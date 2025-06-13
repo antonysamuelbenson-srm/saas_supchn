@@ -1,5 +1,7 @@
 # Inventory Maintainer SaaS 
+
 We’re building a SaaS application to help omni-channel retailers manage their inventory efficiently across a network of stores and warehouses.
+
 ---
 ## Phase 1
 
