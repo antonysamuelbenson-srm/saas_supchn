@@ -27,7 +27,7 @@
   #### Completed so far
   - Login/signup page
   - Data upload through csv and API (Ingestion complete)
-  - Dashboard with KPI's - Current demand, Inventory position, Weeks of Supplay, Stockouts, %SKU's below ROP, LAst Updated, Store-wise Inventory(Integration Pending)
+  - Dashboard with KPI's - Current demand, Inventory position, Weeks of Supply, Stockouts, %SKU's below ROP, Last Updated, Store-wise Inventory(Integration Pending)
   - Database setup : Inventory, Alert, Node, Reorder congif, User
 
   #### Tasks for Next week
