@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles/data-ingestion.css">
+    <title>Document</title>
+</head>
+<body>
+    <div class="upload-container">
+        <div class="upload-header">
+            <h1>Upload CSV File</h1>
+            <p>Select your CSV file to get started</p>
+        </div>
+
+        <form class="upload-form" id="uploadForm">
+            <div class="file-upload-wrapper">
+                <input type="file" class="file-input" id="csvFile" name="csvFile" accept=".csv" required>
+                <div class="file-upload-area" id="fileUploadArea">
+                    <div class="upload-icon">📊</div>
+                    <div class="upload-text">Click to browse or drag & drop</div>
+                    <div class="upload-subtext">CSV files only (max 10MB)</div>
+                </div>
+            </div>
+
+            <div class="file-info" id="fileInfo">
+                <div class="file-name" id="fileName"></div>
+                <div class="file-size" id="fileSize"></div>
+            </div>
+
+            <button type="button" class="upload-button js-upload-button" id="uploadButton" disabled>
+                Upload CSV File
+            </button>
+        </form>
+
+        <form id="textForm">
+            <input type="text" id="textInput">
+        </form>
+        <button type="button" class="upload-button js-text-upload-link">Submit Link</button>
+        
+
+        <div class="success-message" id="successMessage">
+            File uploaded successfully!
+        </div>
+
+        <div class="error-message" id="errorMessage">
+            Error uploading file. Please try again.
+        </div>
+
+        <div class="format-info">
+            <h3>📋 CSV Format Requirements</h3>
+            <ul>
+                <li>File must have .csv extension</li>
+                <li>First row should contain column headers</li>
+                <li>Data separated by commas</li>
+                <li>Maximum file size: 10MB</li>
+                <li>Text fields with commas should be quoted</li>
+            </ul>
+        </div>
+    <script src="scripts/data-ingestion.js" type="module"></script>
+</body>
+</html>

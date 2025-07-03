@@ -1,0 +1,122 @@
+{
+	"info": {
+		"_postman_id": "69d39fff-af42-4e3c-8296-3ddf0732dfa2",
+		"name": "Inventory",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "38185932"
+	},
+	"item": [
+		{
+			"name": "http://127.0.0.1:5000/register",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n \"email\": \"planner1@example.com\",\n \"password\": \"planner123\", \n \"role\": \"planner\"\n \n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://127.0.0.1:5000/register"
+			},
+			"response": []
+		},
+		{
+			"name": "http://127.0.0.1:5000/login",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"email\": \"planner1@example.com\", \"password\": \"planner123\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://127.0.0.1:5000/login"
+			},
+			"response": []
+		},
+		{
+			"name": "http://127.0.0.1:5000/upload/validate",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Cache-Control",
+						"value": "no-cache",
+						"name": "cache-control",
+						"type": "text"
+					},
+					{
+						"key": "Postman-Token",
+						"value": "<calculated when request is sent>",
+						"name": "postman-token",
+						"type": "text"
+					},
+					{
+						"key": "Host",
+						"value": "<calculated when request is sent>",
+						"name": "host",
+						"type": "text"
+					},
+					{
+						"key": "User-Agent",
+						"value": "PostmanRuntime/7.39.1",
+						"name": "user-agent",
+						"type": "text"
+					},
+					{
+						"key": "Accept",
+						"value": "*/*",
+						"name": "accept",
+						"type": "text"
+					},
+					{
+						"key": "Accept-Encoding",
+						"value": "gzip, deflate, br",
+						"name": "accept-encoding",
+						"type": "text"
+					},
+					{
+						"key": "Connection",
+						"value": "keep-alive",
+						"name": "connection",
+						"type": "text"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InBsYW5uZXIxQGV4YW1wbGUuY29tIiwicm9sZSI6InBsYW5uZXIiLCJleHAiOjE3NTA5NTMzNjJ9.2BiClW0sONMDtdADXVRxGLNSTritvM2SoKLTWRCawRI",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/Users/adityapratapsingh/Documents/GitHub/Inventory_maintainer/backend/test.csv"
+						}
+					]
+				},
+				"url": "http://127.0.0.1:5000/upload/validate"
+			},
+			"response": []
+		},
+		{
+			"name": "http://127.0.0.1:5000/config/recalculate-thresholds",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://127.0.0.1:5000/config/recalculate-thresholds"
+			},
+			"response": []
+		}
+	]
+}
