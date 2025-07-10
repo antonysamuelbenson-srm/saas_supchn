@@ -36,10 +36,10 @@ def login():
         token = encode_jwt({
             "email": user.email,
             "role": user.role,
-            "role_user_id": str(user.role_user_id)
+            "role_user_id": str(user.role_user_id)  # ✅ convert UUID to str
         })
-        print(f"✅ Login success for {user.email}")
-        return jsonify({"token": token})
+        return jsonify({"token": token,
+            "role_user_id": str(user.role_user_id)})
 
-    print(f"❌ Login failed for {data['email']}")
     return jsonify({"error": "Invalid credentials"}), 401
+

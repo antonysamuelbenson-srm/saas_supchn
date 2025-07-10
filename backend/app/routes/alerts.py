@@ -22,7 +22,7 @@ def get_alerts():
             "severity": a.severity,
             "message": a.message,
             "sku": a.sku,
-            "store_code": a.store_code,
+            "store_id": a.store_id,
             "created_at": a.created_at.isoformat()
         }
         for a in alerts

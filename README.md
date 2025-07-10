@@ -1,110 +1,48 @@
-# Inventory Maintainer SaaS 
+- Changes in file
 
-We’re building a SaaS application to help omni-channel retailers manage their inventory efficiently across a network of stores and warehouses.
+| 📁 File                    | 🛠️ Function/Logic             | 📄 Purpose                                                                                       |
+| -------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `routes/upload.py`         | `validate_file()`              | ✔ Uploads CSV<br>✔ Validates format<br>✔ Stores in DB (`InventorySnapshot`)<br>✔ Triggers alerts |
+| `utils/kpi_calc.py`        | `generate_alerts()`            | ✔ Checks each SKU<br>✔ Triggers `Stockout` or `BelowThreshold`<br>✔ Stores in `Alert` table      |
+| `utils/threshold_calc.py`  | `update_reorder_config()`      | ✔ Calculates reorder\_point, safety stock, lead time<br>✔ Stores in `ReorderConfig`              |
+| `routes/config.py`         | `recalc_thresholds()`          | ✔ API endpoint to trigger threshold calculations manually                                        |
+| `models/reorder_config.py` | `ReorderConfig` model          | ✔ Stores threshold values per SKU                                                                |
+| `routes/auth.py`           | `login()`, `register()`        | ✔ Handles user login and registration with `role`                                                |
+| `utils/jwt_utils.py`       | `encode_jwt()`, `decode_jwt()` | ✔ Generates and validates JWT tokens for secure routes                                           |
 
----
-## Phase 1
 
-### 1. Control Tower (Landing Page & Dashboard)
+- Tables used - 
 
-**Goal:** Provide a high-level snapshot of inventory health and make the Control Tower a gateway to deeper functionalities.
+| Table                | Stores                             |
+| -------------------- | ---------------------------------- |
+| `inventory_snapshot` | SKU stock per store (from CSV)     |
+| `reorder_config`     | Thresholds like reorder point      |
+| `alert`              | Generated alerts (stockouts, etc.) |
+| `user`               | Login info and user roles          |
 
-**Key Elements to Explore and Prototype:**
 
-- **Network View**  
-  Visual layout showing all nodes (warehouses, DCs, stores), with key metrics or alerts overlaid.
 
-- **KPI Cards**  
-  Display summarized, real-time indicators:  
-  - Current Demand  
-  - Inventory Position  
-  - Weeks of Supply  
+- update_reorder_config() Logic Summary
 
-- **Alerts System**  
-  Trigger and display issues like stockouts, overstock, or demand-supply mismatches.  
-  - When there are multiple alerts, can we group/tag them based on similarity or urgency?
+| **Step** | **Logic/Operation**                                                                  | **Purpose**                                  |
+| -------- | ------------------------------------------------------------------------------------ | -------------------------------------------- |
+| 1️⃣      | Fetch all rows from `InventorySnapshot`                                              | To get current quantity data for each SKU    |
+| 2️⃣      | Aggregate total quantity per SKU                                                     | Simulates total usage over 30 days           |
+| 3️⃣      | Calculate average daily usage:<br>`avg_daily = total_qty / 30`                       | Assumes even usage across 30 days            |
+| 4️⃣      | Compute safety stock:<br>`safety_stock = 0.5 * avg_daily`                            | Buffer to avoid stockouts                    |
+| 5️⃣      | Set lead time:<br>`lead_time = 7`                                                    | Days to restock — fixed at 7 for now         |
+| 6️⃣      | Calculate reorder point:<br>`reorder_point = (avg_daily × lead_time) + safety_stock` | Minimum quantity before reorder is triggered |
+| 7️⃣      | Check if SKU already exists in `ReorderConfig`                                       | Update if it exists, else insert             |
+| 8️⃣      | Save changes with `db.session.commit()`                                              | Stores computed thresholds into DB           |
+| 9️⃣      | Return number of SKUs updated                                                        | Useful for logs/UI/monitoring                |
 
-- **Quick Access to Key Functions**  
-  Links or modules that lead into deeper capabilities:  
-  - Rebalancer  
-  - Forecast  
-  - Settings
 
-**Think about:**  
-UI/UX, responsive layout, how to modularize the dashboard for scale and future integrations.
+📦 What is a Reorder Point?
+The Reorder Point is the inventory level at which you should place a new order to avoid running out of stock before the new supply arrives.
 
-### 2. Data Ingestion Module
+💡 Think of it as:
+“When inventory drops to this level, it's time to restock.”
 
-**Goal:** Design the system to ingest, validate, and integrate various data feeds from customers.
+📐 Reorder Point Formula
 
-**Key Topics to Explore:**
-
-- **Types of Incoming Data**
-  - *Master:*  
-    - Catalogue  
-    - Location  
-  - *Snapshots:*  
-    - Inventory  
-  - *Temporal:*  
-    - Sales  
-    - Transfers  
-    - Inbound  
-  - *Computed:*  
-    - Forecast  
-    - Assortment
-
-- **Frequency and Triggers**
-  - What should be ingested daily, weekly, or monthly?  
-  - What happens if a file is missed?
-
-- **Customer Data Mapping**
-  - Design mapping logic between customer-provided fields (e.g., `SKU_ID`, `Store_Code`) and system internal IDs.  
-  - Should customers provide config upfront or will system infer it?
-
-- **Ingestion Methods**
-  - File Upload (CSV/Excel) – *Focus on this for now*  
-  - API Integrations – *Focus on this for now*  
-  - GCP/AWS Buckets  
-
-- **Data Validation & Checks**
-  - How to detect missing data/data type errors upfront?  
-  - These should pop up as alerts in the Control Tower page.
-
-**Think about:**  
-How to make the ingestion process fault-tolerant, track errors, and enable easy onboarding of new customers.
-
-## 3. Systems Configuration
-
-**Goal:** Define configurable parameters that impact how the system behaves and makes decisions.
-
-**Key Settings to Design and Document:**
-
-- **Network Nodes**
-  - Warehouses and Stores
-
-- **Products**
-  - Product Hierarchies
-
-- **Inventory Planning Parameters**
-  - Safety Stock (by SKU/store or globally defined)  
-  - Reorder Level  
-  - Lead Time assumptions
-
-- **Supply Chain Paths**
-  - Transfer paths (e.g., Warehouse A → Store B)  
-  - Prioritization logic (e.g., based on capacity, proximity, etc.)
-
-- **Operational Constraints**
-  - Node/route capacities (daily limits)  
-  - Minimum Order Quantities
-
-- **User & Role Management**
-  - Who can view/edit what?  
-  - Roles for planners, regional managers, admins
-
-- **Strategy Modes**
-  - Push vs Pull inventory logic  
-  - Static vs Dynamic safety stock calculation
-
-**Think about:**  
-Creating intuitive UI forms or APIs for users to manage these settings, how to store these settings, and how default settings might apply in absence of customer inputs.
+reorder_point = (average_daily_usage × lead_time_days) + safety_stock

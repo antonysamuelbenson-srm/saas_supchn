@@ -1,7 +1,6 @@
-SKU_ID,Store_Code,Product_Name,Quantity
-SKU001,STORE01,Shampoo,0
-SKU002,STORE02,Toothpaste,8
-SKU003,STORE03,Soap,35
-SKU004,STORE04,Facewash,0
-SKU005,STORE05,Hair Oil,9
-
+SKU_ID,Product_Name,Quantity,Store_Location,Store_Name
+SKU001,Shampoo,0,Chennai,Store1
+SKU002,Toothpaste,8,Mumbai,Store2
+SKU003,Soap,35,Kolkata,Store3
+SKU004,Facewash,0,Kanpur,Store4
+SKU005,Hair Oil,9,Delhi,Store5

@@ -8,8 +8,6 @@ bp = Blueprint("dashboard", __name__)
 from flask import Blueprint, request, jsonify
 from app.models.dashboard import DashboardMetrics
 from app.utils.jwt_utils import decode_jwt
-from app.utils.kpi_calc import calculate_kpis
-
 
 bp = Blueprint("dashboard", __name__)
 
@@ -26,11 +24,15 @@ def get_dashboard():
         return jsonify({"error": "Invalid token"}), 401
 
     # Fetch metrics for the logged-in user
-    metrics = DashboardMetrics.query.filter_by(role_user_id=role_user_id).first()
+    metrics = DashboardMetrics.query.filter_by(role_user_id=role_user_id).order_by(DashboardMetrics.timestamp.desc()).first()
 
     if not metrics:
         return jsonify({"error": "No dashboard data found for user"}), 404
 
-    kpi_data = calculate_kpis(role_user_id)
-    return jsonify(kpi_data)
+    return jsonify({
+        "current_demand": metrics.current_demand,
+        "inventory_position": metrics.inventory_position,
+        "weeks_of_supply": metrics.weeks_of_supply,
+        "timestamp": str(metrics.timestamp)
+    })
 

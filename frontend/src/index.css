@@ -1,4 +1,16 @@
+@import "leaflet/dist/leaflet.css";
+@import url('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 @plugin "daisyui";
+

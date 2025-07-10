@@ -16,7 +16,7 @@ with app.app_context():
             InventorySnapshot(
                 id=str(uuid.uuid4()),
                 sku="SKU001",
-                store_code="STORE01",
+                store_id="STORE01",
                 product_name="Shampoo",
                 quantity=100,
                 last_updated=datetime.utcnow()
@@ -24,7 +24,7 @@ with app.app_context():
             InventorySnapshot(
                 id=str(uuid.uuid4()),
                 sku="SKU002",
-                store_code="STORE02",
+                store_id="STORE02",
                 product_name="Toothpaste",
                 quantity=50,
                 last_updated=datetime.utcnow()
@@ -32,7 +32,7 @@ with app.app_context():
             InventorySnapshot(
                 id=str(uuid.uuid4()),
                 sku="SKU003",
-                store_code="STORE01",
+                store_id="STORE01",
                 product_name="Soap",
                 quantity=0,  # Triggers stockout alert
                 last_updated=datetime.utcnow()

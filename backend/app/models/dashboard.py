@@ -12,8 +12,8 @@ class DashboardMetrics(db.Model):
     current_demand = db.Column(db.Integer)
     inventory_position = db.Column(db.Integer)
     weeks_of_supply = db.Column(db.Float)
-    # stockouts = db.Column(db.Integer)   --->calculating on the go
-    # skus_below_threshold = db.Column(db.Integer)   --->calculating on the go
-    # inventory_turnover = db.Column(db.Float)    will add later once we've the sales data
+    # stockouts = db.Column(db.Integer) will calculate on the go
+    # skus_below_threshold = db.Column(db.Integer) will calculate on the go
+    # inventory_turnover = db.Column(db.Float)
 
-    # timestamp = db.Column(db.DateTime, default=datetime.utcnow)  # Optional, helpful for analytics
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)  # Optional, helpful for analytics

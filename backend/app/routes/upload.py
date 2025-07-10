@@ -4,6 +4,8 @@ from app import db
 from app.models.inventory import InventorySnapshot
 from app.utils.kpi_calc import generate_alerts  # ✅ alert trigger
 from app.utils.jwt_utils import decode_jwt  # ✅ make sure this is imported
+from app.utils.store_sync import sync_store_products_from_snapshot,populate_store_ids
+
 import uuid
 from datetime import datetime
 
@@ -30,7 +32,7 @@ def validate_file():
         return jsonify({"error": f"Failed to parse CSV: {str(e)}"}), 400
 
     errors = []
-    required_cols = ["SKU_ID", "Store_Code", "Product_Name", "Quantity"]
+    required_cols = ["SKU_ID", "Product_Name", "Quantity", "Store_Name", "Store_Location"]
     for col in required_cols:
         if col not in df.columns:
             errors.append(f"Missing column: {col}")
@@ -46,20 +48,30 @@ def validate_file():
         item = InventorySnapshot(
             role_user_id=role_user_id,
             sku=row["SKU_ID"],
-            store_code=row["Store_Code"],
             product_name=row["Product_Name"],
             quantity=row["Quantity"],
+            store_name=row["Store_Name"],
+            store_location=row["Store_Location"],
             last_updated=datetime.utcnow()
         )
-        db.session.add(item)
+        existing = InventorySnapshot.query.filter_by(
+        sku=row["SKU_ID"],
+        store_name=row["Store_Name"],
+        store_location=row["Store_Location"],
+        role_user_id=role_user_id
+    ).first()
 
-    db.session.commit()
+    if not existing:
+        db.session.add(item)
+        db.session.commit()
+
+    sync_store_products_from_snapshot(role_user_id=role_user_id)
+    populate_store_ids(role_user_id=role_user_id)
 
     # ✅ Generate alerts for this user’s data
-    alert_count = generate_alerts(role_user_id=role_user_id)
+    #alert_count = generate_alerts(role_user_id=role_user_id)
 
     return jsonify({
         "valid": True,
         "inserted": len(df),
-        "alerts_triggered": alert_count
     })

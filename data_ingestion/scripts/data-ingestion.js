@@ -43,7 +43,7 @@ document.querySelector('.js-upload-button').addEventListener('click', (e) => {
     const formData = new FormData();
     formData.append("csv_file", selectedFile);
 
-    fetch("http://localhost:5000/upload/validate", {
+    fetch("http://localhost:5000/upload", {
         method: "POST",
         body: formData,
     })

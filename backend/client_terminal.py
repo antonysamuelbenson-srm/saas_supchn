@@ -1,6 +1,13 @@
 import requests
 import getpass
 import os
+from dotenv import load_dotenv
+from supabase import create_client, Client
+
+load_dotenv()
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("ANON_KEY")
+supabase: Client = create_client(url, key)
 
 BASE_URL = "http://127.0.0.1:5000"
 
@@ -17,10 +24,13 @@ def signup():
     }
 
     res = requests.post(f"{BASE_URL}/register", json=data)
-    if res.status_code == 200:
+    if res.ok:
         print("✅ Signup successful! Please login.")
     else:
-        print("❌ Signup failed:", res.text)
+        try:
+            print("❌ Signup failed:", res.json())
+        except Exception:
+            print("❌ Signup failed:", res.text)
 
 def login():
     print("\n🔓 LOGIN")
@@ -34,14 +44,18 @@ def login():
 
     res = requests.post(f"{BASE_URL}/login", json=data)
 
-    if res.status_code == 200:
+    if res.ok:
         token = res.json()["token"]
+        role_user_id = res.json().get("role_user_id") 
         print("✅ Login successful!")
-        return token
+        return token, role_user_id
     else:
         print(f"❌ Login failed with status {res.status_code}")
-        print("Response text:", res.text)
-        return None
+        try:
+            print("Response:", res.json())
+        except Exception:
+            print("Response:", res.text)
+        return None,None
 
 def upload_csv(token):
     print("\n📤 UPLOAD CSV")
@@ -56,64 +70,137 @@ def upload_csv(token):
         headers = {"Authorization": f"Bearer {token}"}
         res = requests.post(f"{BASE_URL}/upload/validate", files=files, headers=headers)
 
-    print(f"🔎 Status Code: {res.status_code}")
-    try:
-        response_data = res.json()
-        if res.ok:
-            print("✅ Upload successful:", response_data)
-        else:
-            print("❌ Upload failed:", response_data)
-    except requests.exceptions.JSONDecodeError:
-        print("❌ Upload failed: Response is not valid JSON")
-        print("Response text:", res.text)
+    if res.ok:
+        print("✅ CSV uploaded successfully.")
+        try:
+            print(res.json())
+        except Exception:
+            print(res.text)
+        # 🔷 Automatically move to formula selection
+        choose_formula(token)
+    else:
+        try:
+            print("❌ Upload failed:", res.json())
+        except Exception:
+            print("❌ Upload failed:", res.text)
 
-def view_alerts(token):
-    print("\n🚨 YOUR ALERTS")
+def choose_formula(token):
+    print("\n📐 CHOOSE FORMULA FOR REORDER CALCULATION")
+
     headers = {"Authorization": f"Bearer {token}"}
-    res = requests.get(f"{BASE_URL}/alerts", headers=headers)
+    res = requests.get(f"{BASE_URL}/config/formulas", headers=headers)
+
+    if not res.ok:
+        print("❌ Failed to fetch formulas.")
+        try:
+            print(res.json())
+        except Exception:
+            print(res.text)
+        return
+
+    formulas = res.json()
+    print("\nAvailable formulas:")
+    for i, (key, formula) in enumerate(formulas.items(), start=1):
+        print(f"{i}. {key}: {formula}")
+
+    choice = input("Enter choice number: ").strip()
+
+    try:
+        choice_idx = int(choice) - 1
+        selected_formula = list(formulas.keys())[choice_idx]
+    except Exception:
+        print("❌ Invalid choice.")
+        return
+
+    # Apply chosen formula
+    payload = {"formula": selected_formula}
+    res = requests.post(f"{BASE_URL}/config/apply-formula", json=payload, headers=headers)
 
     if res.ok:
-        alerts = res.json()
-        if alerts:
-            for alert in alerts:
-                print(f"- [{alert['severity']}] {alert['type']}: {alert['message']}")
-        else:
-            print("✅ No alerts.")
+        print("✅ Formula applied & thresholds + alerts updated!")
+        try:
+            print(res.json())
+        except Exception:
+            print(res.text)
     else:
-        print("❌ Failed to fetch alerts:", res.text)
+        print("❌ Failed to apply formula. Status:", res.status_code)
+        try:
+            print(res.json())
+        except Exception:
+            print(res.text)
 
-# def view_dashboard(token):
-#     print("\n📊 YOUR DASHBOARD")
-#     headers = {"Authorization": f"Bearer {token}"}
-#     res = requests.get(f"{BASE_URL}/dashboard", headers=headers)
-
-#     if res.ok:
-#         data = res.json()
-#         print(f"📦 Current Demand       : {data['current_demand']}")
-#         print(f"📦 Inventory Position   : {data['inventory_position']}")
-#         print(f"📦 Weeks of Supply      : {data['weeks_of_supply']}")
-#         print(f"⏰ Last Updated         : {data['timestamp']}")
-#     else:
-#         print("❌ Failed to fetch dashboard:", res.text)
+def view_alerts(token):
+    headers = {"Authorization": f"Bearer {token}"}
+    res = requests.get(f"{BASE_URL}/alerts", headers=headers)
+    print("\n📋 Alerts:")
+    if res.ok:
+        try:
+            for alert in res.json():
+                print(alert)
+        except Exception:
+            print(res.text)
+    else:
+        print("❌ Failed to fetch alerts.")
+        print(res.text)
 
 def view_dashboard(token):
-    print("\n📊 YOUR DASHBOARD")
     headers = {"Authorization": f"Bearer {token}"}
     res = requests.get(f"{BASE_URL}/dashboard", headers=headers)
+    print("\n📊 Dashboard:")
+    if res.ok:
+        try:
+            print(res.json())
+        except Exception:
+            print(res.text)
+    else:
+        print("❌ Failed to fetch dashboard.")
+        print(res.text)
+
+def add_store(token,role_user_id):
+    store_name = input("Enter name of your store: ")
+    store_location = input("Enter location of store: ")
+    
+    print(store_name,store_location)
+
+
+    response = (
+        supabase.table("stores")
+        .insert({"store_name" : store_name, "location" : store_location,
+            "role_user_id": role_user_id })
+        .execute()
+    )
+
+# def add_store(token):
+#     headers = {"Authorization": f"Bearer {token}"}
+#     res = requests.get(f"{BASE_URL}/store_upload", headers=headers)
+#     print("done")
+
+def view_store_summary(token):
+    print("\n🏪 Store-wise Summary:")
+    headers = {"Authorization": f"Bearer {token}"}
+    res = requests.get(f"{BASE_URL}/store/summary", headers=headers)
 
     if res.ok:
         data = res.json()
-        print(f"📦 Current Demand        : {data['current_demand']}")
-        print(f"📦 Inventory Position    : {data['inventory_position']}")
-        print(f"📦 Weeks of Supply       : {data['weeks_of_supply']}")
-        print(f"🚫 Stockouts             : {data['stockouts']}")
-        print(f"📉 % SKUs Below ROP      : {data['percent_below_rop']}%")
-        print(f"🕓 Last Updated          : {data['last_updated']}")
-        print("🏬 Store-wise Inventory:")
-        for store, qty in data['store_wise_stock'].items():
-            print(f"   - {store}: {qty} units")
+        if not data:
+            print("No store data available.")
+            return
+        for store, items in data.items():
+            print(f"\n📦 Store: {store}")
+            for item in items:
+                print(f"  🔸 SKU: {item['sku']}")
+                print(f"     Product Name : {item.get('product_name')}")
+                print(f"     Quantity     : {item.get('quantity')}")
+                print(f"     Avg Daily    : {item.get('avg_daily_usage')}")
+                print(f"     Lead Time    : {item.get('lead_time_days')}")
+                print(f"     Safety Stock : {item.get('safety_stock')}")
+                print(f"     Reorder Point: {item.get('reorder_point')}")
     else:
-        print("❌ Failed to fetch dashboard:", res.text)
+        print("❌ Failed to fetch store summary.")
+        try:
+            print(res.json())
+        except:
+            print(res.text)
 
 
 def main():
@@ -124,16 +211,18 @@ def main():
         if choice == "1":
             signup()
         elif choice == "2":
-            token = login()
+            token,role_user_id = login()
             if token:
                 while True:
                     print("\n📋 Choose an action:")
-                    print("1️⃣  Upload CSV")
-                    print("2️⃣  View Alerts")
-                    print("3️⃣  View Dashboard")
-                    print("4️⃣  Logout")
-                    action = input("Enter your choice (1-4): ").strip()
+                    print("1️1  Upload CSV (will also ask formula & generate alerts)")
+                    print("2️2  View Alerts")
+                    print("3️3  View Dashboard")
+                    print("3️4  Add Store")
+                    print("  5  View Store Summary")
+                    print("4️6  Logout")
 
+                    action = input("Enter your choice: ").strip()
                     if action == "1":
                         upload_csv(token)
                     elif action == "2":
@@ -141,6 +230,10 @@ def main():
                     elif action == "3":
                         view_dashboard(token)
                     elif action == "4":
+                        add_store(token,role_user_id)
+                    elif action == "5":
+                        view_store_summary(token)
+                    elif action == "6":
                         print("👋 Logged out.")
                         break
                     else:
