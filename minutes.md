@@ -33,7 +33,7 @@
 
   #### Tasks for Next week
   - Dashboard enhancements
-    - add maps with store labels
+    - add maps with store labels 
     - display store-level information driven from a config file
     - include store, inventory and mapping
     - uploaded data should directly reflect on the ddashboard
@@ -45,3 +45,16 @@
     - Set up daily updates, preferably at midnight
     - auto-fetch and monitor a file regularly
 
+### 07/10
+- Front end 
+    - Map is ready.
+    - You can add new stores.
+    - Formula selection is now available.
+- Backend
+    - No updates.
+ 
+#### Next Steps
+- uploaded data should directly reflect on the ddashboard
+- accept day-level forecast data from user for the next 4 weeks (uploaded monthly)
+- include store, inventory and mapping
+- Store info adding part should be in config.
