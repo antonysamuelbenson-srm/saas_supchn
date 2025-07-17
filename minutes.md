@@ -58,3 +58,19 @@
 - accept day-level forecast data from user for the next 4 weeks (uploaded monthly)
 - include store, inventory and mapping
 - Store info adding part should be in config.
+
+### 07/17
+- Backend
+    * csv upload of stores, inventory, forecast data, - upload one or more at a time
+    * while upload, all stores' reorder_config are calculated with default formula from config part  we can select       which formula has to be appled for which stores
+    * alerts for all stores in general alert section
+    * on dashboard - kpi's like current demand, inventory position, weeks of supply also reorder details per store       and product(current_demand discrepancy has been resolved)
+    * add stores manually 
+    * view store summary, select a store and view its details on each sku
+    * for map, name of store, the no. of alerts for each store, total sku and last update is returned
+ 
+- Frontend
+    * Fully completed for backend done until now.
+ 
+  Target :
+  - Finish task assigned for sprint 1
