@@ -1,6 +1,6 @@
 import requests
 
-url = "http://127.0.0.1:5000/register"
+url = "http://127.0.0.1:5500/register"
 data = {
     "email": "test123@gmail.com",
     "password": "pass123",

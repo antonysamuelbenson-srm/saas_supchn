@@ -1,25 +1,25 @@
-
-
 from app import db
-import uuid
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy import UniqueConstraint
 
 class InventorySnapshot(db.Model):
-    __tablename__ = 'inventory_snapshot'
+    __tablename__ = 'inventory'
 
-    role_user_id = db.Column(db.String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    store_id = db.Column(db.Integer, db.ForeignKey('stores.store_id'))  #added now
-    store = db.relationship('Store', backref='inventory_snapshots')
+    snapshot_id = db.Column(db.Integer, primary_key=True)
+    role_user_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("user.role_user_id"),
+        nullable=False
+    )
+    snapshot_date = db.Column(db.Date, nullable=False)
 
+    store_id = db.Column(db.Integer, db.ForeignKey('store_data.store_id'), nullable=False)
     sku = db.Column(db.String, nullable=False)
-    product_name = db.Column(db.String)  # ✅ added
+    product_name = db.Column(db.String, nullable=False)
+    qty = db.Column(db.Integer, nullable=False)
 
-    store_name = db.Column(db.String)  # ✅ added
-    store_location = db.Column(db.String)  # ✅ added
-    quantity = db.Column(db.Integer)  # ✅ added
-    last_updated = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
+    store = db.relationship("Store", backref="inventory_snapshots")
 
     __table_args__ = (
-    db.UniqueConstraint('sku', 'role_user_id', name='uq_sku_user'),
-)
-
-    
+        UniqueConstraint("snapshot_date", "store_id", "sku", name="uniq_inventory_entry"),
+    )

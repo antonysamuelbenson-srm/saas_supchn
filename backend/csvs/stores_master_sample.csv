@@ -1,0 +1,4 @@
+store_code,name,address,city,state,country,lat,long,capacity_units
+STR001,Downtown Flagship,123 Main St,Metropolis,CA,USA,37.7749,-122.4194,5500
+STR002,Mall Outlet,456 Mall Rd,Springfield,CA,USA,34.0522,-118.2437,3000
+STR003,Airport Kiosk,789 Terminal Ln,Gotham,NY,USA,40.7128,-74.006,800

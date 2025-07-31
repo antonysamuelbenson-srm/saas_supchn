@@ -1,4 +1,8 @@
-from app import create_app
+# run.py
+from dotenv import load_dotenv
+load_dotenv()  # ✅ Load .env variables first
+
+from app import create_app  # 🧠 This will now use the loaded env vars
 
 app = create_app()
 
@@ -8,4 +12,4 @@ for rule in app.url_map.iter_rules():
     print(f"{rule.methods} -> {rule.rule}")
 
 if __name__ == "__main__":
-    app.run(debug=True,port=5000)
+    app.run(debug=True, port=5000)
