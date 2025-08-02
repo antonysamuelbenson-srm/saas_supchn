@@ -1,391 +1,362 @@
-// import React, { useState } from 'react';
-// import { useNavigate } from 'react-router-dom'; // 🔁 For navigation
+// import React, { useState } from "react";
+// import { useNavigate } from "react-router-dom";
+// import axios from "axios";
 
-// const FileUpload = () => {
-//   const [selectedFile, setSelectedFile] = useState(null);
-//   const [uploading, setUploading] = useState(false);
-//   const [uploadProgress, setUploadProgress] = useState(0);
-//   const [message, setMessage] = useState('');
-//   const [serverResponse, setServerResponse] = useState(null);
+// const UploadCard = ({ type, title }) => {
+//   const [file, setFile] = useState(null);
+//   const [status, setStatus] = useState(null);
+//   const [isUploading, setIsUploading] = useState(false);
 
-//   const navigate = useNavigate(); // ✅ React Router hook
-
-//   const handleFileChange = (event) => {
-//     const file = event.target.files[0];
-
-//     if (file && file.name.endsWith('.csv')) {
-//       setSelectedFile(file);
-//       setMessage('');
-//       setServerResponse(null);
-//     } else {
-//       setSelectedFile(null);
-//       setMessage('❌ Please upload a valid .csv file.');
-//     }
-//   };
-
-//   const handleUpload = () => {
+//   const handleFileChange = (e) => {
+//     const selectedFile = e.target.files[0];
+    
 //     if (!selectedFile) {
-//       setMessage('❌ No file selected.');
+//       setStatus(null);
+//       return;
+//     }
+    
+//     // Check file type
+//     if (!selectedFile.name.endsWith('.csv')) {
+//       setStatus({
+//         success: false,
+//         message: "Only CSV files are allowed"
+//       });
+//       return;
+//     }
+    
+//     // Check file size
+//     if (selectedFile.size > process.env.REACT_APP_MAX_FILE_SIZE) {
+//       setStatus({
+//         success: false,
+//         message: `File too large. Max size is ${process.env.REACT_APP_MAX_FILE_SIZE/1024/1024}MB`
+//       });
+//       return;
+//     }
+    
+//     setFile(selectedFile);
+//     setStatus(null);
+//   };
+
+//   const handleUpload = async () => {
+//     if (!file) {
+//       setStatus({ success: false, message: "Please select a CSV file." });
 //       return;
 //     }
 
-//     const token = localStorage.getItem('token');
+//     const token = localStorage.getItem("token");
 //     if (!token) {
-//       setMessage('❌ Missing authentication token.');
+//       setStatus({ success: false, message: "User not authenticated. Please login again." });
 //       return;
 //     }
 
+//     setIsUploading(true);
+    
 //     const formData = new FormData();
-//     formData.append('file', selectedFile);
+//     formData.append("file", file);
 
-//     const xhr = new XMLHttpRequest();
-//     xhr.open('POST', 'http://localhost:5000/upload/validate', true);
-//     xhr.setRequestHeader('Authorization', 'Bearer ' + token);
-
-//     xhr.upload.onprogress = (event) => {
-//       if (event.lengthComputable) {
-//         const percent = Math.round((event.loaded / event.total) * 100);
-//         setUploadProgress(percent);
-//       }
-//     };
-
-//     xhr.onloadstart = () => {
-//       setUploading(true);
-//       setUploadProgress(0);
-//       setMessage('');
-//       setServerResponse(null);
-//     };
-
-//     xhr.onload = () => {
-//       setUploading(false);
-
-//       try {
-//         const result = JSON.parse(xhr.responseText);
-//         if (xhr.status === 200 && result.valid) {
-//           setMessage(`✅ Uploaded ${result.inserted} rows. Alerts triggered: ${result.alerts_triggered}`);
-//           setServerResponse(result);
-//         } else if (result.errors) {
-//           setMessage(`❌ Validation failed:\n- ${result.errors.join('\n- ')}`);
-//         } else {
-//           setMessage('❌ Upload failed.');
+//     try {
+//       const response = await axios.post(
+//         `${process.env.REACT_APP_API_URL}/api/upload/${type}`,
+//         formData,
+//         {
+//           headers: {
+//             "Content-Type": "multipart/form-data",
+//             Authorization: `Bearer ${token}`,
+//           },
+//           timeout: 30000 // 30 seconds timeout
 //         }
-//       } catch (err) {
-//         setMessage('❌ Unexpected server response.');
+//       );
+      
+//       setStatus({ 
+//         success: true, 
+//         message: "✅ Upload successful!",
+//         details: response.data.message,
+//         rowsProcessed: response.data.rows_processed
+//       });
+      
+//       // Reset file input after successful upload
+//       setFile(null);
+//       document.querySelector(`input[type="file"][data-type="${type}"]`).value = "";
+//     } catch (err) {
+//       let msg = "❌ Upload failed. Please try again.";
+      
+//       if (err.response) {
+//         if (err.response.data?.errors) {
+//           msg = (
+//             <div className="text-left">
+//               <p>Validation errors:</p>
+//               <ul className="list-disc pl-5">
+//                 {err.response.data.errors.map((error, i) => (
+//                   <li key={i}>{error}</li>
+//                 ))}
+//               </ul>
+//             </div>
+//           );
+//         } else if (err.response.data?.message) {
+//           msg = err.response.data.message;
+//         }
+//       } else if (err.message.includes("timeout")) {
+//         msg = "Request timed out. Please try again.";
 //       }
-//     };
-
-//     xhr.onerror = () => {
-//       setUploading(false);
-//       setMessage('❌ Upload error.');
-//     };
-
-//     xhr.send(formData);
-//   };
-
-//   const getProgressClass = () => {
-//     if (uploadProgress < 50) return 'progress-error';
-//     if (uploadProgress < 80) return 'progress-warning';
-//     return 'progress-success';
-//   };
-
-//   const handleGoToDashboard = () => {
-//     navigate('/dashboard'); // 🔁 Navigate to dashboard
+      
+//       setStatus({ 
+//         success: false, 
+//         message: msg,
+//         isHtml: React.isValidElement(msg)
+//       });
+//     } finally {
+//       setIsUploading(false);
+//     }
 //   };
 
 //   return (
-//     <div className="flex flex-col items-center justify-center min-h-screen bg-base-200 p-6">
-//       <div className="card w-full max-w-2xl shadow-xl bg-base-100 p-6">
-//         <h2 className="text-2xl font-bold mb-4 text-center">File Upload</h2>
+//     <div className="bg-gray-900 shadow-lg shadow-black/40 p-6 rounded-xl w-full border border-gray-700">
+//       <h2 className="text-xl font-semibold mb-4 text-gray-100">
+//         {title} Upload
+//       </h2>
 
+//       <div className="mb-4">
+//         <label className="block text-sm font-medium text-gray-300 mb-1">
+//           Select CSV File
+//         </label>
 //         <input
 //           type="file"
 //           accept=".csv"
-//           className="file-input file-input-bordered w-full"
 //           onChange={handleFileChange}
-//           disabled={uploading}
+//           data-type={type}
+//           className="w-full text-gray-300 
+//             file:mr-4 file:py-2 file:px-4 file:rounded-lg 
+//             file:border-0 file:text-sm file:font-medium 
+//             file:bg-blue-600 file:text-white hover:file:bg-blue-700
+//             disabled:opacity-50"
+//           disabled={isUploading}
 //         />
+//         {file && (
+//           <p className="mt-1 text-xs text-gray-400">
+//             Selected: {file.name} ({(file.size / 1024).toFixed(1)} KB)
+//           </p>
+//         )}
+//       </div>
 
-//         <button
-//           className={`btn btn-primary mt-4 ${uploading ? 'btn-disabled' : ''}`}
-//           onClick={handleUpload}
-//         >
-//           {uploading && (
-//             <span className="loading loading-spinner loading-sm mr-2"></span>
+//       <button
+//         onClick={handleUpload}
+//         disabled={!file || isUploading}
+//         className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md transition-all duration-200
+//           ${(!file || isUploading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+//       >
+//         {isUploading ? (
+//           <span className="flex items-center justify-center">
+//             <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+//               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+//               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+//             </svg>
+//             Uploading...
+//           </span>
+//         ) : "Upload"}
+//       </button>
+
+//       {status && (
+//         <div className={`mt-4 p-3 rounded-md text-sm ${
+//           status.success ? "bg-green-900/50 text-green-400" : "bg-red-900/50 text-red-400"
+//         }`}>
+//           <div className="font-medium">
+//             {status.success ? "Success" : "Error"}
+//           </div>
+//           {status.isHtml ? (
+//             status.message
+//           ) : (
+//             <p>{status.message}</p>
 //           )}
-//           {uploading ? 'Uploading...' : 'Upload CSV'}
-//         </button>
+//           {status.details && (
+//             <p className="mt-1 text-xs opacity-80">{status.details}</p>
+//           )}
+//           {status.rowsProcessed && (
+//             <p className="mt-1 text-xs opacity-80">
+//               Processed {status.rowsProcessed} rows
+//             </p>
+//           )}
+//         </div>
+//       )}
+//     </div>
+//   );
+// };
 
-//         {uploading && (
-//           <div className="mt-4 text-center">
-//             <label className="block text-sm mb-1">
-//               Uploading: {uploadProgress}%
-//             </label>
-//             <progress
-//               className={`progress w-full ${getProgressClass()}`}
-//               value={uploadProgress}
-//               max="100"
-//             ></progress>
-//             <div className="text-sm mt-1">
-//               {uploadProgress === 100 ? '✅ Completed!' : `${uploadProgress}%`}
-//             </div>
-//           </div>
-//         )}
+// const FileUploadPage = () => {
+//   const navigate = useNavigate();
 
-//         {message && (
-//           <div className="alert mt-4 text-sm whitespace-pre-wrap">
-//             <span>{message}</span>
-//           </div>
-//         )}
+//   return (
+//     <div className="min-h-screen bg-gradient-to-b from-gray-950 to-gray-900 p-4 md:p-8">
+//       <div className="max-w-7xl mx-auto">
+//         <div className="flex justify-between items-center mb-8">
+//           <button
+//             onClick={() => navigate("/dashboard")}
+//             className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-md transition-all duration-200 shadow-md"
+//           >
+//             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+//               <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+//             </svg>
+//             Back to Dashboard
+//           </button>
+//           <h1 className="text-2xl md:text-3xl font-bold text-white">
+//             CSV File Upload Center
+//           </h1>
+//           <div className="w-10"></div> {/* Spacer for alignment */}
+//         </div>
 
-//         {serverResponse && (
-//           <div className="mt-4 text-center">
-//             <p className="text-sm">✅ Inserted rows: {serverResponse.inserted}</p>
-//             <p className="text-sm">🔔 Alerts triggered: {serverResponse.alerts_triggered}</p>
-//           </div>
-//         )}
+//         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+//           <UploadCard type="store" title="Store Data" />
+//           <UploadCard type="inventory" title="Inventory Data" />
+//           <UploadCard type="forecast" title="Forecast Data" />
+//           <UploadCard type="totalStoreData" title="Stock Levels" />
+//           <UploadCard type="transferCostData" title="Transfer Costs" />
+//           <UploadCard type="warehouseMaxData" title="Warehouse Capacity" />
+//         </div>
 
-//         {/* 🚀 Go to Dashboard Button */}
-//         <button
-//           className="btn btn-outline btn-secondary mt-6"
-//           onClick={handleGoToDashboard}
-//         >
-//           🏠 Go to Dashboard
-//         </button>
+//         <div className="mt-8 p-4 bg-gray-800/50 rounded-lg text-sm text-gray-400">
+//           <h3 className="font-medium text-gray-300 mb-2">Upload Instructions:</h3>
+//           <ul className="list-disc pl-5 space-y-1">
+//             <li>Only CSV files are accepted</li>
+//             <li>Maximum file size: 5MB</li>
+//             <li>Ensure files have the correct columns</li>
+//             <li>Check validation errors if upload fails</li>
+//           </ul>
+//         </div>
 //       </div>
 //     </div>
 //   );
 // };
 
-// export default FileUpload;
+// export default FileUploadPage;
 
 
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 
-const FileUpload = () => {
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [message, setMessage] = useState('');
-  const [serverResponse, setServerResponse] = useState(null);
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
-  const [formulas, setFormulas] = useState({});
-  const [selectedFormula, setSelectedFormula] = useState('');
-  const [formulaApplied, setFormulaApplied] = useState(false);
+const UPLOAD_TYPES = [
+  { type: "store", label: "Store Data" },
+  { type: "inventory", label: "Inventory Data" },
+  { type: "forecast", label: "Forecast Data" },
+  { type: "totalStoreData", label: "Total Store Data" },
+  { type: "transferCostData", label: "Transfer Cost Data" },
+  { type: "warehouseMaxData", label: "Warehouse Max Data" },
+];
 
-  const navigate = useNavigate();
+const FileUploadPage = () => {
+  const [fileMap, setFileMap] = useState({});
+  const [uploadStatus, setUploadStatus] = useState({});
+  const [token, setToken] = useState(null);
+  const navigate = useNavigate();  // ← this line is missing
 
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
 
-    if (file && file.name.endsWith('.csv')) {
-      setSelectedFile(file);
-      setMessage('');
-      setServerResponse(null);
+  // 🔐 Load JWT token from localStorage
+  useEffect(() => {
+    const storedToken = localStorage.getItem("token");
+    if (storedToken) {
+      setToken(storedToken);
     } else {
-      setSelectedFile(null);
-      setMessage('❌ Please upload a valid .csv file.');
+      console.warn("No token found in localStorage.");
     }
+  }, []);
+
+  const handleFileChange = (type, file) => {
+    setFileMap((prev) => ({ ...prev, [type]: file }));
   };
 
-  const handleUpload = () => {
-    if (!selectedFile) {
-      setMessage('❌ No file selected.');
-      return;
-    }
-
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setMessage('❌ Missing authentication token.');
+  const handleUpload = async (type) => {
+    const file = fileMap[type];
+    if (!file || !token) {
+      alert("Missing file or token.");
       return;
     }
 
     const formData = new FormData();
-    formData.append('file', selectedFile);
+    formData.append("file", file);
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', 'http://localhost:5000/upload/validate', true);
-    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+    setUploadStatus((prev) => ({ ...prev, [type]: "uploading" }));
 
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const percent = Math.round((event.loaded / event.total) * 100);
-        setUploadProgress(percent);
-      }
-    };
-
-    xhr.onloadstart = () => {
-      setUploading(true);
-      setUploadProgress(0);
-      setMessage('');
-      setServerResponse(null);
-      setFormulas({});
-      setSelectedFormula('');
-      setFormulaApplied(false);
-    };
-
-    xhr.onload = () => {
-      setUploading(false);
-
-      try {
-        const result = JSON.parse(xhr.responseText);
-        if (xhr.status === 200 && result.valid) {
-          setMessage(`✅ Uploaded ${result.inserted} rows. Alerts triggered: ${result.alerts_triggered}`);
-          setServerResponse(result);
-          fetchFormulas(); // 🧠 Fetch formulas after successful upload
-        } else if (result.errors) {
-          setMessage(`❌ Validation failed:\n- ${result.errors.join('\n- ')}`);
-        } else {
-          setMessage('❌ Upload failed.');
+    try {
+      const response = await axios.post(
+        `http://localhost:5500/api/upload/${type}`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
         }
-      } catch (err) {
-        setMessage('❌ Unexpected server response.');
+      );
+
+      if (response.status === 201) {
+        setUploadStatus((prev) => ({ ...prev, [type]: "success" }));
+      } else {
+        setUploadStatus((prev) => ({ ...prev, [type]: "error" }));
       }
-    };
-
-    xhr.onerror = () => {
-      setUploading(false);
-      setMessage('❌ Upload error.');
-    };
-
-    xhr.send(formData);
-  };
-
-  const fetchFormulas = () => {
-    const token = localStorage.getItem('token');
-    fetch('http://localhost:5000/config/formulas', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => setFormulas(data))
-      .catch(() => setMessage('❌ Failed to load formulas.'));
-  };
-
-  const handleApplyFormula = () => {
-    if (!selectedFormula) {
-      setMessage('⚠️ Please select a formula first.');
-      return;
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || "Upload failed";
+      setUploadStatus((prev) => ({ ...prev, [type]: errorMessage }));
     }
-
-    const token = localStorage.getItem('token');
-    fetch('http://localhost:5000/config/apply-formula', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ formula: selectedFormula }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setMessage('✅ Formula applied & thresholds updated.');
-        setFormulaApplied(true);
-      })
-      .catch(() => setMessage('❌ Failed to apply formula.'));
-  };
-
-  const getProgressClass = () => {
-    if (uploadProgress < 50) return 'progress-error';
-    if (uploadProgress < 80) return 'progress-warning';
-    return 'progress-success';
-  };
-
-  const handleGoToDashboard = () => {
-    navigate('/dashboard');
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-base-200 p-6">
-      <div className="card w-full max-w-2xl shadow-xl bg-base-100 p-6">
-        <h2 className="text-2xl font-bold mb-4 text-center">📁 File Upload + Formula Selection</h2>
+    <div className="min-h-screen bg-base-200 py-10 px-6">
+      <div className="max-w-4xl mx-auto">
+      <div className="mb-4 flex justify-start">
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="btn btn-secondary"
+          >
+            ← Back to Dashboard
+          </button>
+        </div>
+        <h1 className="text-4xl font-bold mb-6 text-center">📤 Upload CSV Data</h1>
 
-        <input
-          type="file"
-          accept=".csv"
-          className="file-input file-input-bordered w-full"
-          onChange={handleFileChange}
-          disabled={uploading}
-        />
+        {!token && (
+          <div className="alert alert-warning mb-6 shadow-lg">
+            <span>⚠️ No token found. Please login to continue.</span>
+          </div>
+        )}
 
-        <button
-          className={`btn btn-primary mt-4 ${uploading ? 'btn-disabled' : ''}`}
-          onClick={handleUpload}
-        >
-          {uploading && (
-            <span className="loading loading-spinner loading-sm mr-2"></span>
-          )}
-          {uploading ? 'Uploading...' : 'Upload CSV'}
-        </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {UPLOAD_TYPES.map(({ type, label }) => (
+            <div key={type} className="card bg-base-100 shadow-xl p-4">
+              <h2 className="font-semibold text-lg mb-2">{label}</h2>
+              <input
+                type="file"
+                accept=".csv"
+                className="file-input file-input-bordered w-full mb-2"
+                onChange={(e) => handleFileChange(type, e.target.files[0])}
+              />
+              <button
+                className="btn btn-primary w-full"
+                onClick={() => handleUpload(type)}
+                disabled={!token}
+              >
+                Upload
+              </button>
 
-        {uploading && (
-          <div className="mt-4 text-center">
-            <label className="block text-sm mb-1">Uploading: {uploadProgress}%</label>
-            <progress
-              className={`progress w-full ${getProgressClass()}`}
-              value={uploadProgress}
-              max="100"
-            ></progress>
-            <div className="text-sm mt-1">
-              {uploadProgress === 100 ? '✅ Completed!' : `${uploadProgress}%`}
+              {/* Upload status display */}
+              {uploadStatus[type] && (
+                <div className="mt-2 text-sm">
+                  {uploadStatus[type] === "uploading" && (
+                    <span className="text-warning">Uploading...</span>
+                  )}
+                  {uploadStatus[type] === "success" && (
+                    <span className="text-success">✅ Upload successful</span>
+                  )}
+                  {uploadStatus[type] !== "uploading" &&
+                    uploadStatus[type] !== "success" && (
+                      <span className="text-error">❌ {uploadStatus[type]}</span>
+                    )}
+                </div>
+              )}
             </div>
-          </div>
-        )}
-
-        {message && (
-          <div className="alert mt-4 text-sm whitespace-pre-wrap">
-            <span>{message}</span>
-          </div>
-        )}
-
-        {serverResponse && (
-          <div className="mt-4 text-center">
-            <p className="text-sm">✅ Inserted rows: {serverResponse.inserted}</p>
-            <p className="text-sm">🔔 Alerts triggered: {serverResponse.alerts_triggered}</p>
-          </div>
-        )}
-
-        {/* Formula Selection */}
-        {Object.keys(formulas).length > 0 && !formulaApplied && (
-          <div className="mt-6">
-            <label className="block mb-2 font-medium">📐 Select Reorder Formula</label>
-            <select
-              className="select select-bordered w-full"
-              value={selectedFormula}
-              onChange={(e) => setSelectedFormula(e.target.value)}
-            >
-              <option value="">-- Choose Formula --</option>
-              {Object.entries(formulas).map(([key, value]) => (
-                <option key={key} value={key}>
-                  {key}: {value}
-                </option>
-              ))}
-            </select>
-            <button
-              className="btn btn-success mt-4 w-full"
-              onClick={handleApplyFormula}
-            >
-              ✅ Apply Selected Formula
-            </button>
-          </div>
-        )}
-
-        {formulaApplied && (
-          <div className="mt-4 text-green-600 font-medium text-center">
-            🧮 Formula applied successfully!
-          </div>
-        )}
-
-        <button
-          className="btn btn-outline btn-secondary mt-6"
-          onClick={handleGoToDashboard}
-        >
-          🏠 Go to Dashboard
-        </button>
+          ))}
+        </div>
       </div>
     </div>
   );
 };
 
-export default FileUpload;
+export default FileUploadPage;

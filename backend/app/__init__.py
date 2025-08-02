@@ -26,8 +26,9 @@ def create_app():
     )
 
     # ✅ Register Blueprints INSIDE this function
-    from app.routes import auth, dashboard, alerts, upload, config, store_upload, forecast_data, node_location_update, reorder, availability
+    from app.routes import auth, dashboard, alerts, upload, config, store_upload, forecast_data, node_location_update, reorder, availability, admin
     app.register_blueprint(auth.bp)
+    app.register_blueprint(admin.bp, url_prefix="/admin")
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(alerts.bp)
     app.register_blueprint(upload.bp)

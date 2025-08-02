@@ -8,6 +8,27 @@ body,
   margin: 0;
   padding: 0;
 }
+
+.blinking-marker {
+  animation: blink 1s infinite ease-in-out;
+  width: 20px;
+  height: 20px;
+  background: red;
+  border-radius: 50%;
+  border: 3px solid white;
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 5px 2px red;
+  }
+  50% {
+    opacity: 0.3;
+    box-shadow: 0 0 15px 4px red;
+  }
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

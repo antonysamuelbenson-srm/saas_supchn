@@ -1,6 +1,6 @@
 ROUTE_ROLE_MAP = {
     # --- Admin Only ---
-    "GET:/users":                        ["admin"],
+    "GET:/admin/users":                        ["admin"],
     "PUT:/user/<role_user_id>/role":    ["admin"],
     "DELETE:/user/<role_user_id>":      ["admin"],
     "POST:/user/<role_user_id>/deactivate": ["admin"],

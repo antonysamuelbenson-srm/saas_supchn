@@ -4,7 +4,7 @@ import SignupForm from "./Pages/SignUp";
 import LoginForm from "./Pages/Login";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import FileUpload from "./Pages/FileUpload";
-import AddStoreForm from "./Pages/AddStoreForm";
+import Config from "./Pages/Config";
 
 function App() {
   return (
@@ -15,7 +15,7 @@ function App() {
           <Route path="/register" element={<SignupForm/>}/>
           <Route path="/dashboard" element={<Dashboard/>}/>
           <Route path="/file-upload" element={<FileUpload/>}/>
-          <Route path="/add-store" element={<AddStoreForm/>}/>
+          <Route path="/config" element={<Config/>}/>
         </Routes>
       </Router>
     </div>

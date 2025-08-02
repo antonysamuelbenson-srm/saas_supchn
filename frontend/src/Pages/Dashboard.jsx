@@ -1,51 +1,135 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import {
-  FiMenu,
-  FiX,
-  FiDatabase,
-  FiTrendingUp,
-  FiSettings,
-  FiUpload,
-  FiBarChart2,
-  FiLogOut,
-  FiRefreshCw,
-  FiShoppingBag
+  FiMenu, FiX, FiDatabase, FiTrendingUp, FiSettings,
+  FiUpload, FiBarChart2, FiLogOut, FiRefreshCw, FiShoppingBag
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, Popup, Tooltip } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useMap } from "react-leaflet";
 
+const BASE_URL = "http://localhost:5500";
+
+// MODIFIED: CSS styles updated for an SVG pointer icon instead of a dot.
+// START: Added for Line Chart
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer
+} from 'recharts';
+// END: Added for Line Chart
+
+const MapStyles = () => (
+  <style>{`
+    .custom-marker-container {
+      position: relative;
+      width: 32px; /* Adjusted for pointer size */
+      height: 42px; /* Adjusted for pointer size */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .marker-svg {
+      width: 100%;
+      height: 100%;
+      filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.5));
+    }
+    .severity-high .marker-svg {
+      fill: #ef4444; /* red-500 */
+    }
+    .severity-medium .marker-svg {
+      fill: #f59e0b; /* amber-500 */
+    }
+    .severity-low .marker-svg {
+      fill: #3b82f6; /* blue-500 */
+    }
+    .marker-count {
+      position: absolute;
+      top: 0px; /* Adjusted for pointer */
+      left: 55%; /* Adjusted for pointer */
+      background-color: white;
+      color: #dc2626; /* red-600 */
+      font-weight: bold;
+      font-size: 12px;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #dc2626;
+      z-index: 10;
+    }
+  `}</style>
+);
+
+
+// Helper to fit map bounds
 const FitBounds = ({ locations }) => {
   const map = useMap();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!locations || locations.length === 0) return;
+    const validCoords = locations
+      .filter((loc) => loc.lat != null && loc.lng != null)
+      .map((loc) => [loc.lat, loc.lng]);
 
-    const bounds = L.latLngBounds(
-      locations.map((loc) => [loc.lat, loc.lng])
-    );
-
-    map.fitBounds(bounds, { padding: [50, 50] });
+    if (validCoords.length === 0) return;
+    const bounds = L.latLngBounds(validCoords);
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [50, 50] });
+    }
   }, [locations, map]);
 
   return null;
 };
 
-
+// Leaflet marker setup
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
+// MODIFIED: The function now creates an SVG pointer icon.
+const createAlertIcon = (location) => {
+  const { alertStatus } = location;
+  const reorderCount = alertStatus?.reorderCount || 0;
+  const stockoutCount = alertStatus?.stockoutCount || 0;
+  const totalAlerts = reorderCount + stockoutCount;
+
+  let severityClass = 'severity-low'; // Default blue
+  if (alertStatus?.hasAlert) { // This means "stockout despite reorder" is true
+    severityClass = 'severity-high'; // Red
+  } else if (reorderCount > 0) {
+    severityClass = 'severity-medium'; // Yellow/Amber
+  }
+
+  // The HTML now contains an SVG path for the map pin.
+  return new L.DivIcon({
+    className: `custom-marker-container ${severityClass}`,
+    html: `
+      ${totalAlerts > 0 ? `<div class="marker-count">${totalAlerts}</div>` : ''}
+      <svg viewBox="0 0 24 24" class="marker-svg">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+      </svg>
+    `,
+    iconSize: [32, 42],
+    iconAnchor: [16, 42] // Point of the pointer
+  });
+};
+
+
 function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [permissions, setPermissions] = useState([]);
+
+    // START: Added state for availability chart
+  const [availabilityData, setAvailabilityData] = useState([]);
+  // END: Added state for availability chart
+
+  // Dashboard state
   const [data, setData] = useState({
     metrics: {
       current_demand: 0,
@@ -62,73 +146,164 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-useEffect(() => {
-  const fetchDashboardData = async () => {
+  const hasPermission = (route) => permissions.includes(route);
+
+  const [forecastDays, setForecastDays] = useState(7);
+  
+  const fetchLookaheadDays = async () => {
     try {
       const token = localStorage.getItem("token");
-
-      const res = await axios.get("http://localhost:5000/store/summary", {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await axios.get(`${BASE_URL}/user/lookahead_days`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      const summary = res.data; // already an array of stores
-      console.log("📦 Backend summary data:", summary);
-
-      let stockouts = 0;
-      let skusBelow = 0;
-      const alerts = [];
-
-      // Optional: Compute alerts here if you want to keep it on frontend
-      summary.forEach((store) => {
-        const storeName = store.store_name;
-
-        store.summary?.forEach((item) => {
-          const { quantity, reorder_point } = item;
-
-          if (quantity === 0) {
-            stockouts++;
-            alerts.push({
-              id: `${storeName}-stockout-${item.sku}`,
-              severity: "High",
-              message: `Stockout for ${item.product_name} at ${storeName}`,
-              type: "Stockout"
-            });
-          } else if (reorder_point && quantity < reorder_point) {
-            skusBelow++;
-            alerts.push({
-              id: `${storeName}-low-${item.sku}`,
-              severity: "Medium",
-              message: `Low stock for ${item.product_name} at ${storeName}`,
-              type: "Below Threshold"
-            });
-          }
-        });
-      });
-
-      setData({
-        metrics: {
-          current_demand: 14250,
-          inventory_position: 87500,
-          weeks_of_supply: 5.8,
-          stockouts,
-          skus_below_threshold: skusBelow,
-          inventory_turnover: 3.4,
-          timestamp: new Date().toISOString()
-        },
-        alerts,
-        locations: summary // use directly
-      });
-
-      setLoading(false);
+      setForecastDays(res.data.lookahead_days || 7);
     } catch (err) {
-      console.error("❌ Failed to fetch data:", err);
+      console.error("❌ Failed to fetch lookahead_days:", err);
     }
   };
+useEffect(() => {
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      if (!token) {
+        navigate("/");
+        return;
+      }
+      const headers = { Authorization: `Bearer ${token}` };
 
-  fetchDashboardData();
-}, []);
+      try {
+        // First, verify permissions
+        const permRes = await axios.get(`${BASE_URL}/user/permissions`, { headers });
+        const allowedRoutes = permRes.data.allowed_routes || [];
+        setPermissions(allowedRoutes);
 
+        if (!allowedRoutes.includes("GET:/dashboard")) {
+          setLoading(false);
+          return;
+        }
 
+        // Fetch all data sources in parallel
+        const [
+          dashboardRes,
+          storesRes,
+          alertsRes,
+          availabilityRes,
+          lookaheadRes
+        ] = await Promise.allSettled([
+          axios.get(`${BASE_URL}/dashboard`, { headers }),
+          axios.get(`${BASE_URL}/stores`, { headers }),
+          axios.get(`${BASE_URL}/alerts`, { headers }),
+          axios.get(`${BASE_URL}/availability`, { headers }),
+          axios.get(`${BASE_URL}/user/lookahead_days`, { headers }),
+        ]);
+
+        // Process lookahead days
+        if (lookaheadRes.status === 'fulfilled') {
+            setForecastDays(lookaheadRes.value.data.lookahead_days || 7);
+        } else {
+            console.error("❌ Failed to fetch lookahead_days:", lookaheadRes.reason);
+        }
+
+        // Process availability data
+        if (availabilityRes.status === 'fulfilled') {
+            setAvailabilityData(availabilityRes.value.data.data || []);
+        } else {
+            console.error("❌ Failed to fetch availability data:", availabilityRes.reason);
+            setAvailabilityData([]); // Ensure it's an empty array on failure
+        }
+        
+        const backendDashboard = dashboardRes.status === 'fulfilled' ? dashboardRes.value.data : {};
+        const stores = storesRes.status === 'fulfilled' ? storesRes.value.data.stores : [];
+        const backendAlerts = alertsRes.status === 'fulfilled' ? alertsRes.value.data : [];
+        
+        let stockouts = 0;
+        let skusBelow = 0;
+        
+        if (backendAlerts && backendAlerts.length > 0) {
+            backendAlerts.forEach(alert => {
+              if (alert.type === "stock_out") stockouts++;
+              else if (alert.type === "excess" || alert.type === "low_stock") skusBelow++;
+            });
+        }
+        
+        // Fetch detailed location data
+        const locationPromises = stores.map(store => Promise.allSettled([
+            axios.get(`${BASE_URL}/store/${store.store_id}/summary`, { headers }),
+            axios.get(`${BASE_URL}/store/${store.store_id}/hover`, { headers }),
+            axios.get(`${BASE_URL}/store/${store.store_id}/with-alert-status`, { headers })
+        ]));
+
+        const locationsData = await Promise.all(locationPromises);
+
+        const locations = locationsData.map((results, index) => {
+            const store = stores[index];
+            const [summaryRes, hoverRes, alertStatusRes] = results;
+
+            const storeKey = summaryRes.status === 'fulfilled' ? Object.keys(summaryRes.value.data)[0] : null;
+            const storeSummary = storeKey && summaryRes.value.data[storeKey] ? summaryRes.value.data[storeKey] : {};
+            const items = storeSummary.items || [];
+            const hoverData = hoverRes.status === 'fulfilled' ? hoverRes.value.data : {};
+            const alertStatusData = alertStatusRes.status === 'fulfilled' ? alertStatusRes.value.data : {};
+
+            return {
+                store_id: store.store_id,
+                store_name: store.name,
+                location: store.city,
+                lat: store.lat,
+                lng: store.lon,
+                alert: backendAlerts.find(a => a.store_id === store.store_id)?.message || null,
+                summary: items.map(i => ({
+                    product_name: i.sku,
+                    quantity: i.quantity,
+                    reorder_point: i.reorder_point
+                })),
+                hoverStats: {
+                    distinct_skus: hoverData.distinct_skus || 0,
+                    inventory_units: hoverData.inventory_units || 0,
+                    forecast_units: hoverData.forecast_units || 0,
+                    alerts: hoverData.alerts || 0,
+                    lookahead_days: hoverData.lookahead_days || 7
+                },
+                alertStatus: {
+                    reorderCount: alertStatusData.num_skus_to_reorder || 0,
+                    stockoutCount: alertStatusData.num_skus_stockout_despite_reorder || 0,
+                    hasAlert: alertStatusData.alert || false,
+                }
+            };
+        });
+
+        setData({
+          metrics: {
+            current_demand: backendDashboard.current_demand ?? 0,
+            inventory_position: backendDashboard.inventory_position ?? 0,
+            weeks_of_supply: backendDashboard.weeks_of_supply ?? 0,
+            stockouts,
+            skus_below_threshold: skusBelow,
+            inventory_turnover: backendDashboard.inventory_turnover ?? 0,
+            timestamp: backendDashboard.timestamp ?? new Date().toISOString()
+          },
+          alerts: backendAlerts.map((a, i) => ({
+            id: a.id || `alert-${i}`,
+            severity: a.severity || "Low",
+            message: a.message,
+            type: a.type ? a.type.charAt(0).toUpperCase() + a.type.slice(1) : "General",
+            store_id: a.store_id
+          })),
+          locations
+        });
+
+      } catch (err) {
+        console.error("❌ Failed to fetch dashboard data:", err);
+        if (err.response?.status === 401) {
+            navigate("/");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -144,8 +319,21 @@ useEffect(() => {
     );
   }
 
+  if (!hasPermission("GET:/dashboard")) {
+      return (
+          <div className="min-h-screen w-full bg-[#0f172a] flex flex-col items-center justify-center text-white">
+              <h1 className="text-3xl font-bold">Access Denied</h1>
+              <p className="mt-2">You do not have permission to view this page.</p>
+              <button onClick={() => navigate("/")} className="mt-4 bg-blue-500 px-4 py-2 rounded">
+                  Go to Login
+              </button>
+          </div>
+      );
+  }
+
   return (
     <div className="min-h-screen w-full bg-[#0f172a] flex transition-all duration-300">
+      <MapStyles /> {/* Inject the CSS for our markers */}
       {/* Sidebar */}
       <div className={`bg-[#152438] border-r border-[#1f2a46] shadow-lg transition-all duration-300 ${sidebarOpen ? "w-60 p-6" : "w-0 overflow-hidden"} flex flex-col space-y-6`}>
         {sidebarOpen && (
@@ -157,15 +345,21 @@ useEffect(() => {
               </button>
             </div>
             <nav className="space-y-4">
-              <button onClick={() => navigate("/file-upload")} className="flex items-center text-white hover:bg-[#1f2a46] p-2 rounded-md transition w-full">
-                <FiUpload className="mr-3" /> File Upload
-              </button>
-              <button className="flex items-center text-white hover:bg-[#1f2a46] p-2 rounded-md transition w-full">
-                <FiBarChart2 className="mr-3" /> Reports
-              </button>
-              <button onClick={() => navigate("/add-store")} className="flex items-center text-white hover:bg-[#1f2a46] p-2 rounded-md transition w-full">
-                <FiShoppingBag className="mr-3" /> Add Store
-              </button>
+              {hasPermission("POST:/store_upload") && (
+                <button onClick={() => navigate("/file-upload")} className="flex items-center text-white hover:bg-[#1f2a46] p-2 rounded-md transition w-full">
+                  <FiUpload className="mr-3" /> File Upload
+                </button>
+              )}
+              {hasPermission("GET:/dashboard") && (
+                 <button className="flex items-center text-white hover:bg-[#1f2a46] p-2 rounded-md transition w-full">
+                    <FiBarChart2 className="mr-3" /> Reports
+                </button>
+              )}
+               {hasPermission("POST:/config/apply-formula") && (
+                <button onClick={() => navigate("/Config")} className="flex items-center text-white hover:bg-[#1f2a46] p-2 rounded-md transition w-full">
+                  <FiShoppingBag className="mr-3" /> Configuration Page
+                </button>
+              )}
               <button onClick={() => navigate("/")} className="flex items-center text-white hover:bg-[#1f2a46] p-2 rounded-md transition w-full">
                 <FiLogOut className="mr-3" /> Logout
               </button>
@@ -178,11 +372,14 @@ useEffect(() => {
       <div className="flex-1">
         <div className="p-4">
           <div className="bg-[#152438] rounded-2xl border border-[#1f2a46] shadow-xl text-white font-sans space-y-8 p-8">
+            
             {/* Header */}
             <header className="flex justify-between items-center">
               <div>
                 <h1 className="text-3xl font-bold">Control Tower Dashboard</h1>
-                <p className="text-sm text-gray-400 mt-1">Last updated: {new Date(data.metrics.timestamp).toLocaleString()}</p>
+                <p className="text-sm text-gray-400 mt-1">
+                  Last updated: {new Date(data.metrics.timestamp).toLocaleString()}
+                </p>
               </div>
               <div className="flex items-center space-x-3">
                 <button onClick={() => window.location.reload()} className="p-2 rounded-md hover:bg-[#1f2a46] transition">
@@ -198,17 +395,24 @@ useEffect(() => {
             <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="bg-[#1f2a46] rounded-lg p-3 shadow-inner border border-white/20 h-[100px] flex flex-col justify-center">
                 <p className="text-xs font-medium text-blue-200">Current Demand</p>
-                <p className="text-2xl font-bold tracking-tight leading-tight">{data.metrics.current_demand.toLocaleString()}</p>
+                <p className="text-2xl font-bold tracking-tight leading-tight">
+                  {data.metrics.current_demand.toLocaleString()}
+                </p>
               </motion.div>
 
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="bg-[#1f2a46] rounded-lg p-3 shadow-inner border border-white/20 h-[100px] flex justify-between items-center">
                 <div>
                   <p className="text-xs font-medium text-blue-200">Inventory</p>
-                  <p className="text-2xl font-bold tracking-tight leading-tight">{data.metrics.inventory_position.toLocaleString()}</p>
+                  <p className="text-2xl font-bold tracking-tight leading-tight">
+                    {data.metrics.inventory_position.toLocaleString()}
+                  </p>
                 </div>
-                <div className="bg-[#24304b] px-2 py-1 rounded-md border border-[#2e3b5c] text-sm font-semibold">{data.metrics.weeks_of_supply}</div>
+                <div className="bg-[#24304b] px-2 py-1 rounded-md border border-[#2e3b5c] text-sm font-semibold">
+                  {data.metrics.weeks_of_supply}
+                </div>
               </motion.div>
 
+              {/* Alerts Card */}
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="bg-[#1f2a46] rounded-xl p-4 shadow-inner space-y-3 border border-white/20">
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-md font-medium text-blue-200">Alerts</p>
@@ -234,12 +438,8 @@ useEffect(() => {
                 </div>
               </motion.div>
 
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                className="bg-[#1f2a46] rounded-xl p-5 shadow-inner border border-white/20 md:col-span-2"
-              >
+              {/* Map View */}
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="bg-[#1f2a46] rounded-xl p-5 shadow-inner border border-white/20 md:col-span-3">
                 <div className="flex justify-between items-center mb-3">
                   <p className="font-medium text-blue-200">Network View</p>
                   <div className="text-xs flex space-x-2">
@@ -254,88 +454,199 @@ useEffect(() => {
 
                 <div className="h-[300px] md:h-[400px] w-full rounded-lg overflow-hidden relative">
                   <MapContainer
-                    center={[20, 0]} // fallback center
-                    zoom={2}         // fallback zoom
+                    center={[20, 0]} 
+                    zoom={2}
                     style={{ height: "100%", width: "100%" }}
                     scrollWheelZoom={true}
                   >
                     <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      attribution='&copy; OpenStreetMap contributors'
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
 
-                    {/* FitBounds helper */}
                     <FitBounds locations={data.locations} />
 
-                    
                     {data.locations
-                      .filter((loc) => loc.lat != null && loc.lng != null) // 🚨 skip invalid
+                      .filter((loc) => loc.lat != null && loc.lng != null)
                       .map((loc, i) => (
-                        <Marker
-                          key={i}
-                          position={[loc.lat, loc.lng]}
-                          eventHandlers={{
-                            mouseover: (e) => e.target.openPopup(),
-                            mouseout: (e) => e.target.closePopup(),
-                          }}
-                        >
-                          <Popup>
-                            <div className="text-sm space-y-2">
-                              <div>
-                                <strong>{loc.store_name}</strong><br />
-                                <span className="text-gray-500">{loc.location}</span>
+                      <Marker
+                        key={i}
+                        position={[loc.lat, loc.lng]}
+                        icon={createAlertIcon(loc)} // Use the new custom icon
+                        eventHandlers={{
+                          mouseover: (e) => e.target.openPopup(),
+                          mouseout: (e) => e.target.closePopup(),
+                        }}
+                      >
+                        <Popup>
+                          <div className="text-sm space-y-2">
+                            <div>
+                              <strong>{loc.store_name}</strong><br />
+                              <span className="text-gray-500">{loc.location}</span>
+                            </div>
+
+                            {loc.alert && (
+                              <div className="text-red-500">
+                                🚨 Alert: {loc.alert}
                               </div>
+                            )}
 
-                              {loc.alert && (
-                                <div className="text-red-500">
-                                  🚨 Alert: {loc.alert}
+                            {loc.alertStatus && (
+                                <div className="mt-2 text-gray-800 bg-amber-100 p-2 rounded-md shadow-inner border border-amber-300/40">
+                                    <p className="text-amber-800 font-semibold mb-1">Reorder Status:</p>
+                                    <ul className="ml-4 list-disc text-sm space-y-1">
+                                        <li>📦 SKUs to Reorder: <strong>{loc.alertStatus.reorderCount}</strong></li>
+                                        <li className={loc.alertStatus.hasAlert ? "text-red-600 font-bold" : ""}>
+                                          ⚠️ Stockout despite Reorder: <strong>{loc.alertStatus.stockoutCount}</strong>
+                                        </li>
+                                    </ul>
                                 </div>
-                              )}
+                            )}
 
-                              <div>
-                                <p className="font-semibold">Summary:</p>
-                                <ul className="list-disc ml-4">
-                                  {loc.summary && loc.summary.length > 0 ? (
-                                    loc.summary.map((item, j) => (
-                                      <li key={j}>
-                                        <span className="font-medium">{item.product_name}</span>: {item.quantity} pcs
-                                        {item.reorder_point !== undefined && (
-                                          <span className="text-xs text-gray-400">
-                                            {" "}
-                                            (Reorder Point: {item.reorder_point})
-                                          </span>
-                                        )}
-                                      </li>
-                                    ))
-                                  ) : (
-                                    <li>No inventory data</li>
-                                  )}
+                            {loc.hoverStats && (
+                              <div className="mt-3 bg-blue-100 text-gray-800 p-2 rounded-md shadow-inner border border-blue-300/40">
+                                <p className="text-blue-800 font-semibold mb-1">Hover Stats:</p>
+                                <ul className="ml-4 list-disc text-sm space-y-1">
+                                  <li>📦 <strong>{loc.hoverStats.distinct_skus}</strong> SKUs</li>
+                                  <li>📊 <strong>{loc.hoverStats.inventory_units}</strong> Inventory Units</li>
+                                  <li>
+                                    📈 <strong>{loc.hoverStats.forecast_units}</strong> Forecast Units 
+                                    ({loc.hoverStats.lookahead_days}-Day)
+                                  </li>
+                                  <li>🚨 <strong>{loc.hoverStats.alerts}</strong> Alert(s)</li>
                                 </ul>
                               </div>
+                            )}
+
+                            <div>
+                              <p className="font-semibold">Summary:</p>
+                              <ul className="list-disc ml-4">
+                                {loc.summary && loc.summary.length > 0 ? (
+                                  loc.summary.map((item, j) => (
+                                    <li key={j}>
+                                      <span className="font-medium">{item.product_name}</span>: {item.quantity} pcs
+                                      {item.reorder_point !== undefined && (
+                                        <span className="text-xs text-gray-400">
+                                          {" "} (Reorder Point: {item.reorder_point})
+                                        </span>
+                                      )}
+                                    </li>
+                                  ))
+                                ) : (
+                                  <li>No inventory data</li>
+                                )}
+                              </ul>
                             </div>
-                          </Popup>
+                          </div>
+                        </Popup>
 
-                          <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent={false}>
-                            {loc.store_name}
-                          </Tooltip>
-                        </Marker>
-                    ))}
-
-                    
+                        <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent={false}>
+                          {loc.store_name}
+                        </Tooltip>
+                      </Marker>
+                      ))}
                   </MapContainer>
-
                 </div>
               </motion.div>
             </section>
 
-            {/* Action Buttons */}
+            {/* START: New Availability Rate Chart Section */}
+            <motion.section
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7 }}
+              className="bg-[#1f2a46] rounded-xl p-5 shadow-inner border border-white/20"
+            >
+              <h3 className="text-lg font-medium text-blue-200">SKU Availability Rate (Historical)</h3>
+              <p className="text-sm text-gray-400 mb-4">
+                Percentage of eligible SKUs not out of stock – tracked week by week.
+              </p>
+              <div className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={availabilityData}
+                    margin={{
+                      top: 5,
+                      right: 30,
+                      left: 0,
+                      bottom: 5,
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2a3a56" />
+                    <XAxis
+                      dataKey="week_start"
+                      stroke="#9ca3af"
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(label) => new Date(label + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    />
+                    <YAxis
+                      stroke="#9ca3af"
+                      tick={{ fontSize: 12 }}
+                      domain={[dataMin => (Math.floor(dataMin / 5) * 5), 100]}
+                      tickFormatter={(tick) => `${tick}%`}
+                    />
+                    <RechartsTooltip
+                      contentStyle={{
+                        backgroundColor: '#0f172a',
+                        borderColor: '#334155',
+                        borderRadius: '0.5rem',
+                      }}
+                      labelStyle={{ fontWeight: 'bold' }}
+                      formatter={(value, name, props) => [`${props.payload.availability_rate.toFixed(2)}%`, "Availability Rate"]}
+                      labelFormatter={(label) => `Week of: ${new Date(label + 'T00:00:00').toLocaleDateString()}`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '14px' }}/>
+                    <Line
+                      type="monotone"
+                      dataKey="availability_rate"
+                      name="Availability Rate"
+                      stroke="#38bdf8" // sky-400
+                      strokeWidth={2}
+                      activeDot={{ r: 8 }}
+                      dot={{ stroke: '#0ea5e9', strokeWidth: 1, r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.section>
+            {/* END: New Availability Rate Chart Section */}
+
+            {/* Quick Links */}
             <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[{ icon: <FiDatabase />, label: "Rebalancer" }, { icon: <FiTrendingUp />, label: "Forecast" }, { icon: <FiSettings />, label: "Settings" }].map(({ icon, label }) => (
-                <motion.div key={label} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="bg-[#1f2a46] rounded-xl p-4 flex items-center justify-center space-x-3 cursor-pointer hover:bg-[#2a3a56] transition border border-white/20">
-                  {icon}
-                  <span className="text-lg font-medium">{label}</span>
-                </motion.div>
-              ))}
+                {hasPermission("GET:/dashboard") && (
+                    <motion.div
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="bg-[#1f2a46] rounded-xl p-4 flex items-center justify-center space-x-3 cursor-pointer hover:bg-[#2a3a56] transition border border-white/20"
+                        onClick={() => alert(`Rebalancer feature coming soon!`)}
+                    >
+                        <FiDatabase />
+                        <span className="text-lg font-medium">Rebalancer</span>
+                    </motion.div>
+                )}
+                {hasPermission("GET:/forecast/store/<param>") && (
+                    <motion.div
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="bg-[#1f2a46] rounded-xl p-4 flex items-center justify-center space-x-3 cursor-pointer hover:bg-[#2a3a56] transition border border-white/20"
+                        onClick={() => alert(`Forecast feature coming soon!`)}
+                    >
+                        <FiTrendingUp />
+                        <span className="text-lg font-medium">Forecast</span>
+                    </motion.div>
+                )}
+                {hasPermission("POST:/config/apply-formula") && (
+                     <motion.div
+                        key="Configuration Page"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="bg-[#1f2a46] rounded-xl p-4 flex items-center justify-center space-x-3 cursor-pointer hover:bg-[#2a3a56] transition border border-white/20"
+                        onClick={() => navigate("/config")}
+                    >
+                        <FiSettings />
+                        <span className="text-lg font-medium">Configuration Page</span>
+                    </motion.div>
+                )}
             </section>
 
             {/* Inventory Health */}

@@ -19,7 +19,7 @@ print("SUPABASE_URL:", os.getenv("SUPABASE_URL"))
 print("ANON_KEY     :", os.getenv("ANON_KEY")[:8], "…")  # show first 8 chars
 
 
-BASE_URL = "http://127.0.0.1:5000"
+BASE_URL = "http://127.0.0.1:5500"
 
 def signup():
     print("\n🔐 SIGNUP")
@@ -852,7 +852,7 @@ MENU_OPTIONS = {
     "8": {"desc": "Check Stockouts After Reorder(store alert on map)", "route": "POST:/alerts/check-stockout-after-reorder"},
     "9": {"desc": "Individual store map alert", "route": "GET:/stores/with-alert-status"},
     "10": {"desc": "Show Forecasted Data", "route": "GET:/forecast/store/<int:store_id>"},
-    "11": {"desc": "Admin Privileges", "route": "GET:/users"},  # Admin-only example
+    "11": {"desc": "Admin Privileges", "route": "GET:/admin/users"},  # Admin-only example
     "12": {"desc": "Logout", "route": None},
     "13": {"desc": "Place Reorder", "route": "POST:/reorder/place"},
     "14": {

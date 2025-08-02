@@ -7,7 +7,7 @@
 	},
 	"item": [
 		{
-			"name": "http://127.0.0.1:5000/register",
+			"name": "http://127.0.0.1:5500/register",
 			"request": {
 				"method": "POST",
 				"header": [],
@@ -20,12 +20,12 @@
 						}
 					}
 				},
-				"url": "http://127.0.0.1:5000/register"
+				"url": "http://127.0.0.1:5500/register"
 			},
 			"response": []
 		},
 		{
-			"name": "http://127.0.0.1:5000/login",
+			"name": "http://127.0.0.1:5500/login",
 			"request": {
 				"method": "POST",
 				"header": [],
@@ -38,12 +38,12 @@
 						}
 					}
 				},
-				"url": "http://127.0.0.1:5000/login"
+				"url": "http://127.0.0.1:5500/login"
 			},
 			"response": []
 		},
 		{
-			"name": "http://127.0.0.1:5000/upload/validate",
+			"name": "http://127.0.0.1:5500/upload/validate",
 			"request": {
 				"method": "POST",
 				"header": [
@@ -105,16 +105,16 @@
 						}
 					]
 				},
-				"url": "http://127.0.0.1:5000/upload/validate"
+				"url": "http://127.0.0.1:5500/upload/validate"
 			},
 			"response": []
 		},
 		{
-			"name": "http://127.0.0.1:5000/config/recalculate-thresholds",
+			"name": "http://127.0.0.1:5500/config/recalculate-thresholds",
 			"request": {
 				"method": "POST",
 				"header": [],
-				"url": "http://127.0.0.1:5000/config/recalculate-thresholds"
+				"url": "http://127.0.0.1:5500/config/recalculate-thresholds"
 			},
 			"response": []
 		}

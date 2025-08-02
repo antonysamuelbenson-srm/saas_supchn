@@ -43,7 +43,7 @@ document.querySelector('.js-upload-button').addEventListener('click', (e) => {
     const formData = new FormData();
     formData.append("csv_file", selectedFile);
 
-    fetch("http://localhost:5000/upload", {
+    fetch("http://localhost:5500/upload", {
         method: "POST",
         body: formData,
     })
@@ -65,7 +65,7 @@ document.querySelector('.js-text-upload-link').
         const textData = {
             textInfo: inputText
         }
-        fetch("http://localhost:5000/upload_api", {
+        fetch("http://localhost:5500/upload_api", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
