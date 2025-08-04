@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 const AdminUserManager = () => {
   const [users, setUsers] = useState([]);
@@ -7,6 +8,7 @@ const AdminUserManager = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [newRole, setNewRole] = useState("");
   const token = localStorage.getItem("token");
+  const navigate = useNavigate();
 
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -74,6 +76,14 @@ const AdminUserManager = () => {
 
   return (
     <div className="p-6">
+        <div className="mb-4 flex justify-start">
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="btn btn-secondary"
+          >
+            ← Back to Dashboard
+          </button>
+        </div>
       <h2 className="text-2xl font-bold mb-4">Admin Panel - Manage Users</h2>
       <div className="overflow-x-auto">
         <table className="table table-zebra w-full">
