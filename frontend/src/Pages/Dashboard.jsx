@@ -406,6 +406,11 @@ useEffect(() => {
                   <FiUpload className="mr-3" /> File Upload
                 </button>
               )}
+              {hasPermission("GET:/admin/users") && (
+                <button onClick={() => navigate("/adminprivileges")} className="flex items-center text-white hover:bg-[#1f2a46] p-2 rounded-md transition w-full">
+                  <FiUpload className="mr-3" /> Manage User Access
+                </button>
+              )}
               {hasPermission("GET:/dashboard") && (
                  <button className="flex items-center text-white hover:bg-[#1f2a46] p-2 rounded-md transition w-full">
                     <FiBarChart2 className="mr-3" /> Reports
