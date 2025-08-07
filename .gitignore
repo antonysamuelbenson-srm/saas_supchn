@@ -1,3 +1,4 @@
 backend/.env
 backend/invmaitnr/
-backend/__pycache__/
+__pycache__/
+*pyc
