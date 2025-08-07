@@ -77,6 +77,12 @@
 
 ### Date - 07/08/25
 
-1. Change the line chart to bar chart  
+#### pending
+1. Change the line chart to bar chart 
 2. Making the dashboard visible for the the forecasted data on maps 
-3. Stockout and connecting back to the backend  
+3. Stockout and connecting back to the backend 
+
+#### Sprint 3 
+- initialized
+- due on 14th Aug 2025
+- Forecast Module
