@@ -468,13 +468,15 @@ useEffect(() => {
                 </div>
               </motion.div>
 
+                        
               {/* Alerts Card */}
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="bg-[#1f2a46] rounded-xl p-4 shadow-inner space-y-3 border border-white/20">
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-md font-medium text-blue-200">Alerts</p>
                   <span className="text-xs bg-red-500/20 px-2 py-1 rounded text-red-300">{data.alerts.length} total</span>
                 </div>
-                <div className="space-y-2">
+                {/* MODIFIED: Added max-h-32 and overflow-y-auto to make the container scrollable */}
+                <div className="space-y-2 max-h-32 overflow-y-auto pr-3">
                   {data.alerts.map((alert) => {
                     const severityColors = {
                       High: "bg-[#743939] text-red-300",
