@@ -72,18 +72,32 @@ const AdminUserManager = () => {
     }
   };
 
+  const reactivateUser = async (user) => {
+    try {
+      await axios.post(
+        `http://127.0.0.1:5500/admin/user/${user.role_user_id}/reactivate`,
+        {},
+        { headers }
+      );
+      alert("User reactivated successfully.");
+      fetchUsers();
+    } catch (err) {
+      console.error("Failed to reactivate user", err);
+    }
+  };
+
   if (loading) return <div className="text-center mt-10">Loading users...</div>;
 
   return (
     <div className="p-6">
-        <div className="mb-4 flex justify-start">
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="btn btn-secondary"
-          >
-            ← Back to Dashboard
-          </button>
-        </div>
+      <div className="mb-4 flex justify-start">
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="btn btn-secondary"
+        >
+          ← Back to Dashboard
+        </button>
+      </div>
       <h2 className="text-2xl font-bold mb-4">Admin Panel - Manage Users</h2>
       <div className="overflow-x-auto">
         <table className="table table-zebra w-full">
@@ -91,6 +105,7 @@ const AdminUserManager = () => {
             <tr>
               <th>Email</th>
               <th>Role</th>
+              <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -99,19 +114,35 @@ const AdminUserManager = () => {
               <tr key={user.role_user_id}>
                 <td>{user.email}</td>
                 <td>{user.role}</td>
-                <td className="flex gap-2">
+                <td>
+                  {user.active ? (
+                    <span className="text-green-600 font-semibold">Active</span>
+                  ) : (
+                    <span className="text-red-600 font-semibold">Deactivated</span>
+                  )}
+                </td>
+                <td className="flex gap-2 flex-wrap">
                   <button
                     className="btn btn-xs btn-info"
                     onClick={() => setSelectedUser(user)}
                   >
                     Change Role
                   </button>
-                  <button
-                    className="btn btn-xs btn-warning"
-                    onClick={() => deactivateUser(user)}
-                  >
-                    Deactivate
-                  </button>
+                  {user.active ? (
+                    <button
+                      className="btn btn-xs btn-warning"
+                      onClick={() => deactivateUser(user)}
+                    >
+                      Deactivate
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-xs btn-success"
+                      onClick={() => reactivateUser(user)}
+                    >
+                      Reactivate
+                    </button>
+                  )}
                   <button
                     className="btn btn-xs btn-error"
                     onClick={() => deleteUser(user)}

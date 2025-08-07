@@ -14,12 +14,7 @@ supabase: Client = create_client(url, key)
 
 from pathlib import Path
 
-print("cwd       :", Path.cwd())
-print("SUPABASE_URL:", os.getenv("SUPABASE_URL"))
-print("ANON_KEY     :", os.getenv("ANON_KEY")[:8], "…")  # show first 8 chars
-
-
-BASE_URL = "http://127.0.0.1:5500"
+BASE_URL = "http://127.0.0.1:5000"
 
 def signup():
     print("\n🔐 SIGNUP")
@@ -68,6 +63,7 @@ def login():
 
 def fetch_permissions(token):
     headers = {"Authorization": f"Bearer {token}"}
+    
     try:
         resp = requests.get(F"{BASE_URL}/user/permissions", headers=headers)
         if resp.status_code == 200:
@@ -643,11 +639,27 @@ def admin_privileges(token):
         except Exception as e:
             print("❌ Failed to parse user list:", str(e))
             return []
+        
+    def fetch_deactivated(status=None):
+        url = f"{BASE_URL}/admin/users"
+        if status:
+            url += f"?status={status}"
+        res = requests.get(url, headers=headers)
+        if not res.ok:
+            print("❌ Failed to fetch users")
+            return []
+        try:
+            return res.json()
+        except Exception as e:
+            print("❌ Failed to parse user list:", str(e))
+            return []
+
 
     def select_user(users):
         print("\n👥 Available Users:")
         for i, user in enumerate(users):
-            print(f"{i + 1}. Email: {user['email']} | Role: {user['role']} | ID: {user['role_user_id']}")
+            status = "🟢 Active" if user.get("active", True) else "🔴 Deactivated"
+            print(f"{i + 1}. Email: {user['email']} | Role: {user['role']} | Status: {status} | ID: {user['role_user_id']}")
         try:
             choice = int(input("\nSelect user number: "))
             if not (1 <= choice <= len(users)):
@@ -719,13 +731,35 @@ def admin_privileges(token):
             print("✅ Response:", res.json())
         except Exception:
             print("❌ Failed to parse response:", res.text)
+    
+    def reactivate_user():
+        users = fetch_deactivated(status="deactivated")
+        if not users:
+            return
+        selected_user = select_user(users)
+        if not selected_user:
+            return
+
+        role_user_id = selected_user['role_user_id']
+        print(f"✅ Reactivating: {selected_user['email']}")
+
+        res = requests.post(
+            f"{BASE_URL}/admin/user/{role_user_id}/reactivate",
+            headers=headers
+        )
+        try:
+            print("✅ Response:", res.json())
+        except Exception:
+            print("❌ Failed to parse response:", res.text)
+
 
     while True:
         print("\n--- Admin Privileges ---")
         print("1. Change a user's role")
         print("2. Delete a user")
         print("3. Deactivate a user")
-        print("4. Back to main menu")
+        print("4. Reactivate a user")
+        print("5. Back to main menu")
 
         choice = input("Enter your choice: ")
 
@@ -736,6 +770,8 @@ def admin_privileges(token):
         elif choice == "3":
             deactivate_user()
         elif choice == "4":
+            reactivate_user()
+        elif choice == "5":
             break
         else:
             print("Invalid choice. Please try again.")
@@ -897,7 +933,7 @@ def main():
             if token:
                 user_role, allowed_routes = fetch_permissions(token)
                 if not allowed_routes:
-                    print("No permissions found, exiting.")
+                    print("\n⛔ Your account is deactivated or has no permissions.")
                     return
 
             if token:

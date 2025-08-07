@@ -9,15 +9,11 @@ import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-
-const BASE_URL = "http://localhost:5500";
-
-// MODIFIED: CSS styles updated for an SVG pointer icon instead of a dot.
-// START: Added for Line Chart
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer
 } from 'recharts';
-// END: Added for Line Chart
+
+const BASE_URL = "http://localhost:5500";
 
 const MapStyles = () => (
   <style>{`
@@ -92,7 +88,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-// MODIFIED: The function now creates an SVG pointer icon.
 const createAlertIcon = (location) => {
   const { alertStatus } = location;
   const reorderCount = alertStatus?.reorderCount || 0;
@@ -106,7 +101,6 @@ const createAlertIcon = (location) => {
     severityClass = 'severity-medium'; // Yellow/Amber
   }
 
-  // The HTML now contains an SVG path for the map pin.
   return new L.DivIcon({
     className: `custom-marker-container ${severityClass}`,
     html: `
@@ -124,12 +118,7 @@ const createAlertIcon = (location) => {
 function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [permissions, setPermissions] = useState([]);
-
-    // START: Added state for availability chart
   const [availabilityData, setAvailabilityData] = useState([]);
-  // END: Added state for availability chart
-
-  // Dashboard state
   const [data, setData] = useState({
     metrics: {
       current_demand: 0,
@@ -150,17 +139,6 @@ function Dashboard() {
 
   const [forecastDays, setForecastDays] = useState(7);
   
-  const fetchLookaheadDays = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(`${BASE_URL}/user/lookahead_days`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setForecastDays(res.data.lookahead_days || 7);
-    } catch (err) {
-      console.error("❌ Failed to fetch lookahead_days:", err);
-    }
-  };
 useEffect(() => {
     const fetchDashboardData = async () => {
       setLoading(true);
@@ -172,7 +150,6 @@ useEffect(() => {
       const headers = { Authorization: `Bearer ${token}` };
 
       try {
-        // First, verify permissions
         const permRes = await axios.get(`${BASE_URL}/user/permissions`, { headers });
         const allowedRoutes = permRes.data.allowed_routes || [];
         setPermissions(allowedRoutes);
@@ -182,7 +159,6 @@ useEffect(() => {
           return;
         }
 
-        // Fetch all data sources in parallel
         const [
           dashboardRes,
           storesRes,
@@ -197,19 +173,17 @@ useEffect(() => {
           axios.get(`${BASE_URL}/user/lookahead_days`, { headers }),
         ]);
 
-        // Process lookahead days
         if (lookaheadRes.status === 'fulfilled') {
             setForecastDays(lookaheadRes.value.data.lookahead_days || 7);
         } else {
             console.error("❌ Failed to fetch lookahead_days:", lookaheadRes.reason);
         }
 
-        // Process availability data
         if (availabilityRes.status === 'fulfilled') {
             setAvailabilityData(availabilityRes.value.data.data || []);
         } else {
             console.error("❌ Failed to fetch availability data:", availabilityRes.reason);
-            setAvailabilityData([]); // Ensure it's an empty array on failure
+            setAvailabilityData([]);
         }
         
         const backendDashboard = dashboardRes.status === 'fulfilled' ? dashboardRes.value.data : {};
@@ -226,7 +200,6 @@ useEffect(() => {
             });
         }
         
-        // Fetch detailed location data
         const locationPromises = stores.map(store => Promise.allSettled([
             axios.get(`${BASE_URL}/store/${store.store_id}/summary`, { headers }),
             axios.get(`${BASE_URL}/store/${store.store_id}/hover`, { headers }),
@@ -332,8 +305,23 @@ useEffect(() => {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#0f172a] flex transition-all duration-300">
-      <MapStyles /> {/* Inject the CSS for our markers */}
+    <div className="min-h-screen w-full bg-[#0f172a] relative flex transition-all duration-300">
+      <MapStyles />
+
+      {/* Floating Sidebar Button */}
+      {!sidebarOpen && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8, x: -50 }}
+          animate={{ opacity: 1, scale: 1, x: 0 }}
+          transition={{ type: "spring", stiffness: 260, damping: 20 }}
+          onClick={() => setSidebarOpen(true)}
+          className="absolute top-4 left-4 z-50 p-3 bg-slate-800 text-white rounded-full hover:bg-slate-700 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-blue-500 transition-all duration-300"
+          aria-label="Open sidebar"
+        >
+          <FiMenu size={22} />
+        </motion.button>
+      )}
+
       {/* Sidebar */}
       <div className={`bg-[#152438] border-r border-[#1f2a46] shadow-lg transition-all duration-300 ${sidebarOpen ? "w-60 p-6" : "w-0 overflow-hidden"} flex flex-col space-y-6`}>
         {sidebarOpen && (
@@ -360,6 +348,9 @@ useEffect(() => {
                     <FiBarChart2 className="mr-3" /> Reports
                 </button>
               )}
+              <button onClick={() => navigate("/rebelancer")} className="flex items-center text-white hover:bg-[#1f2a46] p-2 rounded-md transition w-full">
+                <FiLogOut className="mr-3" /> Rebalancer
+              </button>
                {hasPermission("POST:/config/apply-formula") && (
                 <button onClick={() => navigate("/Config")} className="flex items-center text-white hover:bg-[#1f2a46] p-2 rounded-md transition w-full">
                   <FiShoppingBag className="mr-3" /> Configuration Page
@@ -389,9 +380,6 @@ useEffect(() => {
               <div className="flex items-center space-x-3">
                 <button onClick={() => window.location.reload()} className="p-2 rounded-md hover:bg-[#1f2a46] transition">
                   <FiRefreshCw size={20} />
-                </button>
-                <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-md hover:bg-[#1f2a46] transition">
-                  <FiMenu size={24} />
                 </button>
               </div>
             </header>
@@ -477,7 +465,7 @@ useEffect(() => {
                       <Marker
                         key={i}
                         position={[loc.lat, loc.lng]}
-                        icon={createAlertIcon(loc)} // Use the new custom icon
+                        icon={createAlertIcon(loc)}
                         eventHandlers={{
                           mouseover: (e) => e.target.openPopup(),
                           mouseout: (e) => e.target.closePopup(),
@@ -502,7 +490,7 @@ useEffect(() => {
                                     <ul className="ml-4 list-disc text-sm space-y-1">
                                         <li>📦 SKUs to Reorder: <strong>{loc.alertStatus.reorderCount}</strong></li>
                                         <li className={loc.alertStatus.hasAlert ? "text-red-600 font-bold" : ""}>
-                                          ⚠️ Stockout despite Reorder: <strong>{loc.alertStatus.stockoutCount}</strong>
+                                            ⚠️ Stockout despite Reorder: <strong>{loc.alertStatus.stockoutCount}</strong>
                                         </li>
                                     </ul>
                                 </div>
@@ -555,7 +543,6 @@ useEffect(() => {
               </motion.div>
             </section>
 
-            {/* START: New Availability Rate Chart Section */}
             <motion.section
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -614,45 +601,6 @@ useEffect(() => {
                 </ResponsiveContainer>
               </div>
             </motion.section>
-            {/* END: New Availability Rate Chart Section */}
-
-            {/* Quick Links */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {hasPermission("GET:/dashboard") && (
-                    <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="bg-[#1f2a46] rounded-xl p-4 flex items-center justify-center space-x-3 cursor-pointer hover:bg-[#2a3a56] transition border border-white/20"
-                        onClick={() => alert(`Rebalancer feature coming soon!`)}
-                    >
-                        <FiDatabase />
-                        <span className="text-lg font-medium">Rebalancer</span>
-                    </motion.div>
-                )}
-                {hasPermission("GET:/forecast/store/<param>") && (
-                    <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="bg-[#1f2a46] rounded-xl p-4 flex items-center justify-center space-x-3 cursor-pointer hover:bg-[#2a3a56] transition border border-white/20"
-                        onClick={() => alert(`Forecast feature coming soon!`)}
-                    >
-                        <FiTrendingUp />
-                        <span className="text-lg font-medium">Forecast</span>
-                    </motion.div>
-                )}
-                {hasPermission("POST:/config/apply-formula") && (
-                     <motion.div
-                        key="Configuration Page"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="bg-[#1f2a46] rounded-xl p-4 flex items-center justify-center space-x-3 cursor-pointer hover:bg-[#2a3a56] transition border border-white/20"
-                        onClick={() => navigate("/config")}
-                    >
-                        <FiSettings />
-                        <span className="text-lg font-medium">Configuration Page</span>
-                    </motion.div>
-                )}
-            </section>
 
             {/* Inventory Health */}
             <section className="bg-[#1f2a46] rounded-lg p-4 flex flex-col md:flex-row items-center justify-between border border-white/20">
