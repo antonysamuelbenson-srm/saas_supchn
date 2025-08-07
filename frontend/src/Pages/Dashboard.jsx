@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect , useCallback } from "react";
 import axios from "axios";
 import {
   FiMenu, FiX, FiDatabase, FiTrendingUp, FiSettings,
@@ -79,6 +79,62 @@ const FitBounds = ({ locations }) => {
 
   return null;
 };
+
+
+
+
+
+// NEW COMPONENT: AutoPanMarker
+const AutoPanMarker = ({ children, ...props }) => {
+  const map = useMap();
+
+  const handleTooltipOpen = useCallback((e) => {
+    const tooltip = e.tooltip;
+    if (!tooltip || !map) return;
+
+    // Use a small timeout to allow the tooltip to be fully rendered and positioned
+    setTimeout(() => {
+      // Get the pixel bounds of the tooltip and the map container
+      const tooltipBounds = tooltip.getElement().getBoundingClientRect();
+      const mapBounds = map.getContainer().getBoundingClientRect();
+
+      // Calculate how much the tooltip is overflowing the map container
+      const panOffset = { x: 0, y: 0 };
+      const padding = 20; // Add some padding so it's not flush with the edge
+
+      if (tooltipBounds.right + padding > mapBounds.right) {
+        panOffset.x = tooltipBounds.right + padding - mapBounds.right;
+      }
+      if (tooltipBounds.left - padding < mapBounds.left) {
+        panOffset.x = tooltipBounds.left - padding - mapBounds.left;
+      }
+      if (tooltipBounds.bottom + padding > mapBounds.bottom) {
+        panOffset.y = tooltipBounds.bottom + padding - mapBounds.bottom;
+      }
+      if (tooltipBounds.top - padding < mapBounds.top) {
+        panOffset.y = tooltipBounds.top - padding - mapBounds.top;
+      }
+      
+      // If there is any overflow, pan the map smoothly
+      if (panOffset.x !== 0 || panOffset.y !== 0) {
+        map.panBy([panOffset.x, panOffset.y], { animate: true, duration: 0.3 });
+      }
+    }, 10); // 10ms timeout is usually enough
+
+  }, [map]);
+
+  const eventHandlers = React.useMemo(() => ({
+    tooltipopen: handleTooltipOpen,
+    click: (e) => e.target.openPopup(), // Keep the click for popup
+  }), [handleTooltipOpen]);
+
+  return (
+    <Marker {...props} eventHandlers={eventHandlers}>
+      {children}
+    </Marker>
+  );
+};
+
 
 // Leaflet marker setup
 delete L.Icon.Default.prototype._getIconUrl;
@@ -405,13 +461,15 @@ useEffect(() => {
                 </div>
               </motion.div>
 
+                        
               {/* Alerts Card */}
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="bg-[#1f2a46] rounded-xl p-4 shadow-inner space-y-3 border border-white/20">
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-md font-medium text-blue-200">Alerts</p>
                   <span className="text-xs bg-red-500/20 px-2 py-1 rounded text-red-300">{data.alerts.length} total</span>
                 </div>
-                <div className="space-y-2">
+                {/* MODIFIED: Added max-h-32 and overflow-y-auto to make the container scrollable */}
+                <div className="space-y-2 max-h-32 overflow-y-auto pr-3">
                   {data.alerts.map((alert) => {
                     const severityColors = {
                       High: "bg-[#743939] text-red-300",
