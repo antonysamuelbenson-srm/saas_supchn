@@ -74,3 +74,9 @@
  
   Target :
   - Finish task assigned for sprint 1
+
+### Date - 07/08/25
+
+1. Change the line chart to bar chart  
+2. Making the dashboard visible for the the forecasted data on maps 
+3. Stockout and connecting back to the backend  
