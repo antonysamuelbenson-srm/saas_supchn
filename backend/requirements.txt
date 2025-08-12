@@ -5,3 +5,5 @@ flask-bcrypt
 PyJWT 
 pandas 
 psycopg2-binary
+flask_cors
+supabase
