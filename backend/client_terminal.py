@@ -6,6 +6,7 @@ from datetime import date
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from app.routes import forecast_data
+from app.routes import compare
 
 load_dotenv()
 url: str = os.environ.get("SUPABASE_URL")
@@ -855,13 +856,11 @@ MENU_OPTIONS = {
     "11": {"desc": "Admin Privileges", "route": "GET:/admin/users"},  # Admin-only example
     "12": {"desc": "Logout", "route": None},
     "13": {"desc": "Place Reorder", "route": "POST:/reorder/place"},
-    "14": {
-    "desc": "View Weekly Availability Rate",
-    "route": "GET:/availability"
+    "14": {"desc": "View Weekly Availability Rate", "route": "GET:/availability"},
+    "15": {"desc": "Compare Forecasts & View Metrics", "route": "GET:/compare"},
 }
 
 
-}
 
 def normalize_route(route):
     # Replace all <...> segments with <param> to match your ROUTE_ROLE_MAP style
@@ -883,6 +882,53 @@ def show_menu(allowed_routes):
         norm_route = normalize_route(route)
         if norm_route in normalized_allowed:
             print(f"{key}. {opt['desc']}")
+
+def compare_forecasts(token, role_user_id):
+    """
+    Calls the backend /compare endpoint to calculate and display forecast evaluation metrics.
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Ask the user for inputs
+    try:
+        n_days = int(input("Enter number of days for comparison (e.g., 7): ").strip())
+    except ValueError:
+        print("❌ Invalid number. Defaulting to 7 days.")
+        n_days = 7
+
+    level = input("Comparison level? (store / store_sku) [store]: ").strip().lower() or "store"
+
+    params = {
+        "n_days": n_days,
+        "level": level,
+        "role_user_id": role_user_id
+    }
+
+    # Request metrics from backend
+    res = requests.get(f"{BASE_URL}/compare", headers=headers, params=params)
+
+    if not res.ok:
+        print("❌ Failed to fetch comparison metrics:", res.text)
+        return
+
+    try:
+        metrics_list = res.json()
+    except Exception:
+        print("❌ Failed to parse response:", res.text)
+        return
+
+    if not metrics_list:
+        print("📭 No matching data found for comparison.")
+        return
+
+    print("\n📊 Forecast Evaluation Metrics")
+    for m in metrics_list:
+        key = m["key"] if isinstance(m["key"], str) else " | ".join([str(k) for k in m["key"] if k])
+        print(f"\n🔹 {key}")
+        print(f"   MAPE : {m['mape']:.2f}%")
+        print(f"   sMAPE: {m['smape']:.2f}%")
+        print(f"   MAE  : {m['mae']:.2f}")
+        print(f"   RMSE : {m['rmse']:.2f}")
 
 
 def main():
@@ -952,7 +998,8 @@ def main():
                         place_reorder(token)
                     elif action=="14":
                         display_availability_from_db(token)
-
+                    elif action == "15":
+                        compare_forecasts(token, role_user_id)
                     else:
                         print("❌ Invalid choice.")
         else:

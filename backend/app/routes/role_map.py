@@ -58,6 +58,9 @@ ROUTE_ROLE_MAP = {
     "POST:/api/upload/transferCostData":     ["admin", "editor", "viewer"],
     "POST:/api/upload/warehouseMaxData":     ["admin", "editor", "viewer"],
 
-    "GET:/user/permissions": ["admin", "editor", "viewer"]
+    "GET:/user/permissions": ["admin", "editor", "viewer"],
+
+    # --- Compare Forecasts ---
+    "GET:/compare":                          ["admin", "editor", "viewer"],
 
 }
