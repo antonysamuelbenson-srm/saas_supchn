@@ -857,11 +857,25 @@ MENU_OPTIONS = {
     "13": {"desc": "Place Reorder", "route": "POST:/reorder/place"},
     "14": {
     "desc": "View Weekly Availability Rate",
-    "route": "GET:/availability"
+    "route": "GET:/availability"},
+    "15": {
+        "desc": "Forecast",
+        "route" : None,
+        "submenu": {
+            "1": {"desc": "Set Forecast Schedule", "route": "POST:/forecast/schedule"},
+            "2": {"desc": "Update Forecast Horizon", "route": "POST:/forecast/schedule/horizon"},
+            "3": {"desc": "View Forecast Schedules", "route": "GET:/forecast/schedule"},
+            "4": {"desc": "Manual Forecast Runner", "route": "POST:/forecast/run"},
+            "5": {"desc": "Store-level Forecast (Next N Weeks)", "route": "GET:/forecast/store-level"},
+            "6": {"desc": "Store-level Past Accuracy", "route": "GET:/forecast/accuracy/store"},
+            "7": {"desc": "SKU-level Forecast (Next N Weeks)", "route": "GET:/forecast/sku-level"},
+            "8": {"desc": "SKU-level Past Accuracy", "route": "GET:/forecast/accuracy/sku"},
+            "9": {"desc": "Forecast Chart Data", "route": "GET:/forecast/chart-data"},
+            "10": {"desc": "Forecast Run Logs", "route": "GET:/forecast/logs"}
+        }
+    }
 }
 
-
-}
 
 def normalize_route(route):
     # Replace all <...> segments with <param> to match your ROUTE_ROLE_MAP style
@@ -883,6 +897,137 @@ def show_menu(allowed_routes):
         norm_route = normalize_route(route)
         if norm_route in normalized_allowed:
             print(f"{key}. {opt['desc']}")
+
+
+def forecast_menu(token):
+
+    def view_forecast_schedule():
+        url = f"{BASE_URL}/forecast/schedule"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        print(r.json())
+
+    def set_forecast_schedule():
+        url = f"{BASE_URL}/forecast/schedule"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Optional store/product
+        store_id = input("Enter store ID [leave blank for all stores]: ").strip() or None
+        product_id = input("Enter product ID [leave blank for all products]: ").strip() or None
+
+        # Frequency selection
+        valid_frequencies = ["hourly", "daily", "weekly", "monthly"]
+        while True:
+            frequency = input(f"Select frequency {valid_frequencies}: ").strip().lower()
+            if frequency in valid_frequencies:
+                break
+            print("Invalid frequency, choose from the options above.")
+
+        # Optional time/day
+        time_of_day = input("Enter time of day (HH:MM) [default 00:00]: ").strip() or "00:00"
+        day_of_week = input("Enter day of week [default Saturday]: ").strip() or "Saturday"
+
+        payload = {
+            "store_id": store_id,
+            "product_id": product_id,
+            "frequency": frequency,
+            "time_of_day": time_of_day,
+            "day_of_week": day_of_week
+        }
+
+        r = requests.post(url, json=payload, headers=headers)
+        print(r.json())
+
+
+    def update_forecast_horizon():
+        url = f"{BASE_URL}/forecast/schedule/horizon"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Prompt user for n_days
+        while True:
+            n_days_input = input("Enter forecast horizon in days (e.g., 7): ").strip()
+            if n_days_input.isdigit() and int(n_days_input) > 0:
+                n_days = int(n_days_input)
+                break
+            print("Please enter a valid positive integer for n_weeks.")
+
+        payload = {"n_weeks": n_days}
+
+        r = requests.post(url, json=payload, headers=headers)
+        print(r.json())
+
+    def run_forecast():
+        url = f"{BASE_URL}/forecast/run"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.post(url, headers=headers)
+        print(r.json())
+
+
+    def chart_data():
+        url = f"{BASE_URL}/forecast/chart-data"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        print(r.json())
+
+    def store_level_forecast():
+        url = f"{BASE_URL}/forecast/store-level"
+        headers = {"Authorization": f"Bearer {token}"}
+        params = {"n_weeks": 4}
+        r = requests.get(url, headers=headers, params=params)
+        print(r.json())
+
+    def past_accuracy_store():
+        url = f"{BASE_URL}/forecast/accuracy/store"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        print(r.json())
+
+    def sku_level_forecast():
+        url = f"{BASE_URL}/forecast/sku-level"
+        headers = {"Authorization": f"Bearer {token}"}
+        params = {"n_weeks": 4}
+        r = requests.get(url, headers=headers, params=params)
+        print(r.json())
+
+    def past_accuracy_sku():
+        url = f"{BASE_URL}/forecast/accuracy/sku"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        print(r.json())
+
+    def forecast_logs():
+        url = f"{BASE_URL}/forecast/logs"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        print(r.json())
+
+
+    options = {
+        "1": ("Set Forecast Schedule", set_forecast_schedule),
+        "2": ("View Forecast Schedule", view_forecast_schedule),
+        "3": ("Update Forecast Horizon (N weeks)", update_forecast_horizon),
+        "4": ("Run Forecast Manually", run_forecast),
+        "5": ("Store-Level Forecast (Next N Weeks)", store_level_forecast),
+        "6": ("SKU-Level Forecast (Next N Weeks)", sku_level_forecast),
+        "7": ("Past Accuracy - Store", past_accuracy_store),
+        "8": ("Past Accuracy - SKU", past_accuracy_sku),
+        "9": ("Chart Data with Trendline", chart_data),
+        "10": ("Forecast Run Logs", forecast_logs),
+        "0": ("Exit Forecast Menu", None)
+    }
+
+    while True:
+        print("\n📊 Forecast Module Menu")
+        for key, (desc, _) in options.items():
+            print(f"{key}. {desc}")
+
+        choice = input("Select an option: ").strip()
+        if choice == "0":
+            break
+        elif choice in options:
+            options[choice][1]()
+        else:
+            print("❌ Invalid choice. Try again.")
 
 
 def main():
@@ -952,6 +1097,8 @@ def main():
                         place_reorder(token)
                     elif action=="14":
                         display_availability_from_db(token)
+                    elif action == "15":
+                        forecast_menu(token)
 
                     else:
                         print("❌ Invalid choice.")

@@ -5,5 +5,11 @@ flask-bcrypt
 PyJWT 
 pandas 
 psycopg2-binary
+<<<<<<< Updated upstream
 flask_cors
 supabase
+=======
+
+
+>>>>>>> Stashed changes
+python-Levenshtein

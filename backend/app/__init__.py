@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from flask_cors import CORS
 import os
 
+
 load_dotenv()
 
 db = SQLAlchemy()
@@ -25,8 +26,9 @@ def create_app():
         supports_credentials=True
     )
 
+
     # ✅ Register Blueprints INSIDE this function
-    from app.routes import auth, dashboard, alerts, upload, config, store_upload, forecast_data, node_location_update, reorder, availability, admin
+    from app.routes import auth, dashboard, alerts, upload, config, store_upload, node_location_update, reorder, availability, admin, forecast
     app.register_blueprint(auth.bp)
     app.register_blueprint(admin.bp, url_prefix="/admin")
     app.register_blueprint(dashboard.bp)
@@ -34,10 +36,11 @@ def create_app():
     app.register_blueprint(upload.bp)
     app.register_blueprint(config.bp)
     app.register_blueprint(store_upload.bp)
-    app.register_blueprint(forecast_data.bp)
+    # app.register_blueprint(forecast_data.bp)
     app.register_blueprint(node_location_update.bp)
     app.register_blueprint(reorder.bp)
     app.register_blueprint(availability.bp)
+    app.register_blueprint(forecast.bp)
 
     return app
 
