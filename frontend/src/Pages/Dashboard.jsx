@@ -19,6 +19,20 @@ import {
 } from 'recharts';
 // END: Added for Line Chart
 
+
+function ResetMapViewButton({ center, zoom }) {
+  const map = useMap();
+  return (
+    <button
+      onClick={() => map.setView(center, zoom)}
+      className="absolute top-3 right-3 z-[1000] bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded shadow-md"
+    >
+      ⤢ Reset View
+    </button>
+  );
+}
+
+
 const MapStyles = () => (
   <style>{`
     .custom-marker-container {
@@ -178,6 +192,7 @@ const createAlertIcon = (location) => {
 
 
 function Dashboard() {
+  const [mapSize, setMapSize] = useState("default");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [permissions, setPermissions] = useState([]);
 
@@ -500,89 +515,139 @@ useEffect(() => {
                   })}
                 </div>
               </motion.div>
-
-              {/* Map View */}
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="bg-[#1f2a46] rounded-xl p-5 shadow-inner border border-white/20 md:col-span-3">
-                <div className="flex justify-between items-center mb-3">
-                  <p className="font-medium text-blue-200">Network View</p>
-                  <div className="text-xs flex space-x-2">
-                    <span className="bg-green-500/20 px-2 py-1 rounded text-green-300">
-                      {data.metrics.stockouts} Stockouts
-                    </span>
-                    <span className="bg-yellow-500/20 px-2 py-1 rounded text-yellow-300">
-                      {data.metrics.skus_below_threshold} Below Threshold
-                    </span>
-                  </div>
-                </div>
-
-                <div className="h-[300px] md:h-[400px] w-full rounded-lg overflow-hidden relative">
-                  <MapContainer
-                    center={[20, 0]} 
-                    zoom={2}
-                    style={{ height: "100%", width: "100%" }}
-                    scrollWheelZoom={true}
-                  >
-                    <TileLayer
-                      attribution='&copy; OpenStreetMap contributors'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-
-                    <FitBounds locations={data.locations} />
-
-{data.locations
-  .filter((loc) => loc.lat != null && loc.lng != null)
-  .map((loc, i) => (
-  <AutoPanMarker // <-- Use the new component here
-    key={loc.store_id || i} // Using a more stable key is better
-    position={[loc.lat, loc.lng]}
-    icon={createAlertIcon(loc)}
-  >
-
-
-    <Tooltip direction="top" offset={[0, -42]} opacity={1} permanent={false}>
-        <div className="text-sm space-y-2 text-left" style={{ minWidth: '250px', maxWidth: '300px' }}>
-          {/* Your rich tooltip content is unchanged */}
-          <div>
-            <strong>{loc.store_name}</strong><br />
-            <span className="text-gray-500">{loc.location}</span>
-          </div>
-    
-          {loc.alert && (
-            <div className="text-red-500 font-bold">
-              🚨 Alert: {loc.alert}
-            </div>
-          )}
-    
-          {loc.alertStatus && (
-            <div className="mt-2 text-gray-800 bg-amber-100 p-2 rounded-md shadow-inner border border-amber-300/40">
-              <p className="text-amber-800 font-semibold mb-1">Reorder Status:</p>
-              <ul className="ml-4 list-disc text-sm space-y-1">
-                <li>📦 SKUs to Reorder: <strong>{loc.alertStatus.reorderCount}</strong></li>
-                <li className={loc.alertStatus.hasAlert ? "text-red-600 font-bold" : ""}>
-                  ⚠️ Stockout despite Reorder: <strong>{loc.alertStatus.stockoutCount}</strong>
-                </li>
-              </ul>
-            </div>
-          )}
-    
-          {loc.hoverStats && (
-            <div className="mt-3 bg-blue-100 text-gray-800 p-2 rounded-md shadow-inner border border-blue-300/40">
-              <p className="text-blue-800 font-semibold mb-1">Quick Stats ({loc.hoverStats.lookahead_days}-Day):</p>
-              <ul className="ml-4 list-disc text-sm space-y-1">
-                <li>📦 <strong>{loc.hoverStats.distinct_skus}</strong> SKUs</li>
-                <li>📊 <strong>{loc.hoverStats.inventory_units}</strong> Inventory Units</li>
-                <li>📈 <strong>{loc.hoverStats.forecast_units}</strong> Forecast Units</li>
-              </ul>
-            </div>
-          )}
+ <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+      className="bg-[#1f2a46] rounded-xl p-5 shadow-inner border border-white/20 md:col-span-3"
+    >
+      <div className="flex justify-between items-center mb-3">
+        <p className="font-medium text-blue-200">Network View</p>
+        <div className="text-xs flex space-x-2">
+          <span className="bg-green-500/20 px-2 py-1 rounded text-green-300">
+            {data.metrics.stockouts} Stockouts
+          </span>
+          <span className="bg-yellow-500/20 px-2 py-1 rounded text-yellow-300">
+            {data.metrics.skus_below_threshold} Below Threshold
+          </span>
         </div>
-      </Tooltip>
+      </div>
 
-  </AutoPanMarker>
-                      ))}
-                  </MapContainer>
-                </div>
-              </motion.div>
+      {/* Map Container */}
+      <div className="relative">
+        <div
+          className={`rounded-lg overflow-hidden relative transition-all duration-300 ${
+            mapSize === "default" ? "h-[300px] md:h-[400px]" : "h-[600px]"
+          }`}
+        >
+          <MapContainer
+            center={[20, 0]}
+            zoom={2}
+            style={{ height: "100%", width: "100%" }}
+            scrollWheelZoom={true}
+          >
+            <TileLayer
+              attribution='&copy; OpenStreetMap contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+
+            {/* Reset Button inside Map */}
+            <ResetMapViewButton center={[20, 0]} zoom={2} />
+
+            <FitBounds locations={data.locations} />
+
+            {data.locations
+              .filter((loc) => loc.lat != null && loc.lng != null)
+              .map((loc, i) => (
+                <AutoPanMarker
+                  key={loc.store_id || i}
+                  position={[loc.lat, loc.lng]}
+                  icon={createAlertIcon(loc)}
+                >
+                  <Tooltip
+                    direction="top"
+                    offset={[0, -42]}
+                    opacity={1}
+                    permanent={false}
+                  >
+                    <div
+                      className="text-sm space-y-2 text-left"
+                      style={{ minWidth: "250px", maxWidth: "300px" }}
+                    >
+                      <div>
+                        <strong>{loc.store_name}</strong>
+                        <br />
+                        <span className="text-gray-500">{loc.location}</span>
+                      </div>
+
+                      {loc.alert && (
+                        <div className="text-red-500 font-bold">
+                          🚨 Alert: {loc.alert}
+                        </div>
+                      )}
+
+                      {loc.alertStatus && (
+                        <div className="mt-2 text-gray-800 bg-amber-100 p-2 rounded-md shadow-inner border border-amber-300/40">
+                          <p className="text-amber-800 font-semibold mb-1">
+                            Reorder Status:
+                          </p>
+                          <ul className="ml-4 list-disc text-sm space-y-1">
+                            <li>
+                              📦 SKUs to Reorder:{" "}
+                              <strong>
+                                {loc.alertStatus.reorderCount}
+                              </strong>
+                            </li>
+                            <li
+                              className={
+                                loc.alertStatus.hasAlert
+                                  ? "text-red-600 font-bold"
+                                  : ""
+                              }
+                            >
+                              ⚠️ Stockout despite Reorder:{" "}
+                              <strong>
+                                {loc.alertStatus.stockoutCount}
+                              </strong>
+                            </li>
+                          </ul>
+                        </div>
+                      )}
+
+                      {loc.hoverStats && (
+                        <div className="mt-3 bg-blue-100 text-gray-800 p-2 rounded-md shadow-inner border border-blue-300/40">
+                          <p className="text-blue-800 font-semibold mb-1">
+                            Quick Stats (
+                            {loc.hoverStats.lookahead_days}
+                            -Day):
+                          </p>
+                          <ul className="ml-4 list-disc text-sm space-y-1">
+                            <li>
+                              📦 <strong>{loc.hoverStats.distinct_skus}</strong>{" "}
+                              SKUs
+                            </li>
+                            <li>
+                              📊{" "}
+                              <strong>{loc.hoverStats.inventory_units}</strong>{" "}
+                              Inventory Units
+                            </li>
+                            <li>
+                              📈{" "}
+                              <strong>{loc.hoverStats.forecast_units}</strong>{" "}
+                              Forecast Units
+                            </li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </Tooltip>
+                </AutoPanMarker>
+              ))}
+          </MapContainer>
+        </div>
+      </div>
+    </motion.div>
+
             </section>
 
             {/* START: New Availability Rate Chart Section */}
