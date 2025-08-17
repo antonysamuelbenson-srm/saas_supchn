@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect , useCallback } from "react";
 import axios from "axios";
 import {
   FiMenu, FiX, FiDatabase, FiTrendingUp, FiSettings,
@@ -18,6 +18,20 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer
 } from 'recharts';
 // END: Added for Line Chart
+
+
+function ResetMapViewButton({ center, zoom }) {
+  const map = useMap();
+  return (
+    <button
+      onClick={() => map.setView(center, zoom)}
+      className="absolute top-3 right-3 z-[1000] bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded shadow-md"
+    >
+      ⤢ Reset View
+    </button>
+  );
+}
+
 
 const MapStyles = () => (
   <style>{`
@@ -84,6 +98,62 @@ const FitBounds = ({ locations }) => {
   return null;
 };
 
+
+
+
+
+// NEW COMPONENT: AutoPanMarker
+const AutoPanMarker = ({ children, ...props }) => {
+  const map = useMap();
+
+  const handleTooltipOpen = useCallback((e) => {
+    const tooltip = e.tooltip;
+    if (!tooltip || !map) return;
+
+    // Use a small timeout to allow the tooltip to be fully rendered and positioned
+    setTimeout(() => {
+      // Get the pixel bounds of the tooltip and the map container
+      const tooltipBounds = tooltip.getElement().getBoundingClientRect();
+      const mapBounds = map.getContainer().getBoundingClientRect();
+
+      // Calculate how much the tooltip is overflowing the map container
+      const panOffset = { x: 0, y: 0 };
+      const padding = 20; // Add some padding so it's not flush with the edge
+
+      if (tooltipBounds.right + padding > mapBounds.right) {
+        panOffset.x = tooltipBounds.right + padding - mapBounds.right;
+      }
+      if (tooltipBounds.left - padding < mapBounds.left) {
+        panOffset.x = tooltipBounds.left - padding - mapBounds.left;
+      }
+      if (tooltipBounds.bottom + padding > mapBounds.bottom) {
+        panOffset.y = tooltipBounds.bottom + padding - mapBounds.bottom;
+      }
+      if (tooltipBounds.top - padding < mapBounds.top) {
+        panOffset.y = tooltipBounds.top - padding - mapBounds.top;
+      }
+      
+      // If there is any overflow, pan the map smoothly
+      if (panOffset.x !== 0 || panOffset.y !== 0) {
+        map.panBy([panOffset.x, panOffset.y], { animate: true, duration: 0.3 });
+      }
+    }, 10); // 10ms timeout is usually enough
+
+  }, [map]);
+
+  const eventHandlers = React.useMemo(() => ({
+    tooltipopen: handleTooltipOpen,
+    click: (e) => e.target.openPopup(), // Keep the click for popup
+  }), [handleTooltipOpen]);
+
+  return (
+    <Marker {...props} eventHandlers={eventHandlers}>
+      {children}
+    </Marker>
+  );
+};
+
+
 // Leaflet marker setup
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -122,6 +192,7 @@ const createAlertIcon = (location) => {
 
 
 function Dashboard() {
+  const [mapSize, setMapSize] = useState("default");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [permissions, setPermissions] = useState([]);
 
@@ -417,13 +488,15 @@ useEffect(() => {
                 </div>
               </motion.div>
 
+                        
               {/* Alerts Card */}
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="bg-[#1f2a46] rounded-xl p-4 shadow-inner space-y-3 border border-white/20">
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-md font-medium text-blue-200">Alerts</p>
                   <span className="text-xs bg-red-500/20 px-2 py-1 rounded text-red-300">{data.alerts.length} total</span>
                 </div>
-                <div className="space-y-2">
+                {/* MODIFIED: Added max-h-32 and overflow-y-auto to make the container scrollable */}
+                <div className="space-y-2 max-h-32 overflow-y-auto pr-3">
                   {data.alerts.map((alert) => {
                     const severityColors = {
                       High: "bg-[#743939] text-red-300",
@@ -442,117 +515,139 @@ useEffect(() => {
                   })}
                 </div>
               </motion.div>
+ <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+      className="bg-[#1f2a46] rounded-xl p-5 shadow-inner border border-white/20 md:col-span-3"
+    >
+      <div className="flex justify-between items-center mb-3">
+        <p className="font-medium text-blue-200">Network View</p>
+        <div className="text-xs flex space-x-2">
+          <span className="bg-green-500/20 px-2 py-1 rounded text-green-300">
+            {data.metrics.stockouts} Stockouts
+          </span>
+          <span className="bg-yellow-500/20 px-2 py-1 rounded text-yellow-300">
+            {data.metrics.skus_below_threshold} Below Threshold
+          </span>
+        </div>
+      </div>
 
-              {/* Map View */}
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="bg-[#1f2a46] rounded-xl p-5 shadow-inner border border-white/20 md:col-span-3">
-                <div className="flex justify-between items-center mb-3">
-                  <p className="font-medium text-blue-200">Network View</p>
-                  <div className="text-xs flex space-x-2">
-                    <span className="bg-green-500/20 px-2 py-1 rounded text-green-300">
-                      {data.metrics.stockouts} Stockouts
-                    </span>
-                    <span className="bg-yellow-500/20 px-2 py-1 rounded text-yellow-300">
-                      {data.metrics.skus_below_threshold} Below Threshold
-                    </span>
-                  </div>
-                </div>
+      {/* Map Container */}
+      <div className="relative">
+        <div
+          className={`rounded-lg overflow-hidden relative transition-all duration-300 ${
+            mapSize === "default" ? "h-[300px] md:h-[400px]" : "h-[600px]"
+          }`}
+        >
+          <MapContainer
+            center={[20, 0]}
+            zoom={2}
+            style={{ height: "100%", width: "100%" }}
+            scrollWheelZoom={true}
+          >
+            <TileLayer
+              attribution='&copy; OpenStreetMap contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
 
-                <div className="h-[300px] md:h-[400px] w-full rounded-lg overflow-hidden relative">
-                  <MapContainer
-                    center={[20, 0]} 
-                    zoom={2}
-                    style={{ height: "100%", width: "100%" }}
-                    scrollWheelZoom={true}
+            {/* Reset Button inside Map */}
+            <ResetMapViewButton center={[20, 0]} zoom={2} />
+
+            <FitBounds locations={data.locations} />
+
+            {data.locations
+              .filter((loc) => loc.lat != null && loc.lng != null)
+              .map((loc, i) => (
+                <AutoPanMarker
+                  key={loc.store_id || i}
+                  position={[loc.lat, loc.lng]}
+                  icon={createAlertIcon(loc)}
+                >
+                  <Tooltip
+                    direction="top"
+                    offset={[0, -42]}
+                    opacity={1}
+                    permanent={false}
                   >
-                    <TileLayer
-                      attribution='&copy; OpenStreetMap contributors'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
+                    <div
+                      className="text-sm space-y-2 text-left"
+                      style={{ minWidth: "250px", maxWidth: "300px" }}
+                    >
+                      <div>
+                        <strong>{loc.store_name}</strong>
+                        <br />
+                        <span className="text-gray-500">{loc.location}</span>
+                      </div>
 
-                    <FitBounds locations={data.locations} />
+                      {loc.alert && (
+                        <div className="text-red-500 font-bold">
+                          🚨 Alert: {loc.alert}
+                        </div>
+                      )}
 
-                    {data.locations
-                      .filter((loc) => loc.lat != null && loc.lng != null)
-                      .map((loc, i) => (
-                      <Marker
-                        key={i}
-                        position={[loc.lat, loc.lng]}
-                        icon={createAlertIcon(loc)} // Use the new custom icon
-                        eventHandlers={{
-                          mouseover: (e) => e.target.openPopup(),
-                          mouseout: (e) => e.target.closePopup(),
-                        }}
-                      >
-                        <Popup>
-                          <div className="text-sm space-y-2">
-                            <div>
-                              <strong>{loc.store_name}</strong><br />
-                              <span className="text-gray-500">{loc.location}</span>
-                            </div>
+                      {loc.alertStatus && (
+                        <div className="mt-2 text-gray-800 bg-amber-100 p-2 rounded-md shadow-inner border border-amber-300/40">
+                          <p className="text-amber-800 font-semibold mb-1">
+                            Reorder Status:
+                          </p>
+                          <ul className="ml-4 list-disc text-sm space-y-1">
+                            <li>
+                              📦 SKUs to Reorder:{" "}
+                              <strong>
+                                {loc.alertStatus.reorderCount}
+                              </strong>
+                            </li>
+                            <li
+                              className={
+                                loc.alertStatus.hasAlert
+                                  ? "text-red-600 font-bold"
+                                  : ""
+                              }
+                            >
+                              ⚠️ Stockout despite Reorder:{" "}
+                              <strong>
+                                {loc.alertStatus.stockoutCount}
+                              </strong>
+                            </li>
+                          </ul>
+                        </div>
+                      )}
 
-                            {loc.alert && (
-                              <div className="text-red-500">
-                                🚨 Alert: {loc.alert}
-                              </div>
-                            )}
+                      {loc.hoverStats && (
+                        <div className="mt-3 bg-blue-100 text-gray-800 p-2 rounded-md shadow-inner border border-blue-300/40">
+                          <p className="text-blue-800 font-semibold mb-1">
+                            Quick Stats (
+                            {loc.hoverStats.lookahead_days}
+                            -Day):
+                          </p>
+                          <ul className="ml-4 list-disc text-sm space-y-1">
+                            <li>
+                              📦 <strong>{loc.hoverStats.distinct_skus}</strong>{" "}
+                              SKUs
+                            </li>
+                            <li>
+                              📊{" "}
+                              <strong>{loc.hoverStats.inventory_units}</strong>{" "}
+                              Inventory Units
+                            </li>
+                            <li>
+                              📈{" "}
+                              <strong>{loc.hoverStats.forecast_units}</strong>{" "}
+                              Forecast Units
+                            </li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </Tooltip>
+                </AutoPanMarker>
+              ))}
+          </MapContainer>
+        </div>
+      </div>
+    </motion.div>
 
-                            {loc.alertStatus && (
-                                <div className="mt-2 text-gray-800 bg-amber-100 p-2 rounded-md shadow-inner border border-amber-300/40">
-                                    <p className="text-amber-800 font-semibold mb-1">Reorder Status:</p>
-                                    <ul className="ml-4 list-disc text-sm space-y-1">
-                                        <li>📦 SKUs to Reorder: <strong>{loc.alertStatus.reorderCount}</strong></li>
-                                        <li className={loc.alertStatus.hasAlert ? "text-red-600 font-bold" : ""}>
-                                          ⚠️ Stockout despite Reorder: <strong>{loc.alertStatus.stockoutCount}</strong>
-                                        </li>
-                                    </ul>
-                                </div>
-                            )}
-
-                            {loc.hoverStats && (
-                              <div className="mt-3 bg-blue-100 text-gray-800 p-2 rounded-md shadow-inner border border-blue-300/40">
-                                <p className="text-blue-800 font-semibold mb-1">Hover Stats:</p>
-                                <ul className="ml-4 list-disc text-sm space-y-1">
-                                  <li>📦 <strong>{loc.hoverStats.distinct_skus}</strong> SKUs</li>
-                                  <li>📊 <strong>{loc.hoverStats.inventory_units}</strong> Inventory Units</li>
-                                  <li>
-                                    📈 <strong>{loc.hoverStats.forecast_units}</strong> Forecast Units 
-                                    ({loc.hoverStats.lookahead_days}-Day)
-                                  </li>
-                                  <li>🚨 <strong>{loc.hoverStats.alerts}</strong> Alert(s)</li>
-                                </ul>
-                              </div>
-                            )}
-
-                            <div>
-                              <p className="font-semibold">Summary:</p>
-                              <ul className="list-disc ml-4">
-                                {loc.summary && loc.summary.length > 0 ? (
-                                  loc.summary.map((item, j) => (
-                                    <li key={j}>
-                                      <span className="font-medium">{item.product_name}</span>: {item.quantity} pcs
-                                      {item.reorder_point !== undefined && (
-                                        <span className="text-xs text-gray-400">
-                                          {" "} (Reorder Point: {item.reorder_point})
-                                        </span>
-                                      )}
-                                    </li>
-                                  ))
-                                ) : (
-                                  <li>No inventory data</li>
-                                )}
-                              </ul>
-                            </div>
-                          </div>
-                        </Popup>
-
-                        <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent={false}>
-                          {loc.store_name}
-                        </Tooltip>
-                      </Marker>
-                      ))}
-                  </MapContainer>
-                </div>
-              </motion.div>
             </section>
 
             {/* START: New Availability Rate Chart Section */}
