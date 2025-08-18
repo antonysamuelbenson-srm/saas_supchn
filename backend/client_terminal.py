@@ -5,7 +5,6 @@ import json, uuid
 from datetime import date
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from app.routes import forecast_data
 
 load_dotenv()
 url: str = os.environ.get("SUPABASE_URL")
