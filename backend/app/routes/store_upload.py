@@ -240,10 +240,21 @@ def hovered_store_stats(store_id):
         return jsonify({"error": "Unauthorized"}), 401
 
     # Inventory info
-    inv_rows = (supabase.table("inventory")
-                        .select("sku,qty")
-                        .eq("store_id", str(store_id))
-                        .execute()).data or []
+    # checks the latest snapshot 
+    latest_snapshot = (supabase.table("inventory")
+                    .select("snapshot_date")
+                    .eq("store_id", str(store_id))
+                    .order("snapshot_date", desc=True)   # newest first
+                    .limit(1)
+                    .execute()).data
+
+    if latest_snapshot:
+        latest_date = latest_snapshot[0]["snapshot_date"]
+        inv_rows = (supabase.table("inventory")
+                .select("sku,qty")
+                .eq("store_id", str(store_id))
+                .eq("snapshot_date", latest_date)
+                .execute()).data or []
 
     distinct_skus = set()
     total_inventory_units = 0
