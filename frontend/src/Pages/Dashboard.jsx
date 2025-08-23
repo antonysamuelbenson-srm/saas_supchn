@@ -1122,10 +1122,10 @@ function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-120px)]">
           {/* Main Content Column */}
           <div className="lg:col-span-2 space-y-6 flex flex-col">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <MetricCard icon={<FiTrendingUp size={24} className="text-blue-400" />} title="Current Demand" value={data.metrics.current_demand.toLocaleString()} />
-              <MetricCard icon={<FiDatabase size={24} className="text-green-400" />} title="Inventory Position" value={data.metrics.inventory_position.toLocaleString()} subValue={`${data.metrics.weeks_of_supply} WOS`} />
-              <MetricCard icon={<FiAlertTriangle size={24} className="text-red-400" />} title="Total Alerts" value={data.alerts.length} />
+              <MetricCard icon={<FiDatabase size={24} className="text-green-400" />} title="Inventory Position" value={data.metrics.inventory_position.toLocaleString()}  />
+              <MetricCard icon={<FiAlertTriangle size={24} className="text-yellow-400" />} title="Weeks Of Supply" value={data.metrics.weeks_of_supply.toLocaleString()} />
             </div>
 
             {/* Network View Map */}
