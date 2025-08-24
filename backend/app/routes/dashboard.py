@@ -63,7 +63,7 @@ def recompute_dashboard_metrics():
         avg_adu = (sum(adu_vals) / len(adu_vals)) if adu_vals else None
         weeks_of_supply = r2(inv_total / (avg_adu * 7), 1) if avg_adu else None
         rop_total = sum(float(r["reorder_point"] or 0) for r in rc_rows)
-        inventory_position = r2(inv_total - rop_total)
+        inventory_position = r2(inv_total)
 
         rc_map = {(r["store_id"], r["sku"]): r for r in rc_rows}
         projected_stockouts = 0

@@ -1522,7 +1522,159 @@ export default function ConfigPage() {
       setApplyLoading(false);
     }
   };
+// Example using fetch in React
 
+// const handleClick = async () => {
+//     try {
+//         // 1. Retrieve the authentication token from storage.
+//         // The key 'authToken' is an example; use the key you set during login.
+//         const token = localStorage.getItem('token');
+
+//         // 2. Check if the token exists before making the call.
+//         if (!token) {
+//             console.error('Authentication token not found. User might need to log in again.');
+//             // Optionally, redirect to login page here.
+//             return;
+//         }
+
+//         const response = await fetch('http://localhost:5500/dashboard/recompute', 'http://localhost:5500/availability/recompute',{
+//             method: 'POST',
+//             headers: {
+//                 'Content-Type': 'application/json',
+//                 // 3. Add the Authorization header with the Bearer token.
+//                 'Authorization': `Bearer ${token}`,
+//             },
+//             body: JSON.stringify({ data: 'some data from frontend' }),
+//         });
+        
+//         // This handles cases where the token is invalid or expired
+//         if (!response.ok) {
+//             if (response.status === 401) {
+//                 console.error('Unauthorized: The token may be invalid or expired.');
+//                  // Optionally, redirect to login page here.
+//             }
+//             // Throw an error to be caught by the catch block
+//             throw new Error(`HTTP error! status: ${response.status}`);
+//         }
+
+//         const result = await response.json();
+//         console.log(result);
+//     } catch (error) {
+//         console.error('Error:', error);
+//     }
+// };
+
+// const handleClick = async () => {
+//   try {
+//     // 1. Get the token from local storage
+//     const token = localStorage.getItem('token');
+
+//     if (!token) {
+//       console.error('Authentication token not found. Please log in again.');
+//       // Optionally, update UI state to show an error message
+//       return;
+//     }
+
+//     // 2. Define the request options that are common to both calls
+//     const requestOptions = {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//         'Authorization': `Bearer ${token}`,
+//       },
+//       // Make sure this body contains the data your server actually needs
+//       body: JSON.stringify({ data: 'some data from frontend' }),
+//     };
+
+//     console.log('Starting recomputation for both endpoints...');
+
+//     // 3. Use Promise.all to run both fetch requests in parallel
+//     const [dashboardResponse, availabilityResponse] = await Promise.all([
+//       fetch('http://localhost:5500/dashboard/recompute', requestOptions),
+//       fetch('http://localhost:5500/availability/recompute', requestOptions)
+//     ]);
+
+//     // 4. Check if both responses were successful
+//     if (!dashboardResponse.ok) {
+//       throw new Error(`Dashboard recompute failed with status: ${dashboardResponse.status}`);
+//     }
+//     if (!availabilityResponse.ok) {
+//       throw new Error(`Availability recompute failed with status: ${availabilityResponse.status}`);
+//     }
+
+//     // 5. Get the JSON results from both successful responses
+//     const dashboardResult = await dashboardResponse.json();
+//     const availabilityResult = await availabilityResponse.json();
+
+//     console.log('✅ Dashboard Recompute Successful:', dashboardResult);
+//     console.log('✅ Availability Recompute Successful:', availabilityResult);
+//     // Optionally, update UI state to show a success message
+
+//   } catch (error) {
+//     console.error('Error during recomputation:', error);
+//     // Optionally, update UI state to show the error message
+//   }
+// };
+
+const handleClick = async () => {
+  try {
+    // 1. Get the token from local storage
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      console.error('Authentication token not found. Please log in again.');
+      return;
+    }
+
+    // 2. Define the common request options
+    const requestOptions = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      // Note: The /refresh endpoint doesn't need a body, 
+      // but sending one is harmless.
+      body: JSON.stringify({ data: 'some data from frontend' }), 
+    };
+
+    console.log('Starting requests for all three endpoints...');
+
+    // 3. Use Promise.all to run all three fetch requests in parallel
+    const [
+      dashboardResponse, 
+      availabilityResponse, 
+      alertsResponse // Added handler for the new endpoint
+    ] = await Promise.all([
+      fetch('http://localhost:5500/dashboard/recompute', requestOptions),
+      fetch('http://localhost:5500/availability/recompute', requestOptions),
+      fetch('http://localhost:5500/alerts/refresh', requestOptions) // Added the new endpoint
+    ]);
+
+    // 4. Check if all three responses were successful
+    if (!dashboardResponse.ok) {
+      throw new Error(`Dashboard recompute failed with status: ${dashboardResponse.status}`);
+    }
+    if (!availabilityResponse.ok) {
+      throw new Error(`Availability recompute failed with status: ${availabilityResponse.status}`);
+    }
+    if (!alertsResponse.ok) { // Added check for the new endpoint
+      throw new Error(`Alerts refresh failed with status: ${alertsResponse.status}`);
+    }
+
+    // 5. Get the JSON results from all successful responses
+    const dashboardResult = await dashboardResponse.json();
+    const availabilityResult = await availabilityResponse.json();
+    const alertsResult = await alertsResponse.json(); // Added result parsing
+
+    console.log('✅ Dashboard Recompute Successful:', dashboardResult);
+    console.log('✅ Availability Recompute Successful:', availabilityResult);
+    console.log('✅ Alerts Refresh Successful:', alertsResult); // Added log for the new result
+
+  } catch (error) {
+    console.error('An error occurred during the process:', error);
+  }
+};
   // --- Render ---
   return (
     <div className="dark:bg-[#0f172a] bg-gray-50 text-gray-800 dark:text-gray-200 flex flex-col h-screen">
@@ -1656,7 +1808,7 @@ export default function ConfigPage() {
                   </div>
                   
                   <div className="flex items-center gap-4">
-                    <SubmitButton onClick={handleApplyFormula} isLoading={applyLoading} className="bg-green-600 hover:bg-green-700">
+                    <SubmitButton onClick={() => { handleApplyFormula(); handleClick(); }} isLoading={applyLoading} className="bg-green-600 hover:bg-green-700">
                         Apply Formula
                     </SubmitButton>
                      {applyMessage.text && <StatusMessage message={applyMessage.text} type={applyMessage.type} />}
