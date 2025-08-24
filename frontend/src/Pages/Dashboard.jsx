@@ -1119,7 +1119,7 @@ function Dashboard() {
       <main className="flex-1 p-6 transition-all duration-300">
         <Header lastUpdated={data.metrics.timestamp} onRefresh={() => window.location.reload()} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-120px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 ">
           {/* Main Content Column */}
           <div className="lg:col-span-2 space-y-6 flex flex-col">
 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1137,7 +1137,7 @@ function Dashboard() {
                   <span className="bg-yellow-900/50 px-2 py-1 rounded text-yellow-300">{data.metrics.skus_below_threshold} Below Threshold</span>
                 </div>
               </div>
-              <div className="rounded-lg overflow-hidden relative flex-1">
+              <div className="rounded-lg overflow-hidden relative h-[60vh]">
                 <MapContainer center={[20, 0]} zoom={2} style={{ height: "100%", width: "100%", backgroundColor: '#f0f0f0' }} scrollWheelZoom={true}>
                   <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
                   <ResetMapViewButton locations={data.locations} />
@@ -1184,7 +1184,7 @@ function Dashboard() {
           {/* Right Column */}
           <div className="lg:col-span-1 space-y-6 flex flex-col">
             {/* Alerts Panel */}
-            <div className="bg-slate-800 rounded-lg p-4 shadow-lg border border-slate-700 flex flex-col h-2/5">
+            <div className="bg-slate-800 rounded-lg p-4 shadow-lg border border-slate-700 flex flex-col h-[285px]">
               <div className="flex justify-between items-center mb-4 flex-shrink-0">
                 <h3 className="text-lg font-bold text-white">Alerts</h3>
                 <span className="text-sm bg-red-900/50 px-2 py-1 rounded text-red-300 font-semibold">{data.alerts.length} Total</span>
@@ -1209,7 +1209,7 @@ function Dashboard() {
             </div>
 
 {/* Availability Chart */}
-            <div className="bg-slate-800 rounded-lg p-4 shadow-lg border border-slate-700 flex-1 flex flex-col">
+            <div className="bg-slate-800 rounded-lg p-4 shadow-lg border border-slate-700 flex flex-col h-[320px]">
                 <h3 className="text-lg font-bold text-white">SKU Availability Rate</h3>
                 <p className="text-sm text-slate-400 mb-4 flex-shrink-0">Weekly historical availability.</p>
                 <div className="w-full flex-1">

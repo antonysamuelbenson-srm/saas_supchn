@@ -27,44 +27,44 @@ function useDebounce(value, delay) {
 // --- Reusable UI Components ---
 
 /**
- * A simple loading spinner component.
+ * A simple loading spinner component, styled for a dark background.
  */
 const LoadingSpinner = () => (
   <div className="flex justify-center items-center py-10">
-    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+    <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-600 border-t-indigo-500"></div>
   </div>
 );
 
 /**
- * A generic component for displaying empty or informational states.
+ * A generic component for displaying empty or informational states on a dark background.
  */
 const InfoMessage = ({ icon, title, message }) => (
   <div className="text-center py-16 px-6">
     <div className="text-5xl mb-3">{icon}</div>
-    <h3 className="text-xl font-semibold text-gray-800 mb-1">{title}</h3>
-    <p className="text-gray-500">{message}</p>
+    <h3 className="text-xl font-semibold text-slate-100 mb-1">{title}</h3>
+    <p className="text-slate-400">{message}</p>
   </div>
 );
 
 /**
- * Component for a single SKU's forecast table.
+ * Component for a single SKU's forecast table, styled for a dark theme.
  */
 const SkuForecastTable = ({ sku, forecastDays }) => (
-  <div className="mb-6 last:mb-0 bg-white border border-gray-200 rounded-lg overflow-hidden">
-    <h3 className="text-lg font-semibold text-gray-900 p-4 bg-gray-50 border-b">{sku}</h3>
+  <div className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+    <h3 className="text-lg font-semibold text-slate-100 p-4 bg-slate-900/50 border-b border-slate-700">{sku}</h3>
     <div className="overflow-x-auto">
-        <table className="min-w-full">
-        <thead className="bg-gray-50">
+      <table className="min-w-full">
+        <thead className="bg-slate-900/50">
           <tr>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Forecast Quantity</th>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Date</th>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Forecast Quantity</th>
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="divide-y divide-slate-700">
           {forecastDays.map((d, idx) => (
-            <tr key={idx} className="hover:bg-indigo-50 transition-colors">
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">{d.date}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{d.forecast_qty}</td>
+            <tr key={idx} className="hover:bg-slate-700/50 transition-colors">
+              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-200">{d.date}</td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{d.forecast_qty}</td>
             </tr>
           ))}
         </tbody>
@@ -87,7 +87,7 @@ export default function StoreForecastPage() {
 
   // --- Debouncing Inputs ---
   const debouncedDays = useDebounce(days, 500);
-  const debouncedSkuSearch = useDebounce(skuSearchTerm, 300); // Debounce SKU search
+  const debouncedSkuSearch = useDebounce(skuSearchTerm, 300);
 
   // --- Data Fetching Effects ---
 
@@ -117,11 +117,10 @@ export default function StoreForecastPage() {
       setForecast(null);
       return;
     }
-
     const fetchForecast = async () => {
       setIsLoading(prev => ({ ...prev, forecast: true }));
       setError(prev => ({ ...prev, forecast: null }));
-      setForecast(null); // Clear previous forecast
+      setForecast(null);
       try {
         const res = await axios.get(
           `${BASE_URL}/forecast/store/${selectedStore.value}?days=${debouncedDays}`,
@@ -140,7 +139,7 @@ export default function StoreForecastPage() {
 
   // --- Memoized Computations ---
 
-  // Memoize store options for react-select to prevent re-computation
+  // Memoize store options for react-select
   const storeOptions = useMemo(() =>
     stores.map(store => ({
       value: store.store_id,
@@ -149,7 +148,7 @@ export default function StoreForecastPage() {
     [stores]
   );
 
-  // Memoize filtered forecast based on the debounced SKU search term
+  // Memoize filtered forecast based on SKU search
   const filteredForecastEntries = useMemo(() => {
     if (!forecast) return [];
     return Object.entries(forecast).filter(([sku]) =>
@@ -157,21 +156,49 @@ export default function StoreForecastPage() {
     );
   }, [forecast, debouncedSkuSearch]);
   
-  // Custom styles for react-select to match the theme
+  // Custom styles for react-select to match the dark theme
   const selectStyles = {
     control: (provided, state) => ({
       ...provided,
-      borderColor: state.isFocused ? '#6366f1' : '#d1d5db',
+      backgroundColor: '#1e293b', // slate-800
+      borderColor: state.isFocused ? '#6366f1' : '#334155', // indigo-500 : slate-700
       boxShadow: state.isFocused ? '0 0 0 1px #6366f1' : 'none',
       '&:hover': {
-        borderColor: state.isFocused ? '#6366f1' : '#9ca3af',
+        borderColor: state.isFocused ? '#6366f1' : '#475569', // slate-600
       }
+    }),
+    menu: (provided) => ({
+      ...provided,
+      backgroundColor: '#1e293b', // slate-800
+      border: '1px solid #334155', // slate-700
     }),
     option: (provided, state) => ({
         ...provided,
-        backgroundColor: state.isSelected ? '#6366f1' : state.isFocused ? '#e0e7ff' : 'white',
-        color: state.isSelected ? 'white' : '#1f2937',
-    })
+        backgroundColor: state.isSelected ? '#4f46e5' : state.isFocused ? '#334155' : 'transparent', // indigo-600 : slate-700
+        color: state.isSelected ? '#ffffff' : '#d1d5db', // white : gray-300
+        '&:active': {
+            backgroundColor: '#4338ca', // indigo-700
+        }
+    }),
+    singleValue: (provided) => ({
+        ...provided,
+        color: '#f1f5f9' // slate-100
+    }),
+    input: (provided) => ({
+        ...provided,
+        color: '#f1f5f9' // slate-100
+    }),
+    placeholder: (provided) => ({
+        ...provided,
+        color: '#94a3b8' // slate-400
+    }),
+    indicatorSeparator: () => ({
+        display: 'none'
+    }),
+    dropdownIndicator: (provided) => ({
+        ...provided,
+        color: '#94a3b8' // slate-400
+    }),
   };
 
   // --- Render Logic ---
@@ -183,11 +210,16 @@ export default function StoreForecastPage() {
     if (error.forecast) {
       return <InfoMessage icon="😢" title="Error" message={error.forecast} />;
     }
-    if (forecast && filteredForecastEntries.length > 0) {
-      return filteredForecastEntries.map(([sku, forecastDays]) => (
+   if (forecast && filteredForecastEntries.length > 0) {
+  return (
+    // Add this responsive grid container
+    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+      {filteredForecastEntries.map(([sku, forecastDays]) => (
         <SkuForecastTable key={sku} sku={sku} forecastDays={forecastDays} />
-      ));
-    }
+      ))}
+    </div>
+  );
+}
     if (forecast && filteredForecastEntries.length === 0) {
       return (
         <InfoMessage
@@ -207,12 +239,12 @@ export default function StoreForecastPage() {
   };
 
   return (
-    <main className="h-screen bg-gray-100 p-4 md:p-8 font-sans">
+    <main className="h-screen bg-slate-900 p-4 md:p-8 font-sans text-slate-300">
       <div className="max-w-7xl mx-auto flex flex-col h-full">
         {/* --- Top Control Panel --- */}
-        <header className="flex-shrink-0 bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex flex-col md:flex-row items-center gap-4">
+        <header className="flex-shrink-0 bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 mb-6 flex flex-col md:flex-row items-center gap-4">
           <div className="w-full md:flex-1">
-            <label htmlFor="store-select" className="block text-sm font-semibold text-gray-700 mb-1">🏪 Select Store</label>
+            <label htmlFor="store-select" className="block text-sm font-semibold text-slate-300 mb-1">🏪 Select Store</label>
             <Select
               inputId="store-select"
               options={storeOptions}
@@ -226,7 +258,7 @@ export default function StoreForecastPage() {
             />
           </div>
           <div className="w-full md:w-auto">
-            <label htmlFor="days-input" className="block text-sm font-semibold text-gray-700 mb-1">📅 Forecast Days</label>
+            <label htmlFor="days-input" className="block text-sm font-semibold text-slate-300 mb-1">📅 Forecast Days</label>
             <input
               id="days-input"
               type="number"
@@ -234,18 +266,18 @@ export default function StoreForecastPage() {
               max="60"
               value={days}
               onChange={(e) => setDays(Number(e.target.value))}
-              className="w-full md:w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full md:w-32 px-3 py-2 bg-slate-700 border border-slate-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-white"
             />
           </div>
         </header>
         
         {/* --- Forecast Display Area --- */}
-        <section className="flex-1 bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
+        <section className="flex-1 bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg border border-slate-700 flex flex-col">
           {selectedStore ? (
             <>
               <div className="flex-shrink-0 flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 truncate">
-                  Forecast for: <span className="text-indigo-600">{selectedStore.label}</span>
+                <h2 className="text-2xl font-bold text-slate-100 truncate">
+                  Forecast for: <span className="text-indigo-400">{selectedStore.label}</span>
                 </h2>
                 <div className="w-full md:w-1/3">
                   <input
@@ -253,7 +285,7 @@ export default function StoreForecastPage() {
                     placeholder="🔍 Search by SKU..."
                     value={skuSearchTerm}
                     onChange={(e) => setSkuSearchTerm(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-white"
                   />
                 </div>
               </div>
