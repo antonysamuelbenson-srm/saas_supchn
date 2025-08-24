@@ -484,6 +484,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom"; // ✅ import for navigation
 import axios from "axios";
+import ForecastLookahead from "./ForecastLookahead";
 
 
 const BASE_URL = "http://127.0.0.1:5500";
@@ -499,7 +500,6 @@ export default function ConfigPage() {
   const [selectedStores, setSelectedStores] = useState([]);
   const [applyLoading, setApplyLoading] = useState(false);
   const [applyMessage, setApplyMessage] = useState("");const [lookaheadDays, setLookaheadDays] = useState(7);
-const [lookaheadStatus, setLookaheadStatus] = useState("");
 const [activeTab, setActiveTab] = useState("addStore");
 
   const [storeForm, setStoreForm] = useState({
@@ -665,17 +665,6 @@ const handleStoreSelect = (e) => {
       setApplyLoading(false);
     }
   };
-  const updateLookaheadDays = async () => {
-  try {
-    await axios.post(`${BASE_URL}/user/lookahead_days`, {
-      lookahead_days: parseInt(lookaheadDays),
-    }, { headers: authHeaders });
-
-    setLookaheadStatus("✅ Updated lookahead days!");
-  } catch (err) {
-    setLookaheadStatus(`❌ Error: ${err.response?.data?.error || err.message}`);
-  }
-};
   
 
   return (
@@ -861,28 +850,8 @@ const handleStoreSelect = (e) => {
 
           )}
 
-    {activeTab === "forecast" && (
-      // your Forecast Lookahead section here
-      <section className="bg-white dark:bg-[#1e293b] shadow rounded-xl p-6">
-        <h2 className="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">🔭 Forecast Lookahead</h2>
-        <div className="flex items-center gap-4">
-          <input
-            type="number"
-            min="1"
-            className="border p-2 rounded w-32 dark:bg-[#334155] dark:text-white dark:border-gray-600"
-            placeholder="Lookahead Days"
-            value={lookaheadDays}
-            onChange={(e) => setLookaheadDays(e.target.value)}
-          />
-          <button
-            onClick={updateLookaheadDays}
-            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-          >
-            Save Days
-          </button>
-        </div>
-        {lookaheadStatus && <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{lookaheadStatus}</p>}
-      </section>
+          {activeTab === "forecast" && (
+            <ForecastLookahead />
           )}
         </main>
       </div>

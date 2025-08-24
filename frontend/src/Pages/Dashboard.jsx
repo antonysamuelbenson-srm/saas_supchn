@@ -767,7 +767,7 @@ import axios from "axios";
 import {
   FiMenu, FiX, FiDatabase, FiTrendingUp, FiSettings,
   FiUpload, FiBarChart2, FiLogOut, FiRefreshCw, FiShoppingBag,
-  FiAlertTriangle, FiCheckCircle, FiInfo
+  FiAlertTriangle, FiCheckCircle, FiInfo, FiBox, FiCalendar
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -912,11 +912,10 @@ const MetricCard = React.memo(({ icon, title, value, subValue = null }) => (
   </motion.div>
 ));
 
-const Header = React.memo(({ lastUpdated, onRefresh }) => (
+const Header = React.memo(({ onRefresh }) => (
   <header className="relative flex justify-center items-center mb-6">
     <div className="text-center">
       <h1 className="text-3xl font-bold text-white">Control Tower Dashboard</h1>
-      <p className="text-sm text-slate-400 mt-1">Last updated: {new Date(lastUpdated).toLocaleString()}</p>
     </div>
     <button 
       onClick={onRefresh} 
@@ -1076,7 +1075,8 @@ function Dashboard() {
               severity: a.severity || "Low",
               message: a.message,
               type: a.type ? a.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : "General",
-              store_id: a.store_id
+              store_id: a.store_id,
+              sku: a.sku // Add this line
             })),
             locations
           });
@@ -1123,9 +1123,9 @@ function Dashboard() {
           {/* Main Content Column */}
           <div className="lg:col-span-2 space-y-6 flex flex-col">
 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <MetricCard icon={<FiTrendingUp size={24} className="text-blue-400" />} title="Current Demand" value={data.metrics.current_demand.toLocaleString()} />
-              <MetricCard icon={<FiDatabase size={24} className="text-green-400" />} title="Inventory Position" value={data.metrics.inventory_position.toLocaleString()}  />
-              <MetricCard icon={<FiAlertTriangle size={24} className="text-yellow-400" />} title="Weeks Of Supply" value={data.metrics.weeks_of_supply.toLocaleString()} />
+ <MetricCard icon={<FiTrendingUp size={24} className="text-blue-400" />} title="Current Demand" value={data.metrics.current_demand.toLocaleString()} />
+    <MetricCard icon={<FiBox size={24} className="text-green-400" />} title="Inventory Position" value={data.metrics.inventory_position.toLocaleString()}  />
+    <MetricCard icon={<FiCalendar size={24} className="text-yellow-400" />} title="Weeks Of Supply" value={data.metrics.weeks_of_supply.toLocaleString()} />
             </div>
 
             {/* Network View Map */}
@@ -1198,7 +1198,7 @@ function Dashboard() {
                         {alert.severity === 'Low' && <FiCheckCircle className="text-green-400 mr-3 mt-1 flex-shrink-0" />}
                       <div>
                         <p className="text-sm font-semibold text-slate-200">{alert.message}</p>
-                        <p className="text-xs text-slate-400 mt-1">{alert.type} (Store: {alert.store_id})</p>
+                        <p className="text-xs text-slate-400 mt-1">{alert.type} (SKU: {alert.sku}, Store: {alert.store_id})</p>
                       </div>
                     </div>
                   </div>
