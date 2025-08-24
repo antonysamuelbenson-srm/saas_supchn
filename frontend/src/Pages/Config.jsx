@@ -855,7 +855,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import ForecastLookahead from "./ForecastLookahead";
 
-const BASE_URL = "http://127.0.0.1:5100";
+const BASE_URL = "http://127.0.0.1:5500";
 const token = localStorage.getItem("token");
 
 export default function ConfigPage() {

@@ -18,15 +18,12 @@ def create_app():
 
     from app.models import user
     db.init_app(app)
-    # CORS(app, resources={r"/*": {"origins": "*"}})
+    # ✅ Correct CORS setup
     CORS(
         app,
-        origins=["http://localhost:5173"],  # only allow your frontend
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization"],
+        resources={r"/*": {"origins": "http://localhost:5173"}},
         supports_credentials=True
     )
-
     # ✅ Register Blueprints INSIDE this function
     from app.routes import auth, dashboard, alerts, upload, config, store_upload, forecast_data, node_location_update, reorder, availability, admin
     app.register_blueprint(auth.bp)
