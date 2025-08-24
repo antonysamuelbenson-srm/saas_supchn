@@ -1515,6 +1515,8 @@ export default function ConfigPage() {
     
     try {
       const res = await axios.post(`${BASE_URL}/config/apply-formula`, payload, { headers });
+      console.log("✅ Success Response from Server:", res.data);
+      console.log("Store IDs:", selectedStores);
       setApplyMessage({ text: `✅ Success: ${res.data.message || 'Formula applied.'}`, type: "success" });
     } catch (err) {
       setApplyMessage({ text: `❌ Failed: ${err.response?.data?.error || err.message}`, type: "error" });
@@ -1785,7 +1787,7 @@ const handleClick = async () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Select Stores (leave empty for all)</label>
+                    <label className="block text-sm font-medium mb-1">Select Stores</label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto border p-4 rounded-lg bg-gray-50 dark:bg-slate-800 border-gray-300 dark:border-gray-600">
                       {stores.map((store) => (
                         <label key={store.store_id} className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors cursor-pointer">

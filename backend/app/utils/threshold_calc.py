@@ -4,13 +4,13 @@ from app.models.inventory import InventorySnapshot
 from app.models.forecast import ForecastDaily
 import uuid
 
-def update_reorder_config(role_user_id: str, formula: str = "default",store_ids: list[int] | None = None) -> int:
+
+def update_reorder_config(role_user_id: str, formula,store_ids: list[int] | None = None) -> int:
     """
     Recompute and upsert reorder thresholds for every (store_id, SKU)
     found in InventorySnapshot for the given tenant.
     Returns the number of SKUs inserted or updated, or -1 on commit failure.
     """
-
     r2 = lambda x: round(x, 2)
 
     q = ForecastDaily.query.filter_by(role_user_id=role_user_id)
