@@ -854,7 +854,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const BASE_URL = "http://127.0.0.1:5500";
+const BASE_URL = "http://127.0.0.1:5100";
+const token = localStorage.getItem("token");
 
 export default function ConfigPage() {
   const navigate = useNavigate();
@@ -1129,6 +1130,7 @@ export default function ConfigPage() {
       setApplyLoading(false);
     }
   };
+
 
   const updateLookaheadDays = async () => {
     const headers = getAuthHeaders();
