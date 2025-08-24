@@ -4,12 +4,12 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from app import db
 
 
-# Create the enum type once; SQLAlchemy will generate the DDL if it doesn't exist
+
 batch_type_enum = Enum(
-    "store", "inventory", "forecast",
+    "store", "inventory", "forecast","capacity","transfer_cost_data","total_store_data",
     name="batch_type_enum",
     create_constraint=True,
-    metadata=db.metadata,   # ensure it goes into migrations
+    metadata=db.metadata,   
 )
 
 

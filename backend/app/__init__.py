@@ -12,7 +12,9 @@ def create_app():
     app = Flask(__name__)
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
-    ANON_KEY = os.getenv("ANON_KEY")
+    # ANON_KEY = os.getenv("ANON_KEY")
+    # If you need ANON_KEY elsewhere, add it to the app config
+    app.config["ANON_KEY"] = os.getenv("ANON_KEY")
 
     from app.models import user
     db.init_app(app)
