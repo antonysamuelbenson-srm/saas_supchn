@@ -5,6 +5,7 @@ import json, uuid
 from datetime import date
 from dotenv import load_dotenv
 from supabase import create_client, Client
+from app.routes import forecast_data
 
 load_dotenv()
 url: str = os.environ.get("SUPABASE_URL")
@@ -13,12 +14,7 @@ supabase: Client = create_client(url, key)
 
 from pathlib import Path
 
-print("cwd       :", Path.cwd())
-print("SUPABASE_URL:", os.getenv("SUPABASE_URL"))
-print("ANON_KEY     :", os.getenv("ANON_KEY")[:8], "…")  # show first 8 chars
-
-
-BASE_URL = "http://127.0.0.1:5500"
+BASE_URL = "http://127.0.0.1:5000"
 
 def signup():
     print("\n🔐 SIGNUP")
@@ -67,6 +63,7 @@ def login():
 
 def fetch_permissions(token):
     headers = {"Authorization": f"Bearer {token}"}
+    
     try:
         resp = requests.get(F"{BASE_URL}/user/permissions", headers=headers)
         if resp.status_code == 200:
@@ -94,7 +91,7 @@ def upload_csv(token: str) -> None:
         "3": ("forecast"          , "forecast"),
         "4": ("uploadStoreData"        , "totalStoreData"),
         "5": ("TransferCostData     " , "transferCostData"),
-        "6": ("WarehouseMaxCapacityDataUpload", "capacity")
+        "6": ("WarehouseMaxCapacityDataUpload", "warehouseMaxData")
     }
 
     headers = {"Authorization": f"Bearer {token}"}
@@ -642,11 +639,27 @@ def admin_privileges(token):
         except Exception as e:
             print("❌ Failed to parse user list:", str(e))
             return []
+        
+    def fetch_deactivated(status=None):
+        url = f"{BASE_URL}/admin/users"
+        if status:
+            url += f"?status={status}"
+        res = requests.get(url, headers=headers)
+        if not res.ok:
+            print("❌ Failed to fetch users")
+            return []
+        try:
+            return res.json()
+        except Exception as e:
+            print("❌ Failed to parse user list:", str(e))
+            return []
+
 
     def select_user(users):
         print("\n👥 Available Users:")
         for i, user in enumerate(users):
-            print(f"{i + 1}. Email: {user['email']} | Role: {user['role']} | ID: {user['role_user_id']}")
+            status = "🟢 Active" if user.get("active", True) else "🔴 Deactivated"
+            print(f"{i + 1}. Email: {user['email']} | Role: {user['role']} | Status: {status} | ID: {user['role_user_id']}")
         try:
             choice = int(input("\nSelect user number: "))
             if not (1 <= choice <= len(users)):
@@ -718,13 +731,35 @@ def admin_privileges(token):
             print("✅ Response:", res.json())
         except Exception:
             print("❌ Failed to parse response:", res.text)
+    
+    def reactivate_user():
+        users = fetch_deactivated(status="deactivated")
+        if not users:
+            return
+        selected_user = select_user(users)
+        if not selected_user:
+            return
+
+        role_user_id = selected_user['role_user_id']
+        print(f"✅ Reactivating: {selected_user['email']}")
+
+        res = requests.post(
+            f"{BASE_URL}/admin/user/{role_user_id}/reactivate",
+            headers=headers
+        )
+        try:
+            print("✅ Response:", res.json())
+        except Exception:
+            print("❌ Failed to parse response:", res.text)
+
 
     while True:
         print("\n--- Admin Privileges ---")
         print("1. Change a user's role")
         print("2. Delete a user")
         print("3. Deactivate a user")
-        print("4. Back to main menu")
+        print("4. Reactivate a user")
+        print("5. Back to main menu")
 
         choice = input("Enter your choice: ")
 
@@ -735,6 +770,8 @@ def admin_privileges(token):
         elif choice == "3":
             deactivate_user()
         elif choice == "4":
+            reactivate_user()
+        elif choice == "5":
             break
         else:
             print("Invalid choice. Please try again.")
@@ -856,25 +893,11 @@ MENU_OPTIONS = {
     "13": {"desc": "Place Reorder", "route": "POST:/reorder/place"},
     "14": {
     "desc": "View Weekly Availability Rate",
-    "route": "GET:/availability"},
-    "15": {
-        "desc": "Forecast",
-        "route" : None,
-        "submenu": {
-            "1": {"desc": "Set Forecast Schedule", "route": "POST:/forecast/schedule"},
-            "2": {"desc": "Update Forecast Horizon", "route": "POST:/forecast/horizon"},
-            "3": {"desc": "View Forecast Schedules", "route": "GET:/forecast/schedule"},
-            "4": {"desc": "Manual Forecast Runner", "route": "POST:/forecast/run"},
-            "5": {"desc": "Store-level Forecast (Next N Weeks)", "route": "GET:/forecast/store-level"},
-            "6": {"desc": "Store-level Past Accuracy", "route": "GET:/forecast/accuracy/store"},
-            "7": {"desc": "SKU-level Forecast (Next N Weeks)", "route": "GET:/forecast/sku-level"},
-            "8": {"desc": "SKU-level Past Accuracy", "route": "GET:/forecast/accuracy/sku"},
-            "9": {"desc": "Forecast Chart Data", "route": "GET:/forecast/chart-data"},
-            "10": {"desc": "Forecast Run Logs", "route": "GET:/forecast/logs"}
-        }
-    }
+    "route": "GET:/availability"
 }
 
+
+}
 
 def normalize_route(route):
     # Replace all <...> segments with <param> to match your ROUTE_ROLE_MAP style
@@ -898,197 +921,6 @@ def show_menu(allowed_routes):
             print(f"{key}. {opt['desc']}")
 
 
-def forecast_menu(token):
-
-    def view_forecast_schedule():
-        url = f"{BASE_URL}/forecast/schedule"
-        headers = {"Authorization": f"Bearer {token}"}
-        r = requests.get(url, headers=headers)
-        print(r.json())
-
-    def set_forecast_schedule():
-        url = f"{BASE_URL}/forecast/schedule"
-        headers = {"Authorization": f"Bearer {token}"}
-
-        # Optional store/product
-        store_id = input("Enter store ID [leave blank for all stores]: ").strip() or None
-        product_id = input("Enter product ID [leave blank for all products]: ").strip() or None
-
-        # Frequency selection
-        valid_frequencies = ["hourly", "daily", "weekly", "monthly"]
-        while True:
-            frequency = input(f"Select frequency {valid_frequencies}: ").strip().lower()
-            if frequency in valid_frequencies:
-                break
-            print("Invalid frequency, choose from the options above.")
-
-        # Optional time/day
-        time_of_day = input("Enter time of day (HH:MM) [default 00:00]: ").strip() or "00:00"
-        day_of_week = input("Enter day of week [default Saturday]: ").strip() or "Saturday"
-
-        payload = {
-            "store_id": store_id,
-            "product_id": product_id,
-            "frequency": frequency,
-            "time_of_day": time_of_day,
-            "day_of_week": day_of_week
-        }
-
-        r = requests.post(url, json=payload, headers=headers)
-        print(r.json())
-
-
-    def update_forecast_horizon():
-        url = f"{BASE_URL}/forecast/horizon"
-        headers = {"Authorization": f"Bearer {token}"}
-
-        # Prompt user for n_weeks
-        while True:
-            n_weeks_input = input("Enter forecast horizon in weeks (e.g., 4): ").strip()
-            if n_weeks_input.isdigit() and int(n_weeks_input) > 0:
-                n_weeks = int(n_weeks_input)
-                break
-            print("Please enter a valid positive integer for n_weeks.")
-
-        payload = {"n_weeks": n_weeks}
-
-        try:
-            r = requests.post(url, json=payload, headers=headers)
-            resp = r.json()
-
-            if r.status_code == 200:
-                print(f"✅ Forecast horizon updated: {resp.get('message', 'Success')}")
-            elif r.status_code == 401:
-                print("❌ Authentication failed: Invalid or expired token")
-            else:
-                print(f"❌ Failed to update horizon: {resp.get('error', r.text)}")
-        except Exception as e:
-            print(f"❌ Request error: {str(e)}")
-
-
-
-
-    # def run_forecast():
-    #     url = f"{BASE_URL}/forecast/run"
-    #     headers = {"Authorization": f"Bearer {token}"}
-    #     r = requests.post(url, headers=headers)
-    #     print(r.json())
-
-    def run_forecast():
-        headers = {"Authorization": f"Bearer {token}"}
-        # Run forecast
-        r = requests.post(f"{BASE_URL}/forecast/run", headers=headers)
-        if not r.ok:
-            print("❌ Failed:", r.text)
-            return
-
-        result = r.json()
-
-        # Also fetch horizon info
-        h = requests.get(f"{BASE_URL}/user/profile", headers=headers)
-        horizon_days = h.json().get("lookahead_days") if h.ok else None
-
-        print("✅ Forecast run completed")
-        if horizon_days:
-            print(f"📆 Horizon used: {horizon_days//7} weeks ({horizon_days} days)")
-        print("Result:", result)
-        
-    def chart_data():
-        url = f"{BASE_URL}/forecast/chart-data"
-        headers = {"Authorization": f"Bearer {token}"}
-        r = requests.get(url, headers=headers)
-        if r.ok:
-            print("\n📊 Chart Data:")
-            print(json.dumps(r.json(), indent=2))
-        else:
-            print(f"❌ Failed: {r.status_code} {r.text}")
-
-
-    def store_level_forecast():
-        url = f"{BASE_URL}/forecast/store-level"
-        headers = {"Authorization": f"Bearer {token}"}
-        params = {"n_weeks": 4}
-        r = requests.get(url, headers=headers, params=params)
-        if r.ok:
-            print("\n🏬 Store-Level Forecast:")
-            print(json.dumps(r.json(), indent=2))
-        else:
-            print(f"❌ Failed: {r.status_code} {r.text}")
-
-
-    def past_accuracy_store():
-        url = f"{BASE_URL}/forecast/accuracy/store"
-        headers = {"Authorization": f"Bearer {token}"}
-        r = requests.get(url, headers=headers)
-        if r.ok:
-            print("\n📈 Past Accuracy (Store-Level):")
-            print(json.dumps(r.json(), indent=2))
-        else:
-            print(f"❌ Failed: {r.status_code} {r.text}")
-
-
-    def sku_level_forecast():
-        url = f"{BASE_URL}/forecast/sku-level"
-        headers = {"Authorization": f"Bearer {token}"}
-        params = {"n_weeks": 4}
-        r = requests.get(url, headers=headers, params=params)
-        if r.ok:
-            print("\n📦 SKU-Level Forecast:")
-            print(json.dumps(r.json(), indent=2))
-        else:
-            print(f"❌ Failed: {r.status_code} {r.text}")
-
-
-    def past_accuracy_sku():
-        url = f"{BASE_URL}/forecast/accuracy/sku"
-        headers = {"Authorization": f"Bearer {token}"}
-        r = requests.get(url, headers=headers)
-        if r.ok:
-            print("\n📉 Past Accuracy (SKU-Level):")
-            print(json.dumps(r.json(), indent=2))
-        else:
-            print(f"❌ Failed: {r.status_code} {r.text}")
-
-
-    def forecast_logs():
-        url = f"{BASE_URL}/forecast/logs"
-        headers = {"Authorization": f"Bearer {token}"}
-        r = requests.get(url, headers=headers)
-        if r.ok:
-            print("\n📝 Forecast Logs:")
-            print(json.dumps(r.json(), indent=2))
-        else:
-            print(f"❌ Failed: {r.status_code} {r.text}")
-
-
-    options = {
-        "1": ("Set Forecast Schedule", set_forecast_schedule),
-        "2": ("View Forecast Schedule", view_forecast_schedule),
-        "3": ("Update Forecast Horizon (N weeks)", update_forecast_horizon),
-        "4": ("Run Forecast Manually", run_forecast),
-        "5": ("Store-Level Forecast (Next N Weeks)", store_level_forecast),
-        "6": ("SKU-Level Forecast (Next N Weeks)", sku_level_forecast),
-        "7": ("Past Accuracy - Store", past_accuracy_store),
-        "8": ("Past Accuracy - SKU", past_accuracy_sku),
-        "9": ("Chart Data with Trendline", chart_data),
-        "10": ("Forecast Run Logs", forecast_logs),
-        "0": ("Exit Forecast Menu", None)
-    }
-
-    while True:
-        print("\n📊 Forecast Module Menu")
-        for key, (desc, _) in options.items():
-            print(f"{key}. {desc}")
-
-        choice = input("Select an option: ").strip()
-        if choice == "0":
-            break
-        elif choice in options:
-            options[choice][1]()
-        else:
-            print("❌ Invalid choice. Try again.")
-
-
 def main():
     while True:
         print("\n==== Inventory Maintainer ====")
@@ -1101,7 +933,7 @@ def main():
             if token:
                 user_role, allowed_routes = fetch_permissions(token)
                 if not allowed_routes:
-                    print("No permissions found, exiting.")
+                    print("\n⛔ Your account is deactivated or has no permissions.")
                     return
 
             if token:
@@ -1156,8 +988,6 @@ def main():
                         place_reorder(token)
                     elif action=="14":
                         display_availability_from_db(token)
-                    elif action == "15":
-                        forecast_menu(token)
 
                     else:
                         print("❌ Invalid choice.")
