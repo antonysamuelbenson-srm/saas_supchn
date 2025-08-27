@@ -29,6 +29,16 @@ ROUTE_ROLE_MAP = {
     "GET:/forecast/store/<int:store_id>":  ["admin", "editor", "viewer"],
     "GET:/user/lookahead_days":              ["admin", "editor", "viewer"],
     "POST:/user/lookahead_days":             ["admin", "editor", "viewer"],
+    "POST:/forecast/schedule/horizon": ["admin", "editor"],
+    "POST:/forecast/schedule": ["admin", "editor", "viewer"],
+    "GET:/forecast/schedule": ["admin", "editor", "viewer"],
+    "POST:/forecast/run": ["admin", "editor", "viewer"],
+    "GET:/forecast/store-level": ["admin", "editor", "viewer"],
+    "GET:/forecast/sku-level": ["admin", "editor", "viewer"],
+    "GET:/forecast/accuracy/store": ["admin", "editor", "viewer"],
+    "GET:/forecast/accuracy/sku": ["admin", "editor", "viewer"],
+    "GET:/forecast/chart-data": ["admin", "editor", "viewer"],
+    "GET:/forecast/logs": ["admin", "editor", "viewer"],
 
     # --- Store ---
     "POST:/store_upload":               ["admin", "editor"],
