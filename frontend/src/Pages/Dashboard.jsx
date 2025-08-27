@@ -939,23 +939,25 @@ const Sidebar = React.memo(({ isOpen, onClose, permissions }) => {
                         <button onClick={onClose} className="text-slate-400 hover:text-white"><FiX size={24} /></button>
                     </div>
                     <nav className="space-y-3">
-                        {hasPermission("POST:/store_upload") && (
-                            <button onClick={() => navigate("/file-upload")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiUpload className="mr-3" /> File Upload</button>
-                        )}
-                        {hasPermission("GET:/admin/users") && (
-                            <button onClick={() => navigate("/adminprivileges")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiSettings className="mr-3" /> Manage Users</button>
-                        )}
-                        {hasPermission("GET:/dashboard") && (
-                            <button className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiBarChart2 className="mr-3" /> Reports</button>
-                        )}
-                        <button onClick={() => navigate("/rebalancer")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiRefreshCw className="mr-3" /> Rebalancer</button>
-                        {hasPermission("POST:/config/apply-formula") && (
-                            <button onClick={() => navigate("/Config")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiShoppingBag className="mr-3" /> Configuration</button>
-                        )}
-                        <div className="!mt-auto pt-4 border-t border-slate-700">
-                             <button onClick={() => navigate("/")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiLogOut className="mr-3" /> Logout</button>
-                        </div>
-                    </nav>
+                      {hasPermission("POST:/store_upload") && (
+                          <button onClick={() => navigate("/file-upload")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiUpload className="mr-3" /> File Upload</button>
+                      )}
+                      {hasPermission("GET:/admin/users") && (
+                          <button onClick={() => navigate("/adminprivileges")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiSettings className="mr-3" /> Manage Users</button>
+                      )}
+                      {hasPermission("GET:/dashboard") && (
+                          <button className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiBarChart2 className="mr-3" /> Reports</button>
+                      )}
+                      {/* Added Forecast Button */}
+                      <button onClick={() => navigate("/forecast")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiTrendingUp className="mr-3" /> Forecast</button>
+                      <button onClick={() => navigate("/rebalancer")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiRefreshCw className="mr-3" /> Rebalancer</button>
+                      {hasPermission("POST:/config/apply-formula") && (
+                          <button onClick={() => navigate("/Config")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiShoppingBag className="mr-3" /> Configuration</button>
+                      )}
+                      <div className="!mt-auto pt-4 border-t border-slate-700">
+                          <button onClick={() => navigate("/")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiLogOut className="mr-3" /> Logout</button>
+                      </div>
+                  </nav>
                 </>
             )}  
         </div>
