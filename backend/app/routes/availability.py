@@ -15,27 +15,21 @@ bp = Blueprint("availability_rate", __name__)
 def get_week_start(date):
     return date - timedelta(days=date.weekday())
 
+
 @bp.route("/availability/recompute", methods=["POST"])
 @role_required
 def recompute_availability_rate():
-    # Fetch weekly forecast to get eligible SKUs
     forecast_rows = db.session.query(
         ForecastDaily.forecast_date,
         ForecastDaily.store_id,
         ForecastDaily.sku,
-        ForecastDaily.forecast_qty
     ).filter(ForecastDaily.forecast_date != None).all()
 
-    # Map of week -> set of eligible SKUs
     weekly_eligible = defaultdict(set)
-    weekly_forecast_qty = defaultdict(lambda: defaultdict(int))
     for row in forecast_rows:
         week = get_week_start(row.forecast_date)
-        key = (row.store_id, row.sku)
-        weekly_eligible[week].add(key)
-        weekly_forecast_qty[week][key] += row.forecast_qty
+        weekly_eligible[week].add((row.store_id, row.sku))
 
-    # Fetch inventory
     inventory_rows = db.session.query(
         InventorySnapshot.snapshot_date,
         InventorySnapshot.store_id,
@@ -43,44 +37,31 @@ def recompute_availability_rate():
         InventorySnapshot.qty
     ).filter(InventorySnapshot.snapshot_date != None).all()
 
-    # Get the most recent inventory snapshot per week
-    inventory_by_week = defaultdict(lambda: defaultdict(lambda: {'date': None, 'qty': 0}))
+    inventory_by_week = defaultdict(lambda: defaultdict(list))
     for row in inventory_rows:
         week = get_week_start(row.snapshot_date)
-        key = (row.store_id, row.sku)
-        
-        # Keep only the most recent snapshot for each week
-        if (inventory_by_week[week][key]['date'] is None or 
-            row.snapshot_date > inventory_by_week[week][key]['date']):
-            inventory_by_week[week][key] = {
-                'date': row.snapshot_date, 
-                'qty': row.qty
-            }
+        inventory_by_week[week][(row.store_id, row.sku)].append(row.qty)
 
     inserted = 0
 
-    # Process each week
     for week, sku_set in weekly_eligible.items():
         if week > date.today():
             continue
 
-        # Skip if already computed
+        # Check if already computed
         exists = db.session.query(func.count()).select_from(AvailabilityRate).filter_by(week_start=week).scalar()
         if exists:
             continue
 
         eligible_count = len(sku_set)
+        oos_count = 0
+        for key in sku_set:
+            qtys = inventory_by_week.get(week, {}).get(key, [])
+            if not qtys or all(q <= 0 for q in qtys):
+                oos_count += 1
+
         if eligible_count == 0:
             continue
-
-        oos_count = 0
-        
-        # Check each eligible SKU for this week
-        for key in sku_set:
-            total_inventory = inventory_by_week.get(week, {}).get(key, {'qty': 0})['qty']
-            total_forecast = weekly_forecast_qty[week].get(key, 0)
-            if total_inventory < total_forecast:  # This covers both zero and insufficient
-                oos_count += 1
 
         availability_rate = 1 - (oos_count / eligible_count)
         entry = AvailabilityRate(
