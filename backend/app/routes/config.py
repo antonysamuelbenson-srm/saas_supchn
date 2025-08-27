@@ -78,12 +78,16 @@ def apply_formula():
         role_user_id = payload.get("role_user_id")
 
         chosen_formula = request.json.get("formula")
-        store_ids      = request.json.get("store_ids") 
+        print("Chosen formula:", chosen_formula)
+        store_ids      = request.json.get("store_ids", []) 
         if chosen_formula not in FORMULAS:
             return jsonify({"error": "Invalid formula choice"}), 400
 
-        updated = update_reorder_config(None, formula=chosen_formula, store_ids=store_ids)
-        alerts_count = generate_alerts(None)
+        updated = update_reorder_config(role_user_id, formula=chosen_formula, store_ids=store_ids)
+        # from app.models.alert import Alert
+        # db.session.query(Alert).delete(synchronize_session=False)    
+        # db.session.commit()
+        alerts_count = generate_alerts(role_user_id)
 
 
         return jsonify({

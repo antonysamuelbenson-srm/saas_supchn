@@ -12,19 +12,18 @@ def create_app():
     app = Flask(__name__)
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
-    ANON_KEY = os.getenv("ANON_KEY")
+    # ANON_KEY = os.getenv("ANON_KEY")
+    # If you need ANON_KEY elsewhere, add it to the app config
+    app.config["ANON_KEY"] = os.getenv("ANON_KEY")
 
     from app.models import user
     db.init_app(app)
-    # CORS(app, resources={r"/*": {"origins": "*"}})
+    # ✅ Correct CORS setup
     CORS(
         app,
-        origins=["http://localhost:5173"],  # only allow your frontend
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization"],
+        resources={r"/*": {"origins": "http://localhost:5173"}},
         supports_credentials=True
     )
-
     # ✅ Register Blueprints INSIDE this function
     from app.routes import auth, dashboard, alerts, upload, config, store_upload, forecast_data, node_location_update, reorder, availability, admin
     app.register_blueprint(auth.bp)

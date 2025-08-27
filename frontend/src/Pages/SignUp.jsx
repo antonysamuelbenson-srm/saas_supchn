@@ -62,7 +62,7 @@ export default function SignupForm() {
               required 
             />
           </div>
-
+{/* 
           <div className="form-control mb-6">
             <select 
               className="select select-bordered w-full rounded-xl focus:border-[#062f53] focus:outline-none"
@@ -72,7 +72,7 @@ export default function SignupForm() {
               <option value="planner">Planner</option>
               <option value="admin">Admin</option>
             </select>
-          </div>
+          </div> */}
 
           <button 
             type="submit"
