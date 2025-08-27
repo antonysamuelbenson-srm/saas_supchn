@@ -10,11 +10,21 @@ bp = Blueprint("admin", __name__)
 @bp.route("/users", methods=["GET"])
 @admin_required
 def list_users():
-    users = User.query.all()
+    status = request.args.get("status")  # e.g., "active", "deactivated"
+
+    query = User.query
+    if status == "active":
+        query = query.filter_by(active=True)
+    elif status == "deactivated":
+        query = query.filter_by(active=False)
+
+    users = query.all()
+
     return jsonify([{
         "email": user.email,
         "role": Role.query.get(user.role_id).role if Role else None,
-        "role_user_id": user.role_user_id
+        "role_user_id": user.role_user_id,
+        "active": user.active  # 👈 ADD THIS
     } for user in users])
 
 @bp.route("/user/<string:role_user_id>/role", methods=["PUT"])
@@ -44,7 +54,6 @@ def delete_user(role_user_id):
     db.session.commit()
     return jsonify({"message": f"User {user.email} deleted."})
 
-# Optional: Deactivate user without deleting
 @bp.route("/user/<string:role_user_id>/deactivate", methods=["POST"])
 @admin_required
 def deactivate_user(role_user_id):
@@ -54,3 +63,14 @@ def deactivate_user(role_user_id):
     user.active = False  # Add 'active' column in User model if needed
     db.session.commit()
     return jsonify({"message": f"User {user.email} deactivated."})
+
+
+@bp.route("/user/<string:role_user_id>/reactivate", methods=["POST"])
+@admin_required
+def reactivate_user(role_user_id):
+    user = User.query.get(role_user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    user.active = True
+    db.session.commit()
+    return jsonify({"message": f"User {user.email} reactivated."})

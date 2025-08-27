@@ -45,14 +45,13 @@ def login():
             "email": user.email,
             "role_id": user.role_id,  # Include role_id in the token
             "role": role.role,
-            "role_user_id": str(user.role_user_id)  # ✅ convert UUID to str
+            "role_user_id": str(user.role_user_id),  # ✅ convert UUID to str
+            "active": user.active
         })
         print("Your token:", token)
         return jsonify({"token": token,
             "role_user_id": str(user.role_user_id)})
         
-
-
     return jsonify({"error": "Invalid credentials"}), 401
 
 @bp.route("/user/permissions", methods=["GET"])
@@ -64,6 +63,11 @@ def user_permissions():
         user = User.query.filter_by(email=payload["email"]).first()
         if not user:
             return jsonify({"error": "User not found"}), 404
+
+        # ⛔ NEW: Check if user is deactivated
+        if not user.active:
+            return jsonify({"role": None, "allowed_routes": []})
+
         role = Role.query.get(user.role_id)
         if not role:
             return jsonify({"error": "Role not found"}), 404
