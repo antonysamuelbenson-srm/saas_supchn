@@ -1,145 +1,625 @@
-import React, { useState } from 'react';
-import { FiCalendar, FiBarChart2, FiDownload, FiCheckCircle, FiTrendingUp } from 'react-icons/fi';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area } from 'recharts';
+// import React, { useState, useEffect, useCallback } from 'react';
+// import { FiBarChart2, FiDownload, FiCheckCircle, FiTrendingUp, FiCpu, FiClock, FiAlertCircle } from 'react-icons/fi';
+// import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area } from 'recharts';
 
-// --- MOCK DATA (Replace with your actual API data) ---
-const mockData = [
-    // Historical Data
-    { date: '2025-07-07', historical: 14500 },
-    { date: '2025-07-14', historical: 15200 },
-    { date: '2025-07-21', historical: 14900 },
-    { date: '2025-07-28', historical: 16100 },
-    { date: '2025-08-04', historical: 15800 },
-    { date: '2025-08-11', historical: 16500 },
-    { date: '2025-08-18', historical: 16300 },
-    { date: '2025-08-25', historical: 17000 },
-    // Forecasted Data
-    { date: '2025-09-01', forecast: 17200, confidence: [16700, 17700] },
-    { date: '2025-09-08', forecast: 17500, confidence: [17000, 18000] },
-    { date: '2025-09-15', forecast: 17800, confidence: [17200, 18400] },
-    { date: '2025-09-22', forecast: 18100, confidence: [17500, 18700] },
-];
+// // --- API Configuration ---
+// // ✅ IMPORTANT: This URL must match the one used in your login page
+// const API_BASE_URL = 'http://127.0.0.1:5500'; 
+
+// const ForecastPage = () => {
+//     // --- State Management ---
+//     const [activeTab, setActiveTab] = useState('forecast');
+//     const [chartData, setChartData] = useState([]);
+//     const [accuracyData, setAccuracyData] = useState([]);
+//     const [logData, setLogData] = useState([]);
+//     const [keyMetrics, setKeyMetrics] = useState({
+//         forecastedUnits: 'N/A',
+//         forecastedRevenue: 'N/A',
+//         forecastAccuracy: 'N/A',
+//     });
+//     const [loading, setLoading] = useState({
+//         chart: true,
+//         accuracy: false,
+//         logs: false,
+//         run: false,
+//     });
+//     const [error, setError] = useState(null);
+
+//     // --- API Fetching Functions ---
+//     const getToken = () => localStorage.getItem('token'); // ✅ Using the correct key: 'token'
+
+//     const fetchChartData = useCallback(async () => {
+//         const token = getToken();
+//         if (!token) {
+//             setError("No authentication token found. Please log in.");
+//             setLoading(prev => ({ ...prev, chart: false }));
+//             return;
+//         }
+//         setLoading(prev => ({ ...prev, chart: true }));
+//         setError(null);
+//         try {
+//             const res = await fetch(`${API_BASE_URL}/forecast/chart-data`, {
+//                 headers: { 'Authorization': `Bearer ${token}` },
+//             });
+//             if (!res.ok) throw new Error(`Failed to fetch chart data (Status: ${res.status})`);
+//             const data = await res.json();
+            
+//             const firstStoreId = Object.keys(data)[0];
+//             if (firstStoreId) {
+//                 const formattedData = data[firstStoreId].map(item => ({
+//                     date: item.week_start,
+//                     historical: item.actual,
+//                     forecast: item.forecast,
+//                 }));
+//                 setChartData(formattedData);
+//             } else {
+//                 setChartData([]);
+//             }
+//         } catch (err) {
+//             setError(err.message);
+//             setChartData([]);
+//         } finally {
+//             setLoading(prev => ({ ...prev, chart: false }));
+//         }
+//     }, []);
+
+//     const fetchAccuracyData = useCallback(async (level = 'store') => {
+//         const token = getToken();
+//         if (!token) return;
+//         setLoading(prev => ({ ...prev, accuracy: true }));
+//         try {
+//             const res = await fetch(`${API_BASE_URL}/forecast/accuracy/${level}`, {
+//                 headers: { 'Authorization': `Bearer ${token}` },
+//             });
+//             if (!res.ok) throw new Error(`Failed to fetch ${level}-level accuracy`);
+//             const data = await res.json();
+//             setAccuracyData(data);
+//         } catch (err) {
+//             setError(err.message);
+//         } finally {
+//             setLoading(prev => ({ ...prev, accuracy: false }));
+//         }
+//     }, []);
+
+//     const fetchLogs = useCallback(async () => {
+//         const token = getToken();
+//         if (!token) return;
+//         setLoading(prev => ({ ...prev, logs: true }));
+//         try {
+//             const res = await fetch(`${API_BASE_URL}/forecast/logs`, {
+//                 headers: { 'Authorization': `Bearer ${token}` },
+//             });
+//             if (!res.ok) throw new Error('Failed to fetch logs');
+//             const data = await res.json();
+//             setLogData(data.logs || []);
+//         } catch (err) {
+//             setError(err.message);
+//         } finally {
+//             setLoading(prev => ({ ...prev, logs: false }));
+//         }
+//     }, []);
+
+//     const handleRunForecast = async () => {
+//         const token = getToken();
+//         if (!token) {
+//             alert("You must be logged in to run a forecast.");
+//             return;
+//         }
+//         setLoading(prev => ({ ...prev, run: true }));
+//         setError(null);
+//         try {
+//             const res = await fetch(`${API_BASE_URL}/forecast/run`, {
+//                 method: 'POST',
+//                 headers: { 'Authorization': `Bearer ${token}` },
+//             });
+//             if (!res.ok) throw new Error('Forecast run failed');
+//             alert('Forecast run initiated successfully! Data will be updated shortly.');
+//             setTimeout(fetchChartData, 5000); 
+//         } catch (err) {
+//             setError(err.message);
+//             alert(`Error: ${err.message}`);
+//         } finally {
+//             setLoading(prev => ({ ...prev, run: false }));
+//         }
+//     };
+    
+//     useEffect(() => {
+//         fetchChartData();
+//     }, [fetchChartData]);
+
+//     // ... (The rest of your component's JSX remains the same)
+//     // Card component, TabButton, ForecastChartPanel, AccuracyPanel, LogsPanel etc.
+
+//     return (
+//         <div className="p-8 bg-slate-900 text-slate-300 min-h-screen font-sans">
+//              {/* 1. Header */}
+//             <div className="flex justify-between items-center mb-8">
+//                 <h1 className="text-3xl font-bold text-white">Sales & Demand Forecast</h1>
+//                 <button 
+//                     onClick={handleRunForecast}
+//                     disabled={loading.run}
+//                     className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition disabled:bg-slate-500 disabled:cursor-not-allowed"
+//                 >
+//                     <FiCpu className={`mr-2 ${loading.run ? 'animate-spin' : ''}`} />
+//                     {loading.run ? 'Running...' : 'Run Forecast Manually'}
+//                 </button>
+//             </div>
+            
+//             {error && <div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-lg mb-6 flex items-center"><FiAlertCircle className="mr-3" /> Error: {error}</div>}
+
+//             {/* 2. Key Metrics */}
+//             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+//                 <Card title="Forecasted Units" value={keyMetrics.forecastedUnits} icon={<FiBarChart2 size={24} className="text-blue-400" />} />
+//                 <Card title="Forecasted Revenue" value={keyMetrics.forecastedRevenue} icon={<FiTrendingUp size={24} className="text-green-400" />} change="+7.2% vs. previous period" />
+//                 <Card title="Forecast Accuracy" value={keyMetrics.forecastAccuracy} icon={<FiCheckCircle size={24} className="text-teal-400" />} />
+//             </div>
+
+//             {/* 3. Tab Navigation */}
+//             <div className="flex border-b border-slate-700 mb-8">
+//                 <TabButton title="Forecast Visualization" tabName="forecast" activeTab={activeTab} setActiveTab={setActiveTab} />
+//                 <TabButton title="Performance & Accuracy" tabName="accuracy" activeTab={activeTab} setActiveTab={setActiveTab} onClick={() => fetchAccuracyData('store')} />
+//                 <TabButton title="Run History" tabName="logs" activeTab={activeTab} setActiveTab={setActiveTab} onClick={fetchLogs} />
+//             </div>
+
+//             {/* 4. Tab Content */}
+//             <div>
+//                 {activeTab === 'forecast' && <ForecastChartPanel loading={loading.chart} data={chartData} />}
+//                 {activeTab === 'accuracy' && <AccuracyPanel loading={loading.accuracy} data={accuracyData} fetchData={fetchAccuracyData} />}
+//                 {activeTab === 'logs' && <LogsPanel loading={loading.logs} data={logData} />}
+//             </div>
+//         </div>
+//     );
+// };
+
+// // --- Child Components ---
+// const Card = ({ title, value, icon, change }) => (
+//     <div className="bg-slate-800 p-6 rounded-lg shadow-lg">
+//         <div className="flex items-center">
+//             <div className="p-3 bg-slate-700 rounded-md mr-4">{icon}</div>
+//             <div>
+//                 <p className="text-sm text-slate-400">{title}</p>
+//                 <p className="text-2xl font-bold text-white">{value}</p>
+//             </div>
+//         </div>
+//         {change && <p className="text-sm text-green-400 mt-2">{change}</p>}
+//     </div>
+// );
+
+// const TabButton = ({ title, tabName, activeTab, setActiveTab, onClick }) => (
+//     <button
+//         onClick={() => {
+//             setActiveTab(tabName);
+//             if (onClick) onClick();
+//         }}
+//         className={`py-3 px-6 font-semibold transition -mb-px ${
+//             activeTab === tabName 
+//             ? 'text-blue-400 border-b-2 border-blue-400' 
+//             : 'text-slate-400 hover:text-white'
+//         }`}
+//     >
+//         {title}
+//     </button>
+// );
+
+// const ForecastChartPanel = ({ loading, data }) => (
+//     <div className="bg-slate-800 p-6 rounded-lg shadow-lg h-[500px]">
+//         <h2 className="text-xl font-semibold mb-4 text-white">Forecast vs. Historical Sales (Weekly)</h2>
+//         {loading ? (
+//             <div className="flex items-center justify-center h-full">Loading chart data...</div>
+//         ) : data.length === 0 ? (
+//              <div className="flex items-center justify-center h-full">No data available to display.</div>
+//         ) : (
+//             <ResponsiveContainer width="100%" height="90%">
+//                 <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+//                     <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+//                     <XAxis dataKey="date" stroke="#94a3b8" />
+//                     <YAxis stroke="#94a3b8" />
+//                     <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569' }} />
+//                     <Legend />
+//                     <Line type="monotone" dataKey="historical" stroke="#60a5fa" strokeWidth={2} name="Historical Sales" dot={false} />
+//                     <Line type="monotone" dataKey="forecast" stroke="#34d399" strokeWidth={2} strokeDasharray="5 5" name="Forecasted Sales" dot={false} />
+//                 </LineChart>
+//             </ResponsiveContainer>
+//         )}
+//     </div>
+// );
+
+// const AccuracyPanel = ({ loading, data, fetchData }) => (
+//     <div className="bg-slate-800 p-6 rounded-lg shadow-lg">
+//         <div className="flex justify-between items-center mb-4">
+//             <h2 className="text-xl font-semibold text-white">Forecast Accuracy (MAPE %)</h2>
+//             <div>
+//                 <button onClick={() => fetchData('store')} className="bg-slate-700 hover:bg-slate-600 text-sm py-1 px-3 rounded-l-md">Store-Level</button>
+//                 <button onClick={() => fetchData('sku')} className="bg-slate-700 hover:bg-slate-600 text-sm py-1 px-3 rounded-r-md">SKU-Level</button>
+//             </div>
+//         </div>
+//         {loading ? <p>Loading accuracy data...</p> : (
+//             <div className="overflow-x-auto">
+//                 <table className="w-full text-left">
+//                     <thead className="border-b border-slate-600">
+//                         <tr>
+//                             <th className="p-3">Identifier (Store/SKU)</th>
+//                             <th className="p-3">Week Start</th>
+//                             <th className="p-3">MAPE (%)</th>
+//                         </tr>
+//                     </thead>
+//                     <tbody>
+//                         {data.flatMap(item => 
+//                             item.weekly_accuracy.map((acc, index) => (
+//                                 <tr key={`${item.store_id || item.product_id}-${acc.week_start}`} className="border-b border-slate-700">
+//                                     {index === 0 && <td rowSpan={item.weekly_accuracy.length} className="p-3 font-bold text-white">{item.store_id || item.product_id}</td>}
+//                                     <td className="p-3">{acc.week_start}</td>
+//                                     <td className="p-3 font-medium text-teal-400">{acc.mape !== null ? `${acc.mape}%` : 'N/A'}</td>
+//                                 </tr>
+//                             ))
+//                         )}
+//                     </tbody>
+//                 </table>
+//             </div>
+//         )}
+//     </div>
+// );
+
+// const LogsPanel = ({ loading, data }) => (
+//     <div className="bg-slate-800 p-6 rounded-lg shadow-lg">
+//         <h2 className="text-xl font-semibold text-white mb-4">Forecast Run History</h2>
+//         {loading ? <p>Loading logs...</p> : (
+//             <div className="overflow-x-auto">
+//                 <table className="w-full text-left">
+//                     <thead className="border-b border-slate-600">
+//                         <tr>
+//                             <th className="p-3">Run Time (UTC)</th>
+//                             <th className="p-3">Store ID</th>
+//                             <th className="p-3">Product ID</th>
+//                             <th className="p-3">Forecast Horizon</th>
+//                         </tr>
+//                     </thead>
+//                     <tbody>
+//                         {data.map((log, index) => (
+//                             <tr key={index} className="border-b border-slate-700 hover:bg-slate-700/50">
+//                                 <td className="p-3"><FiClock className="inline mr-2" />{log.run_time}</td>
+//                                 <td className="p-3">{log.store_id || 'All'}</td>
+//                                 <td className="p-3">{log.product_id || 'All'}</td>
+//                                 <td className="p-3">{log.n_weeks} weeks</td>
+//                             </tr>
+//                         ))}
+//                     </tbody>
+//                 </table>
+//             </div>
+//         )}
+//     </div>
+// );
+
+// export default ForecastPage;
+
+
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { FiBarChart2, FiDownload, FiCheckCircle, FiTrendingUp, FiCpu, FiClock, FiAlertCircle } from 'react-icons/fi';
+// ✅ Corrected line
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area } from 'recharts';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// --- API Configuration ---
+const API_BASE_URL = 'http://127.0.0.1:5500';
+
+// ✨ NEW: Animation variants for panels
+const panelVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+    exit: { opacity: 0, y: -20, transition: { duration: 0.3, ease: "easeIn" } },
+};
 
 const ForecastPage = () => {
+    // --- State Management ---
+    const [activeTab, setActiveTab] = useState('forecast');
+    const [chartData, setChartData] = useState([]);
+    const [accuracyData, setAccuracyData] = useState([]);
+    const [logData, setLogData] = useState([]);
+    const [loading, setLoading] = useState({
+        chart: true,
+        accuracy: false,
+        logs: false,
+        run: false,
+    });
+    const [error, setError] = useState(null);
 
-    const Card = ({ title, value, icon, change }) => (
-        <div className="bg-slate-800 p-6 rounded-lg shadow-lg">
-            <div className="flex items-center">
-                <div className="p-3 bg-slate-700 rounded-md mr-4">
-                    {icon}
-                </div>
-                <div>
-                    <p className="text-sm text-slate-400">{title}</p>
-                    <p className="text-2xl font-bold text-white">{value}</p>
-                </div>
-            </div>
-            {change && <p className="text-sm text-green-400 mt-2">{change}</p>}
-        </div>
-    );
+    // --- API Fetching Functions ---
+    const getToken = () => localStorage.getItem('token');
+
+    const fetchChartData = useCallback(async () => {
+        const token = getToken();
+        if (!token) {
+            setError("No authentication token found. Please log in.");
+            setLoading(prev => ({ ...prev, chart: false }));
+            return;
+        }
+        setLoading(prev => ({ ...prev, chart: true }));
+        setError(null);
+        try {
+            const res = await fetch(`${API_BASE_URL}/forecast/chart-data`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`Failed to fetch chart data (Status: ${res.status})`);
+            const data = await res.json();
+            
+            const firstStoreId = Object.keys(data)[0];
+            if (firstStoreId) {
+                const formattedData = data[firstStoreId].map(item => ({
+                    date: item.week_start,
+                    historical: item.actual,
+                    forecast: item.forecast,
+                }));
+                setChartData(formattedData);
+            } else {
+                setChartData([]);
+            }
+        } catch (err) {
+            setError(err.message);
+            setChartData([]);
+        } finally {
+            setLoading(prev => ({ ...prev, chart: false }));
+        }
+    }, []);
+
+    const fetchAccuracyData = useCallback(async (level = 'store') => {
+        const token = getToken();
+        if (!token) return;
+        setLoading(prev => ({ ...prev, accuracy: true }));
+        try {
+            const res = await fetch(`${API_BASE_URL}/forecast/accuracy/${level}`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`Failed to fetch ${level}-level accuracy`);
+            const data = await res.json();
+            setAccuracyData(data);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(prev => ({ ...prev, accuracy: false }));
+        }
+    }, []);
+
+    const fetchLogs = useCallback(async () => {
+        const token = getToken();
+        if (!token) return;
+        setLoading(prev => ({ ...prev, logs: true }));
+        try {
+            const res = await fetch(`${API_BASE_URL}/forecast/logs`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error('Failed to fetch logs');
+            const data = await res.json();
+            setLogData(data.logs || []);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(prev => ({ ...prev, logs: false }));
+        }
+    }, []);
+
+    const handleRunForecast = async () => {
+        const token = getToken();
+        if (!token) {
+            alert("You must be logged in to run a forecast.");
+            return;
+        }
+        setLoading(prev => ({ ...prev, run: true }));
+        setError(null);
+        try {
+            const res = await fetch(`${API_BASE_URL}/forecast/run`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error('Forecast run failed');
+            alert('Forecast run initiated successfully! Data will be updated shortly.');
+            setTimeout(fetchChartData, 5000);
+        } catch (err) {
+            setError(err.message);
+            alert(`Error: ${err.message}`);
+        } finally {
+            setLoading(prev => ({ ...prev, run: false }));
+        }
+    };
+    
+    useEffect(() => {
+        fetchChartData();
+    }, [fetchChartData]);
+
+    const tabs = [
+        { id: 'forecast', title: 'Forecast Visualization', onClick: null },
+        { id: 'accuracy', title: 'Performance & Accuracy', onClick: () => fetchAccuracyData('store') },
+        { id: 'logs', title: 'Run History', onClick: fetchLogs },
+    ];
 
     return (
-        <div className="p-8 bg-slate-900 text-slate-300 min-h-screen font-sans">
-            {/* 1. Header */}
-            <div className="flex justify-between items-center mb-8">
-                <h1 className="text-3xl font-bold text-white">Sales & Demand Forecast</h1>
-                <button className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">
-                    <FiTrendingUp className="mr-2" />
-                    Generate Forecast
-                </button>
-            </div>
-
-            {/* 2. Filter Controls */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 p-6 bg-slate-800 rounded-lg">
-                <div>
-                    <label className="text-sm font-semibold mb-2 block">Date Range</label>
-                    <input type="text" value="2025-09-01 to 2025-12-31" className="w-full bg-slate-700 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                 <div>
-                    <label className="text-sm font-semibold mb-2 block">Granularity</label>
-                    <select className="w-full bg-slate-700 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option>Daily</option>
-                        <option selected>Weekly</option>
-                        <option>Monthly</option>
-                    </select>
-                </div>
-                 <div>
-                    <label className="text-sm font-semibold mb-2 block">Category</label>
-                    <select className="w-full bg-slate-700 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option>All Categories</option>
-                        {/* Add other categories */}
-                    </select>
-                </div>
-                 <div>
-                    <label className="text-sm font-semibold mb-2 block">SKU</label>
-                    <select className="w-full bg-slate-700 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option>All SKUs</option>
-                         {/* Add other skus */}
-                    </select>
-                </div>
-            </div>
-
-            {/* 3. Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <Card title="Forecasted Units" value="1,240,500" icon={<FiBarChart2 size={24} className="text-blue-400" />} />
-                <Card title="Forecasted Revenue" value="$18.6M" icon={<FiTrendingUp size={24} className="text-green-400" />} change="+7.2% vs. previous period" />
-                <Card title="Forecast Accuracy" value="94.5%" icon={<FiCheckCircle size={24} className="text-teal-400" />} />
-            </div>
-
-            {/* 4. Chart Visualization */}
-            <div className="bg-slate-800 p-6 rounded-lg shadow-lg mb-8 h-[500px]">
-                 <h2 className="text-xl font-semibold mb-4 text-white">Forecast vs. Historical</h2>
-                 <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={mockData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
-                        <XAxis dataKey="date" stroke="#94a3b8" />
-                        <YAxis stroke="#94a3b8" />
-                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569' }} />
-                        <Legend />
-                        <Line type="monotone" dataKey="historical" stroke="#60a5fa" strokeWidth={2} name="Historical Sales" dot={false} />
-                        <Line type="monotone" dataKey="forecast" stroke="#34d399" strokeWidth={2} strokeDasharray="5 5" name="Forecasted Sales" dot={false} />
-                        <Area type="monotone" dataKey="confidence" stroke={false} fill="#34d399" fillOpacity={0.1} name="Confidence Interval" />
-                    </LineChart>
-                </ResponsiveContainer>
-            </div>
-
-            {/* 5. Data Table & Adjustments */}
-            <div className="bg-slate-800 p-6 rounded-lg shadow-lg">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-white">Forecast Data</h2>
-                    <button className="flex items-center bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg transition">
-                        <FiDownload className="mr-2" />
-                        Export CSV
+        <div className="p-4 sm:p-6 lg:p-8 bg-slate-900 text-slate-300 min-h-screen font-sans">
+            <div className="max-w-7xl mx-auto">
+                {/* 1. Header */}
+                <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+                    <div>
+                         <h1 className="text-3xl font-bold text-white">Demand Forecast Dashboard</h1>
+                         <p className="text-slate-400 mt-1">Analyze historical data and future sales predictions.</p>
+                    </div>
+                    <button 
+                        onClick={handleRunForecast}
+                        disabled={loading.run}
+                        className="flex items-center mt-4 sm:mt-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-5 rounded-lg transition-all duration-300 disabled:bg-slate-500 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/30"
+                    >
+                        <FiCpu className={`mr-2 ${loading.run ? 'animate-spin' : ''}`} />
+                        {loading.run ? 'Processing...' : 'Run New Forecast'}
                     </button>
+                </header>
+                
+                {error && <div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-lg mb-6 flex items-center"><FiAlertCircle className="mr-3" /> Error: {error}</div>}
+
+                {/* 2. Tab Navigation */}
+                <div className="flex border-b border-slate-700 mb-8">
+                    {tabs.map(tab => (
+                        <TabButton 
+                            key={tab.id}
+                            title={tab.title}
+                            tabName={tab.id}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            onClick={tab.onClick}
+                        />
+                    ))}
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead className="border-b border-slate-600">
-                            <tr>
-                                <th className="p-3">Date</th>
-                                <th className="p-3">Historical</th>
-                                <th className="p-3">Forecast</th>
-                                <th className="p-3">Adjustment (%)</th>
-                                <th className="p-3">Adjusted Forecast</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {mockData.filter(d => d.forecast).map((row, index) => (
-                                <tr key={index} className="border-b border-slate-700 hover:bg-slate-700/50">
-                                    <td className="p-3">{row.date}</td>
-                                    <td className="p-3 text-slate-400">--</td>
-                                    <td className="p-3 text-green-400 font-medium">{row.forecast.toLocaleString()}</td>
-                                    <td className="p-3 w-40">
-                                        <input type="number" placeholder="e.g., 5 or -10" className="w-full bg-slate-700 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                    </td>
-                                    <td className="p-3 font-bold text-white">{row.forecast.toLocaleString()}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+
+                {/* 3. Tab Content */}
+                <main>
+                    <AnimatePresence mode="wait">
+                        {activeTab === 'forecast' && (
+                            <motion.div key="forecast" variants={panelVariants} initial="hidden" animate="visible" exit="exit">
+                                <ForecastChartPanel loading={loading.chart} data={chartData} />
+                            </motion.div>
+                        )}
+                        {activeTab === 'accuracy' && (
+                            <motion.div key="accuracy" variants={panelVariants} initial="hidden" animate="visible" exit="exit">
+                                <AccuracyPanel loading={loading.accuracy} data={accuracyData} fetchData={fetchAccuracyData} />
+                            </motion.div>
+                        )}
+                        {activeTab === 'logs' && (
+                             <motion.div key="logs" variants={panelVariants} initial="hidden" animate="visible" exit="exit">
+                                <LogsPanel loading={loading.logs} data={logData} />
+                             </motion.div>
+                        )}
+                    </AnimatePresence>
+                </main>
             </div>
         </div>
     );
-}
+};
+
+
+// --- Child Components ---
+
+const TabButton = ({ title, tabName, activeTab, setActiveTab, onClick }) => (
+    <button
+        onClick={() => {
+            setActiveTab(tabName);
+            if (onClick) onClick();
+        }}
+        className={`relative py-3 px-2 sm:px-6 font-semibold transition-colors duration-300 text-sm sm:text-base ${
+            activeTab === tabName ? 'text-indigo-400' : 'text-slate-400 hover:text-white'
+        }`}
+    >
+        {title}
+        {activeTab === tabName && (
+            <motion.div 
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-400"
+                layoutId="underline"
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+            />
+        )}
+    </button>
+);
+
+const LoadingSpinner = () => (
+    <div className="flex items-center justify-center h-full min-h-[300px]">
+        <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-indigo-400"></div>
+    </div>
+);
+
+const ForecastChartPanel = ({ loading, data }) => (
+    <div className="bg-slate-800/50 p-6 rounded-xl shadow-lg h-[500px] border border-slate-700">
+        <h2 className="text-xl font-semibold mb-4 text-white">Forecast vs. Historical Sales (Weekly)</h2>
+        {loading ? (
+            <LoadingSpinner />
+        ) : data.length === 0 ? (
+             <div className="flex items-center justify-center h-full text-slate-400">No data available to display.</div>
+        ) : (
+            <ResponsiveContainer width="100%" height="90%">
+                <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                    {/* 👇 This JSX is correct and uses standard SVG tags, not imported components */}
+                    <defs>
+                        <linearGradient id="colorForecast" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#34d399" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#34d399" stopOpacity={0}/>
+                        </linearGradient>
+                         <linearGradient id="colorHistorical" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#818cf8" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
+                        </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                    <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
+                    <YAxis stroke="#94a3b8" fontSize={12} />
+                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '0.5rem' }} />
+                    <Legend />
+                    <Area type="monotone" dataKey="historical" stroke="#818cf8" strokeWidth={2} name="Historical Sales" fill="url(#colorHistorical)" />
+                    <Area type="monotone" dataKey="forecast" stroke="#34d399" strokeWidth={2} strokeDasharray="5 5" name="Forecasted Sales" fill="url(#colorForecast)" />
+                </LineChart>
+            </ResponsiveContainer>
+        )}
+    </div>
+);
+
+const AccuracyPanel = ({ loading, data, fetchData }) => (
+    <div className="bg-slate-800/50 p-6 rounded-xl shadow-lg border border-slate-700">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+            <h2 className="text-xl font-semibold text-white mb-3 sm:mb-0">Forecast Accuracy (MAPE %)</h2>
+            <div className="bg-slate-700 p-1 rounded-lg">
+                <button onClick={() => fetchData('store')} className="hover:bg-slate-600 text-sm py-1.5 px-4 rounded-md transition-colors">Store-Level</button>
+                <button onClick={() => fetchData('sku')} className="hover:bg-slate-600 text-sm py-1.5 px-4 rounded-md transition-colors">SKU-Level</button>
+            </div>
+        </div>
+        {loading ? <LoadingSpinner /> : (
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className="border-b-2 border-slate-600">
+                        <tr>
+                            <th className="p-3 text-sm font-semibold uppercase text-slate-400">Identifier (Store/SKU)</th>
+                            <th className="p-3 text-sm font-semibold uppercase text-slate-400">Week Start</th>
+                            <th className="p-3 text-sm font-semibold uppercase text-slate-400">MAPE (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {data.map(item => 
+                            item.weekly_accuracy.map((acc, index) => (
+                                <tr key={`${item.store_id || item.product_id}-${acc.week_start}`} className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors">
+                                    {index === 0 && <td rowSpan={item.weekly_accuracy.length} className="p-3 font-bold text-white align-top">{item.store_id || item.product_id}</td>}
+                                    <td className="p-3">{acc.week_start}</td>
+                                    <td className="p-3 font-medium text-teal-400">{acc.mape !== null ? `${acc.mape}%` : 'N/A'}</td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        )}
+    </div>
+);
+
+const LogsPanel = ({ loading, data }) => (
+    <div className="bg-slate-800/50 p-6 rounded-xl shadow-lg border border-slate-700">
+        <h2 className="text-xl font-semibold text-white mb-4">Forecast Run History</h2>
+        {loading ? <LoadingSpinner /> : (
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className="border-b-2 border-slate-600">
+                        <tr>
+                            <th className="p-3 text-sm font-semibold uppercase text-slate-400">Run Time (UTC)</th>
+                            <th className="p-3 text-sm font-semibold uppercase text-slate-400">Store ID</th>
+                            <th className="p-3 text-sm font-semibold uppercase text-slate-400">Product ID</th>
+                            <th className="p-3 text-sm font-semibold uppercase text-slate-400">Forecast Horizon</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {data.map((log, index) => (
+                            <tr key={index} className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors">
+                                <td className="p-3 whitespace-nowrap"><FiClock className="inline mr-2 text-slate-400" />{log.run_time}</td>
+                                <td className="p-3">{log.store_id || 'All'}</td>
+                                <td className="p-3">{log.product_id || 'All'}</td>
+                                <td className="p-3">{log.n_weeks} weeks</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        )}
+    </div>
+);
 
 export default ForecastPage;

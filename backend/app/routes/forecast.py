@@ -666,8 +666,8 @@ def chart_data():
             week_str = week_start.strftime("%Y-%m-%d")
             results.setdefault(store_id, []).append({
                 "week_start": week_str,
-                "forecast": float(forecast),
-                "actual": float(actual)
+                "forecast": float(forecast) if forecast is not None else 0.0,
+                "actual": float(actual) if actual is not None else 0.0
             })
 
         return jsonify(results), 200
