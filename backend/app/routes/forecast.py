@@ -456,16 +456,27 @@ def chart_data():
 @role_required
 def forecast_logs():
     try:
-        logs = ForecastLog.query.order_by(ForecastLog.run_time.desc()).all()
+        # Get latest 10 logs
+        logs = (
+            ForecastLog.query
+            .order_by(ForecastLog.run_time.desc())
+            .limit(10)
+            .all()
+        )
+
         data = [{
-            "run_time": log.run_time.strftime("%Y-%m-%d %H:%M:%S"),
-            "store_id": log.store_id,
-            "product_id": log.product_id,
-            "n_weeks": log.n_weeks
+            "id": str(log.id),
+            "run_time": log.run_time.strftime("%Y-%m-%d %H:%M:%S") if log.run_time else None,
+            "run_started_at": log.run_started_at.strftime("%Y-%m-%d %H:%M:%S") if log.run_started_at else None,
+            "run_completed_at": log.run_completed_at.strftime("%Y-%m-%d %H:%M:%S") if log.run_completed_at else None,
+            "status": log.status
         } for log in logs]
+
         return jsonify({"logs": data}), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 # display sku's
 @bp.route("/skus", methods=["GET"])
