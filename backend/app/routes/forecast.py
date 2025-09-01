@@ -17,6 +17,7 @@ from app.models.forecast_log import ForecastLog
 from app.models.predict import Forecast
 from app.models.user import User
 from app.models.sales import Sales
+from app.models.store import Store
 from collections import defaultdict
 import os
 from dotenv import load_dotenv
@@ -210,230 +211,7 @@ def view_forecast_schedule():
         return jsonify({"schedules": data}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-# @bp.route("/forecast/run", methods=["POST"])
-# def run_forecast():
-#     try:
-#         # 1️⃣ Get latest schedule
-#         latest_sched = ForecastSchedule.query.order_by(ForecastSchedule.created_at.desc()).first()
-#         if not latest_sched:
-#             return jsonify({"status": "error", "message": "No forecast schedule found"}), 404
-
-#         # Ensure n_weeks is native Python int
-#         n_weeks = int(latest_sched.n_weeks)
-#         if hasattr(latest_sched.n_weeks, 'item'):  # numpy/pandas scalar
-#             n_weeks = int(latest_sched.n_weeks.item())
-#         elif hasattr(latest_sched.n_weeks, 'to_python'):  # Polars
-#             n_weeks = int(latest_sched.n_weeks.to_python())
-#         else:
-#             n_weeks = int(latest_sched.n_weeks)
-            
-#         results_summary = []
-#         all_forecast_rows = []
-
-#         print(f"DEBUG: n_weeks type: {type(n_weeks)}, value: {n_weeks}")
-#         print(f"DEBUG: n_weeks is native Python int? {type(n_weeks) == int}")
-#         print(f"DEBUG: latest_sched.id type: {type(latest_sched.id)}")
-#         print(f"DEBUG: latest_sched.store_id type: {type(latest_sched.store_id)}")
-#         print(f"DEBUG: latest_sched.product_id type: {type(latest_sched.product_id)}")
-
-#         # 2️⃣ Create ForecastLog entry
-#         print(f"DEBUG: About to create ForecastLog with:")
-#         print(f"  store_id: {latest_sched.store_id} (type: {type(latest_sched.store_id)})")
-#         print(f"  product_id: {latest_sched.product_id} (type: {type(latest_sched.product_id)})")
-#         print(f"  n_weeks: {n_weeks} (type: {type(n_weeks)})")
-#         print(f"  schedule_id: {latest_sched.id} (type: {type(latest_sched.id)})")
-        
-#         forecast_log = ForecastLog(
-#             id=uuid.uuid4(),
-#             run_time=datetime.utcnow(),
-#             store_id=latest_sched.store_id,
-#             product_id=latest_sched.product_id,
-#             n_weeks=n_weeks,
-#             schedule_id=latest_sched.id,
-#             run_started_at=datetime.utcnow(),
-#             status="running"
-#         )
-        
-#         print("DEBUG: ForecastLog created successfully")
-        
-#         try:
-#             db.session.add(forecast_log)
-#             print("DEBUG: ForecastLog added to session")
-#             db.session.flush()  # generate log_id without committing
-#             print("DEBUG: ForecastLog flushed successfully")
-#         except Exception as e:
-#             print(f"ERROR: Failed during ForecastLog creation/flush: {e}")
-#             raise
-            
-#         log_id = forecast_log.id
-#         log_id_to_use = log_id
-
-#         print(f"DEBUG: log_id type: {type(log_id)}")
-
-#         # 3️⃣ Determine store-product combos
-#         if latest_sched.store_id and latest_sched.product_id:
-#             combos = [(latest_sched.store_id, latest_sched.product_id)]
-#         else:
-#             print("DEBUG: Fetching all store-product combos from Sales table...")
-#             combos = db.session.query(Sales.store_id, Sales.product_id).distinct().all()
-#             combos = [(c[0], c[1]) for c in combos]
-#             print(f"DEBUG: Found {len(combos)} combos from Sales table")
-#             if combos:
-#                 print(f"DEBUG: First combo types: store_id={type(combos[0][0])}, product_id={type(combos[0][1])}")
-
-#         print(f"DEBUG: combos: {combos}")
-
-#         # 4️⃣ Run forecasts for each combo
-#         for store_id, product_id in combos:
-#             print(f"DEBUG: Processing combo - store_id: {store_id} (type: {type(store_id)}), product_id: {product_id} (type: {type(product_id)})")
-            
-#             # Ensure store_id and product_id are strings AND check for problematic types
-#             if hasattr(store_id, 'item'):  # numpy/pandas scalar
-#                 store_id = str(store_id.item())
-#             elif hasattr(store_id, 'to_python'):  # Polars
-#                 store_id = str(store_id.to_python())
-#             else:
-#                 store_id = str(store_id)
-                
-#             if hasattr(product_id, 'item'):  # numpy/pandas scalar
-#                 product_id = str(product_id.item())
-#             elif hasattr(product_id, 'to_python'):  # Polars
-#                 product_id = str(product_id.to_python())
-#             else:
-#                 product_id = str(product_id)
-            
-#             print(f"DEBUG: After conversion - store_id: {store_id} (type: {type(store_id)}), product_id: {product_id} (type: {type(product_id)})")
-            
-#             forecasts = run_forecast_logic(store_id, product_id, n_weeks)
-#             print(f"DEBUG: forecasts returned: {len(forecasts) if forecasts else 0}")
-
-#             if not forecasts:
-#                 print(f"⚠ No forecasts generated for store {store_id}, product {product_id}")
-#                 continue
-
-#             # DEBUG: Check the first forecast structure
-#             if forecasts:
-#                 first_forecast = forecasts[0]
-#                 print(f"DEBUG: First forecast structure: {first_forecast}")
-#                 print(f"DEBUG: First forecast types: {[(k, type(v)) for k, v in first_forecast.items()]}")
-
-#             # Prepare Forecast rows
-#             now = datetime.utcnow()
-#             for i, f in enumerate(forecasts):
-#                 print(f"DEBUG: Processing forecast {i}: {f}")
-                
-#                 # Check forecast value type
-#                 forecast_val = f.get("forecast", 0.0)
-#                 pred_val = float(forecast_val) 
-#                 print(f"DEBUG: forecast_val before conversion: {forecast_val} (type: {type(forecast_val)})")
-                
-#                 # Convert to native Python float (handle numpy, pandas, polars types)
-#                 if hasattr(forecast_val, 'item'):  # numpy/pandas types
-#                     pred_val = float(forecast_val.item())
-#                 elif hasattr(forecast_val, 'to_python'):  # Polars types
-#                     pred_val = float(forecast_val.to_python())
-#                 elif str(type(forecast_val)).startswith('<class \'polars'):  # Polars types
-#                     pred_val = float(forecast_val)
-#                 else:
-#                     pred_val = float(forecast_val)
-                    
-#                 print(f"DEBUG: pred_val after conversion: {pred_val} (type: {type(pred_val)})")
-#                 print(f"DEBUG: pred_val is native Python float? {type(pred_val) == float}")
-
-#                 # Ensure date is native Python date (not datetime) - SIMPLIFIED
-#                 forecast_date = f["date"]
-#                 print(f"DEBUG: forecast_date before conversion: {forecast_date} (type: {type(forecast_date)})")
-                
-#                 # Simple conversion - just get the date part
-#                 from datetime import date
-#                 if hasattr(forecast_date, 'date') and callable(getattr(forecast_date, 'date')):
-#                     # It's a datetime object, get the date part
-#                     forecast_date = forecast_date.date()
-#                 elif isinstance(forecast_date, date):
-#                     # Already a date object, keep as is
-#                     pass
-#                 else:
-#                     # Convert string or other format to date
-#                     import datetime as dt
-#                     if isinstance(forecast_date, str):
-#                         forecast_date = dt.datetime.strptime(forecast_date[:10], '%Y-%m-%d').date()
-#                     else:
-#                         # Last resort - convert to string then parse
-#                         date_str = str(forecast_date)[:10]
-#                         forecast_date = dt.datetime.strptime(date_str, '%Y-%m-%d').date()
-                    
-#                 print(f"DEBUG: forecast_date after conversion: {forecast_date} (type: {type(forecast_date)})")
-#                 print(f"DEBUG: Is forecast_date a date? {isinstance(forecast_date, date)}")
-#                 print(f"DEBUG: Is forecast_date a datetime? {isinstance(forecast_date, datetime)}")
-
-#                 # Ensure all values are native Python types
-#                 row_data = {
-#                     'store_id': str(store_id),  # Ensure string
-#                     'product_id': str(product_id),  # Ensure string
-#                     'date': forecast_date,  # Native date
-#                     'Forecasted': pred_val,  # Native float
-#                     'created_at': now,  # Native datetime
-#                     'forecast_log_id': log_id_to_use  # UUID
-#                 }
-#                 print(f"DEBUG: Row data types: {[(k, type(v)) for k, v in row_data.items()]}")
-
-#                 all_forecast_rows.append(
-#                     Forecast(**row_data)
-#                 )
-
-#             results_summary.append({
-#                 "store_id": store_id,
-#                 "product_id": product_id,
-#                 "n_weeks": n_weeks,
-#                 "forecast_count": len(forecasts)
-#             })
-
-#         print(f"DEBUG: Total rows to insert: {len(all_forecast_rows)}")
-        
-#         # DEBUG: Check the first row's data types before insert
-#         if all_forecast_rows:
-#             first_row = all_forecast_rows[0]
-#             print(f"DEBUG: First row attributes:")
-#             for attr in ['store_id', 'product_id', 'date', 'Forecasted', 'created_at', 'forecast_log_id']:
-#                 if hasattr(first_row, attr):
-#                     val = getattr(first_row, attr)
-#                     print(f"  {attr}: {val} (type: {type(val)})")
-
-#         # 5️⃣ Insert forecasts
-#         if all_forecast_rows:
-#             print("DEBUG: About to insert forecast rows...")
-#             try:
-#                 db.session.add_all(all_forecast_rows)
-#                 print("DEBUG: add_all completed successfully")
-#             except Exception as e:
-#                 print(f"DEBUG: Error during add_all: {e}")
-#                 raise
-
-#         # 6️⃣ Mark ForecastLog as completed
-#         forecast_log.status = "completed"
-#         forecast_log.run_completed_at = datetime.utcnow()
-
-#         # 7️⃣ Commit all changes
-#         print("DEBUG: About to commit...")
-#         db.session.commit()
-#         print("DEBUG: Commit successful!")
-
-#         return jsonify({
-#             "status": "success",
-#             "n_weeks": n_weeks,
-#             "total_combinations": len(results_summary),
-#             "details": results_summary
-#         }), 200
-
-#     except Exception as e:
-#         db.session.rollback()
-#         print(f"ERROR: {str(e)}")
-#         print(f"ERROR TYPE: {type(e)}")
-#         import traceback
-#         traceback.print_exc()
-#         return jsonify({"status": "error", "message": str(e)}), 500
-
+    
 @bp.route("/forecast/run", methods=["POST"])
 def run_forecast_endpoint():
     data = request.get_json(silent=True) or {}
@@ -688,3 +466,100 @@ def forecast_logs():
         return jsonify({"logs": data}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# display sku's
+@bp.route("/skus", methods=["GET"])
+@role_required
+def get_skus():
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    payload = decode_jwt(token)
+    role_user_id = payload.get("role_user_id")
+
+    if not role_user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    # Query distinct SKUs from Forecast table
+    skus = (
+        db.session.query(Forecast.product_id)
+        .distinct()
+        .order_by(Forecast.product_id)
+        .all()
+    )
+
+    sku_list = [row.product_id for row in skus]
+
+    return jsonify({"skus": sku_list}), 200
+
+@bp.route("/forecast/weekly", methods=["POST"])
+@role_required
+def weekly_forecast():
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    payload = decode_jwt(token)
+    role_user_id = payload.get("role_user_id")
+
+    if not role_user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    body = request.get_json(silent=True) or {}
+    store_ids = body.get("store_ids")   # numeric IDs from user
+    skus      = body.get("skus")        # list[str] or None
+    weeks     = body.get("weeks", 4)    # default 4 weeks lookahead
+
+    if not isinstance(weeks, int) or weeks <= 0:
+        return jsonify({"error": "Invalid weeks value"}), 400
+
+    # Get user's lookahead days (default fallback = weeks*7)
+    user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    lookahead_days = user.lookahead_days or (weeks * 7)
+
+    # If store_ids given, map them → store_codes
+    store_codes = None
+    if store_ids and isinstance(store_ids, list):
+        code_rows = (
+            db.session.query(Store.store_id, Store.store_code)
+            .filter(Store.store_id.in_(store_ids))
+            .all()
+        )
+        store_codes = [row.store_code for row in code_rows]
+
+    # Query Forecast (which stores store_code in store_id column)
+    query = (
+        db.session.query(
+            Forecast.store_id.label("store_code"),
+            Forecast.product_id.label("sku"),
+            func.date_trunc("week", Forecast.date).label("week_start"),
+            func.sum(Forecast.predicted).label("weekly_forecast")
+        )
+        .filter(Forecast.date <= datetime.utcnow() + timedelta(days=lookahead_days))
+    )
+
+    # Apply mapped store_code filter
+    if store_codes:
+        query = query.filter(Forecast.store_id.in_(store_codes))
+
+    # Apply sku filter
+    if skus and isinstance(skus, list):
+        query = query.filter(Forecast.product_id.in_(skus))
+
+    query = query.group_by(
+        Forecast.store_id,
+        Forecast.product_id,
+        func.date_trunc("week", Forecast.date)
+    ).order_by("week_start")
+
+    results = query.all()
+
+    # Format response
+    response = []
+    for row in results:
+        response.append({
+            "store_code": row.store_code,   # from Forecast
+            "sku": row.sku,
+            "week_start": row.week_start.strftime("%Y-%m-%d"),
+            "weekly_forecast": float(row.weekly_forecast or 0)
+        })
+
+    return jsonify({"forecasts": response}), 200

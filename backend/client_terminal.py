@@ -906,7 +906,9 @@ MENU_OPTIONS = {
             "7": {"desc": "SKU-level Forecast (Next N Weeks)", "route": "GET:/forecast/sku-level"},
             "8": {"desc": "SKU-level Past Accuracy", "route": "GET:/forecast/accuracy/sku"},
             "9": {"desc": "Forecast Chart Data", "route": "GET:/forecast/chart-data"},
-            "10": {"desc": "Forecast Run Logs", "route": "GET:/forecast/logs"}
+            "10": {"desc": "Weekly forecasts", "route": "POST:/forecast/weekly"},
+            "11": {"desc": "Forecast Run Logs", "route": "GET:/forecast/logs"}
+        
         }
     }
 }
@@ -1030,6 +1032,71 @@ def forecast_menu(token):
         r = requests.get(url, headers=headers)
         print(r.json())
 
+    def view_weekly_forecast(token):
+        hdr = {"Authorization": f"Bearer {token}"}
+
+        # Fetch available stores
+        r = requests.get(f"{BASE_URL}/stores", headers=hdr, timeout=20)
+        stores = r.json().get("stores", []) if r.ok else []
+        print("\n🏬 Available Stores:")
+        if stores:
+            for s in stores:
+                print(f"  - {s['store_id']} ({s['name']} - {s['city']})")
+        else:
+            print("  🙅 No stores found.")
+
+        # Fetch available SKUs
+        r = requests.get(f"{BASE_URL}/skus", headers=hdr, timeout=20)
+        skus_list = r.json().get("skus", []) if r.ok else []
+        print("\n📦 Available SKUs:")
+        if skus_list:
+            for s in skus_list:
+                print(f"  - {s}")
+        else:
+            print("  🙅 No SKUs found.")
+
+        # Ask user for filters
+        print("\n🔎 Forecast Filters")
+        store_ids_in = input("Enter store code(s) (comma-separated, leave blank for all): ").strip()
+        skus_in = input("Enter SKUs (comma-separated, leave blank for all): ").strip()
+        weeks_in = input("Enter weeks of forecast (default=4): ").strip()
+
+        try:
+            store_ids = [s.strip() for s in store_ids_in.split(",") if s.strip()] if store_ids_in else None
+            skus = [s.strip() for s in skus_in.split(",")] if skus_in else None 
+            weeks = int(weeks_in) if weeks_in else 4
+        except Exception:
+            print("🚫 Invalid input.")
+            return
+
+        payload = {
+            "store_ids": store_ids,
+            "skus": skus,
+            "weeks": weeks
+        }
+
+        # Call backend
+        r = requests.post(f"{BASE_URL}/forecast/weekly", json=payload, headers=hdr, timeout=20)
+        if not r.ok:
+            print("❌ Failed to fetch weekly forecast:", r.text)
+            return
+
+        data = r.json().get("forecasts", [])
+        if not data:
+            print("🙅 No forecast data available for given filters.")
+            return
+
+        print("\n📊 Weekly Forecast Results:")
+        for row in data:
+            print(
+                print(
+    f"🏬 Store: {row['store_code']} | 📦 SKU: {row['sku']} | "
+    f"📅 Week Start: {row['week_start']} | 🔮 Forecast: {row['weekly_forecast']:.2f} units"
+)
+
+            )
+
+
     def forecast_logs():
         url = f"{BASE_URL}/forecast/logs"
         headers = {"Authorization": f"Bearer {token}"}
@@ -1047,7 +1114,8 @@ def forecast_menu(token):
         "7": ("Past Accuracy - Store", past_accuracy_store),
         "8": ("Past Accuracy - SKU", past_accuracy_sku),
         "9": ("Chart Data with Trendline", chart_data),
-        "10": ("Forecast Run Logs", forecast_logs),
+        "10": ("View Weekly Forecast", lambda: view_weekly_forecast(token)),
+        "11": ("Forecast Run Logs", forecast_logs),
         "0": ("Exit Forecast Menu", None)
     }
 

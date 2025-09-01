@@ -38,6 +38,7 @@ ROUTE_ROLE_MAP = {
     "GET:/forecast/accuracy/store": ["admin", "editor", "viewer"],
     "GET:/forecast/accuracy/sku": ["admin", "editor", "viewer"],
     "GET:/forecast/chart-data": ["admin", "editor", "viewer"],
+    "POST:/forecast/weekly": ["admin", "editor", "viewer"],
     "GET:/forecast/logs": ["admin", "editor", "viewer"],
 
     # --- Store ---
@@ -47,6 +48,10 @@ ROUTE_ROLE_MAP = {
     "GET:/store/<int:store_id>/hover":             ["admin", "editor", "viewer"],
     "GET:/stores/with-alert-status":               ["admin", "editor", "viewer"],
     "GET:/store/<int:store_id>/with-alert-status": ["admin", "editor", "viewer"],
+
+       # -----display all skus  -----
+    "GET:/skus":                       ["admin", "editor", "viewer"],
+
 
     # --- Node Location Update ---
     "POST:/update_store":               ["admin", "editor"],
