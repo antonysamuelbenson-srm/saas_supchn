@@ -2,7 +2,7 @@ from app import db
 from sqlalchemy import UUID
 from datetime import datetime
 
-class ForecastDaily(db.Model):
+class Forecast(db.Model):
     __tablename__ = "predict"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)

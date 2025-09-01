@@ -3,7 +3,7 @@
 #     from app import db
 #     from app.models.forecast_schedule import ForecastSchedule
 #     from app.models.forecast_log import ForecastLog
-#     from app.models.predict import ForecastDaily
+#     from app.models.predict import Forecast
 #     from app.models.sales import Sales
 #     from app.utils.forecast_utils import run_forecast_logic
 #     from datetime import datetime
@@ -43,7 +43,7 @@
 #         for store_id, product_id in combos:
 #             forecasts = run_forecast_logic(store_id, product_id, n_weeks)
 #             for f in forecasts:
-#                 db.session.add(ForecastDaily(
+#                 db.session.add(Forecast(
 #                     store_id=store_id,
 #                     product_id=product_id,
 #                     date=f["date"],
@@ -69,7 +69,7 @@
 #     from app import db
 #     from app.models.forecast_schedule import ForecastSchedule
 #     from app.models.forecast_log import ForecastLog
-#     from app.models.forecast import ForecastDaily
+#     from app.models.forecast import Forecast
 #     from app.models.sales import Sales
 #     from app.utils.forecast_utils import run_forecast_logic
 #     from sqlalchemy import text
@@ -143,7 +143,7 @@
 
 #             # Bulk insert forecasts
 #             forecast_records = [
-#                 ForecastDaily(
+#                 Forecast(
 #                     store_id=row.store_id,
 #                     product_id=row.product_id,
 #                     date=row.date,
@@ -177,7 +177,7 @@ def execute_forecast_job(schedule_id=None):
     from app import db
     from app.models.forecast_schedule import ForecastSchedule
     from app.models.forecast_log import ForecastLog
-    from app.models.predict import ForecastDaily
+    from app.models.predict import Forecast
     from app.models.sales import Sales
     from app.utils.forecast_utils import run_forecast_logic
     from datetime import datetime, date
@@ -238,7 +238,7 @@ def execute_forecast_job(schedule_id=None):
 
                     pred_val = float(getattr(f.get("forecast", 0.0), 'item', f.get("forecast", 0.0)))
 
-                    all_forecast_rows.append(ForecastDaily(
+                    all_forecast_rows.append(Forecast(
                         store_id=store_id,
                         product_id=product_id,
                         date=forecast_date,

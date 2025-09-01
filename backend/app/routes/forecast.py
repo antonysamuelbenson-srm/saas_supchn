@@ -14,7 +14,8 @@ from app.utils.forecast_utils import (
 from app.services.forecast_service import execute_forecast_job
 from app.models.forecast_schedule import ForecastSchedule
 from app.models.forecast_log import ForecastLog 
-from app.models.predict import ForecastDaily
+from app.models.predict import Forecast
+from app.models.user import User
 from app.models.sales import Sales
 from collections import defaultdict
 import os
@@ -97,17 +98,9 @@ def forecast_for_store(store_id):
         "forecast": forecast_data
     }), 200
 
-@bp.route("/user/lookahead_days", methods=["POST", "OPTIONS"])
+@bp.route("/user/lookahead_days", methods=["GET", "POST"])
 @role_required
-def update_lookahead_days():
-    if request.method == "OPTIONS":
-        # Preflight for CORS
-        response = jsonify({})
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-        response.headers.add("Access-Control-Allow-Methods", "POST,OPTIONS")
-        return response, 200
-
+def lookahead_days():
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
     payload = decode_jwt(token)
     role_user_id = payload.get("role_user_id")
@@ -115,38 +108,35 @@ def update_lookahead_days():
     if not role_user_id:
         return jsonify({"error": "Unauthorized"}), 401
 
-    data = request.get_json()
-    lookahead_days = data.get("lookahead_days")
+    if request.method == "POST":
+        body = request.get_json(silent=True) or {}
+        weeks = body.get("weeks")
 
-    if not isinstance(lookahead_days, int) or lookahead_days <= 0:
-        return jsonify({"error": "Invalid days value"}), 400
+        if weeks is None or not isinstance(weeks, int) or weeks < 0:
+            return jsonify({"error": "Invalid weeks value"}), 400
 
-    try:
-        supabase.table("user").update({
-            "lookahead_days": lookahead_days
-        }).eq("role_user_id", role_user_id).execute()
-        return jsonify({"message": "Lookahead days updated"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-@bp.route("/user/lookahead_days", methods=["GET"])
-@role_required
-def get_lookahead_days():
-    token = request.headers.get("Authorization", "").replace("Bearer ", "")
-    payload = decode_jwt(token)
-    role_user_id = payload.get("role_user_id")
+        days = weeks * 7
 
-    if not role_user_id:
-        return jsonify({"error": "Unauthorized"}), 401
+        # Example with SQLAlchemy
+        user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
 
-    user_row = (supabase.table("user")
-                        .select("lookahead_days")
-                        .eq("role_user_id", role_user_id)
-                        .single()
-                        .execute()).data
+        user.lookahead_days = days
+        db.session.commit()
+
+        return jsonify({
+            "message": "Lookahead updated",
+            "lookahead_days": days
+        }), 200
+
+    # GET request
+    user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
 
     return jsonify({
-        "lookahead_days": user_row.get("lookahead_days", 7)
+        "lookahead_days": user.lookahead_days or 7
     }), 200
 
 
@@ -328,7 +318,7 @@ def view_forecast_schedule():
 #                 print(f"DEBUG: First forecast structure: {first_forecast}")
 #                 print(f"DEBUG: First forecast types: {[(k, type(v)) for k, v in first_forecast.items()]}")
 
-#             # Prepare ForecastDaily rows
+#             # Prepare Forecast rows
 #             now = datetime.utcnow()
 #             for i, f in enumerate(forecasts):
 #                 print(f"DEBUG: Processing forecast {i}: {f}")
@@ -382,14 +372,14 @@ def view_forecast_schedule():
 #                     'store_id': str(store_id),  # Ensure string
 #                     'product_id': str(product_id),  # Ensure string
 #                     'date': forecast_date,  # Native date
-#                     'ForecastDailyed': pred_val,  # Native float
+#                     'Forecasted': pred_val,  # Native float
 #                     'created_at': now,  # Native datetime
 #                     'forecast_log_id': log_id_to_use  # UUID
 #                 }
 #                 print(f"DEBUG: Row data types: {[(k, type(v)) for k, v in row_data.items()]}")
 
 #                 all_forecast_rows.append(
-#                     ForecastDaily(**row_data)
+#                     Forecast(**row_data)
 #                 )
 
 #             results_summary.append({
@@ -405,7 +395,7 @@ def view_forecast_schedule():
 #         if all_forecast_rows:
 #             first_row = all_forecast_rows[0]
 #             print(f"DEBUG: First row attributes:")
-#             for attr in ['store_id', 'product_id', 'date', 'ForecastDailyed', 'created_at', 'forecast_log_id']:
+#             for attr in ['store_id', 'product_id', 'date', 'Forecasted', 'created_at', 'forecast_log_id']:
 #                 if hasattr(first_row, attr):
 #                     val = getattr(first_row, attr)
 #                     print(f"  {attr}: {val} (type: {type(val)})")
@@ -471,17 +461,17 @@ def store_level_forecast():
         # 3️⃣ Aggregate weekly forecasts from now → cutoff
         forecast_rows = (
             db.session.query(
-                ForecastDaily.store_id,
-                func.date_trunc('week', ForecastDaily.date).label("week_start"),
-                func.sum(ForecastDaily.predicted).label("forecast")
+                Forecast.store_id,
+                func.date_trunc('week', Forecast.date).label("week_start"),
+                func.sum(Forecast.predicted).label("forecast")
             )
-            .filter(ForecastDaily.date >= start_date)
-            .filter(ForecastDaily.date <= cutoff_date)
+            .filter(Forecast.date >= start_date)
+            .filter(Forecast.date <= cutoff_date)
             .group_by(
-                ForecastDaily.store_id,
-                func.date_trunc('week', ForecastDaily.date)
+                Forecast.store_id,
+                func.date_trunc('week', Forecast.date)
             )
-            .order_by(ForecastDaily.store_id, "week_start")
+            .order_by(Forecast.store_id, "week_start")
             .all()
         )
 
@@ -523,17 +513,17 @@ def sku_level_forecast():
         # 3️⃣ Aggregate weekly forecasts per SKU (across all stores)
         forecast_rows = (
             db.session.query(
-                ForecastDaily.product_id,
-                func.date_trunc('week', ForecastDaily.date).label("week_start"),
-                func.sum(ForecastDaily.predicted).label("forecast")
+                Forecast.product_id,
+                func.date_trunc('week', Forecast.date).label("week_start"),
+                func.sum(Forecast.predicted).label("forecast")
             )
-            .filter(ForecastDaily.date >= start_date)
-            .filter(ForecastDaily.date <= cutoff_date)
+            .filter(Forecast.date >= start_date)
+            .filter(Forecast.date <= cutoff_date)
             .group_by(
-                ForecastDaily.product_id,
-                func.date_trunc('week', ForecastDaily.date)
+                Forecast.product_id,
+                func.date_trunc('week', Forecast.date)
             )
-            .order_by(ForecastDaily.product_id, "week_start")
+            .order_by(Forecast.product_id, "week_start")
             .all()
         )
 
@@ -557,84 +547,93 @@ def sku_level_forecast():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@bp.route("/forecast/accuracy/store", methods=["GET"])
+
+@bp.get("/forecast/accuracy/store")
 @role_required
-def store_level_accuracy():
-    try:
-        # Past 4 weeks date range
-        start_date = datetime.utcnow().date() - timedelta(weeks=4)
-        end_date = datetime.utcnow().date()
+def compare_store():
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    payload = decode_jwt(token)
+    role_user_id = payload.get("role_user_id")
 
-        rows = (
-            db.session.query(
-                ForecastDaily.store_id,
-                func.date_trunc('week', ForecastDaily.date).label("week_start"),
-                (func.sum(func.abs(ForecastDaily.actual - ForecastDaily.predicted)) /
-                 func.nullif(func.sum(ForecastDaily.actual), 0) * 100).label("mape")
-            )
-            .filter(ForecastDaily.date >= start_date, ForecastDaily.date <= end_date)
-            .group_by(
-                ForecastDaily.store_id,
-                func.date_trunc('week', ForecastDaily.date)
-            )
-            .order_by(ForecastDaily.store_id, "week_start")
-            .all()
+    user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    lookahead_days = user.lookahead_days or 28
+    n_weeks = lookahead_days // 7
+
+    # Get last available date in Forecast (not system date)
+    end_date = db.session.query(func.max(Forecast.date)).scalar()
+    start_date = end_date - timedelta(days=lookahead_days)
+
+    data = (
+        db.session.query(
+            Forecast.store_id,
+            func.date_trunc("week", Forecast.date).label("week_start"),
+            func.sum(Forecast.predicted).label("predicted"),
+            func.sum(Forecast.actual).label("actual"),
         )
+        .filter(Forecast.date >= start_date, Forecast.date <= end_date)
+        .group_by(Forecast.store_id, func.date_trunc("week", Forecast.date))
+        .order_by("week_start")
+        .all()
+    )
 
-        results = {}
-        for store_id, week_start, mape in rows:
-            results.setdefault(store_id, []).append({
-                "week_start": week_start.strftime("%Y-%m-%d"),
-                "mape": round(float(mape), 2) if mape is not None else None
-            })
+    results = [
+        {
+            "store_id": row.store_id,
+            "week_start": row.week_start.strftime("%Y-%m-%d"),
+            "predicted": float(row.predicted or 0),
+            "actual": float(row.actual or 0),
+        }
+        for row in data
+    ]
 
-        return jsonify([
-            {"store_id": store_id, "weekly_accuracy": weeks}
-            for store_id, weeks in results.items()
-        ]), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify(results), 200
 
 
-@bp.route("/forecast/accuracy/sku", methods=["GET"])
+@bp.get("/forecast/accuracy/sku")
 @role_required
-def sku_level_accuracy():
-    try:
-        # Past 4 weeks date range
-        start_date = datetime.utcnow().date() - timedelta(weeks=4)
-        end_date = datetime.utcnow().date()
+def compare_sku():
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    payload = decode_jwt(token)
+    role_user_id = payload.get("role_user_id")
 
-        rows = (
-            db.session.query(
-                ForecastDaily.product_id,
-                func.date_trunc('week', ForecastDaily.date).label("week_start"),
-                (func.sum(func.abs(ForecastDaily.actual - ForecastDaily.predicted)) /
-                 func.nullif(func.sum(ForecastDaily.actual), 0) * 100).label("mape")
-            )
-            .filter(ForecastDaily.date >= start_date, ForecastDaily.date <= end_date)
-            .group_by(
-                ForecastDaily.product_id,
-                func.date_trunc('week', ForecastDaily.date)
-            )
-            .order_by(ForecastDaily.product_id, "week_start")
-            .all()
+    user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    lookahead_days = user.lookahead_days or 28
+    n_weeks = lookahead_days // 7
+
+    # Get last available date in Forecast
+    end_date = db.session.query(func.max(Forecast.date)).scalar()
+    start_date = end_date - timedelta(days=lookahead_days)
+
+    data = (
+        db.session.query(
+            Forecast.product_id.label("sku"),
+            func.date_trunc("week", Forecast.date).label("week_start"),
+            func.sum(Forecast.predicted).label("predicted"),
+            func.sum(Forecast.actual).label("actual"),
         )
+        .filter(Forecast.date >= start_date, Forecast.date <= end_date)
+        .group_by(Forecast.product_id, func.date_trunc("week", Forecast.date))
+        .order_by("week_start")
+        .all()
+    )
 
-        results = {}
-        for product_id, week_start, mape in rows:
-            results.setdefault(product_id, []).append({
-                "week_start": week_start.strftime("%Y-%m-%d"),
-                "mape": round(float(mape), 2) if mape is not None else None
-            })
+    results = [
+        {
+            "sku": row.sku,
+            "week_start": row.week_start.strftime("%Y-%m-%d"),
+            "predicted": float(row.predicted or 0),
+            "actual": float(row.actual or 0),
+        }
+        for row in data
+    ]
 
-        return jsonify([
-            {"product_id": product_id, "weekly_accuracy": weeks}
-            for product_id, weeks in results.items()
-        ]), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify(results), 200
 
     
 @bp.route("/forecast/chart-data", methods=["GET"])
@@ -648,15 +647,15 @@ def chart_data():
         # Aggregate by store-week
         rows = (
             db.session.query(
-                ForecastDaily.store_id,
-                func.date_trunc('week', ForecastDaily.date).label("week_start"),
-                func.sum(ForecastDaily.predicted).label("forecast"),
-                func.sum(ForecastDaily.actual).label("actual")
+                Forecast.store_id,
+                func.date_trunc('week', Forecast.date).label("week_start"),
+                func.sum(Forecast.predicted).label("forecast"),
+                func.sum(Forecast.actual).label("actual")
             )
-            .filter(ForecastDaily.date >= start_date)
-            .filter(ForecastDaily.date <= end_date)
-            .group_by(ForecastDaily.store_id, func.date_trunc('week', ForecastDaily.date))
-            .order_by(ForecastDaily.store_id, "week_start")
+            .filter(Forecast.date >= start_date)
+            .filter(Forecast.date <= end_date)
+            .group_by(Forecast.store_id, func.date_trunc('week', Forecast.date))
+            .order_by(Forecast.store_id, "week_start")
             .all()
         )
 

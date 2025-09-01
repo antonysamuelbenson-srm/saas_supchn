@@ -5,7 +5,7 @@ import numpy as np
 from datetime import timedelta, datetime, date
 from math import ceil
 from app.models.sales import Sales
-from app.models.predict import ForecastDaily
+from app.models.predict import Forecast
 from app.utils.feature_engineering import ensure_minimum_history, generate_features
 
 # ----------------------------
@@ -139,7 +139,7 @@ def aggregate_weekly(df: pl.DataFrame, date_col="date", value_col="forecast"):
 
 def prepare_chart_data(store_id):
     """Fetch historical forecasts for charting"""
-    history = ForecastDaily.query.filter_by(store_id=store_id).order_by(ForecastDaily.date).all()
+    history = Forecast.query.filter_by(store_id=store_id).order_by(Forecast.date).all()
     if not history:
         return []
 

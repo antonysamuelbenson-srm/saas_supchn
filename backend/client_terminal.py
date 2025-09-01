@@ -266,14 +266,14 @@ def settings_menu(token: str):
             set_lead_times(token)
 
         elif choice == "3":
-            lookahead = input("Enter forecast lookahead (in days): ").strip()
+            lookahead = input("Enter forecast lookahead (in weeks): ").strip()
             if not lookahead.isdigit():
                 print("❌ Invalid input. Must be a number.")
                 continue
             response = requests.post(
-                f"{BASE_URL}/config/set-lookahead-days",
+                f"{BASE_URL}/user/lookahead_days",
                 headers=hdr,
-                json={"lookahead_days": int(lookahead)}
+                json={"weeks": int(lookahead)}
             )
             if response.ok:
                 print("✅ Lookahead updated successfully.")
