@@ -1044,17 +1044,18 @@ def forecast_menu(token):
             data = r.json()
             print("\n📊 SKU Forecast Accuracy (%):")
             for row in data:
-                # Use .get() with default None and fallback 'N/A' or 0
-                accuracy = row.get('accuracy_percent') or 0
+                mape = row.get('mape')
                 sku = row.get('sku') or "Unknown"
                 week_start = row.get('week_start') or "Unknown"
+                accuracy_str = f"{mape:.2f}%" if mape is not None else "N/A"
                 print(
                     f"📦 SKU: {sku} | "
                     f"📅 Week Start: {week_start} | "
-                    f"✅ Accuracy: {accuracy:.2f}%"
+                    f"✅ Accuracy: {accuracy_str}"
                 )
         else:
             print("❌ Failed to fetch SKU accuracy:", r.text)
+
 
 
     def past_accuracy_store(token):
