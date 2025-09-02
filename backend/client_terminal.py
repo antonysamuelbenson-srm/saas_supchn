@@ -994,10 +994,25 @@ def forecast_menu(token):
         print(r.json())
 
     def run_forecast():
-        url = f"{BASE_URL}/forecast/run"
+        url = f"{BASE_URL}/run"
         headers = {"Authorization": f"Bearer {token}"}
-        r = requests.post(url, headers=headers)
-        print(r.json())
+
+        # ask user for input
+        try:
+            weeks_input = input("Enter number of weeks for forecast [default 4]: ").strip()
+            weeks = int(weeks_input) if weeks_input else 4
+        except ValueError:
+            print("❌ Invalid input. Please enter an integer.")
+            return
+
+        payload = {"weeks": weeks}
+
+        try:
+            r = requests.post(url, headers=headers, json=payload)
+            r.raise_for_status()
+            print(r.json())
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
 
 
     def chart_data():
@@ -1013,11 +1028,22 @@ def forecast_menu(token):
         r = requests.get(url, headers=headers, params=params)
         print(r.json())
 
-    def past_accuracy_store():
+    def past_accuracy_store(token):
         url = f"{BASE_URL}/forecast/accuracy/store"
         headers = {"Authorization": f"Bearer {token}"}
         r = requests.get(url, headers=headers)
-        print(r.json())
+        if r.ok:
+            data = r.json()
+            print("\n📊 Store Forecast Accuracy (MAPE %):")
+            for row in data:
+                print(
+                    f"🏬 Store: {row['store_id']} | "
+                    f"📅 Week Start: {row['week_start']} | "
+                    f"⚠️ MAPE: {row['mape']:.2f}%"
+                )
+        else:
+            print("❌ Failed to fetch Store accuracy:", r.text)
+
 
     def sku_level_forecast():
         url = f"{BASE_URL}/forecast/sku-level"
@@ -1026,11 +1052,22 @@ def forecast_menu(token):
         r = requests.get(url, headers=headers, params=params)
         print(r.json())
 
-    def past_accuracy_sku():
+    def past_accuracy_sku(token):
         url = f"{BASE_URL}/forecast/accuracy/sku"
         headers = {"Authorization": f"Bearer {token}"}
         r = requests.get(url, headers=headers)
-        print(r.json())
+        if r.ok:
+            data = r.json()
+            print("\n📊 SKU Forecast Accuracy (MAPE %):")
+            for row in data:
+                print(
+                    f"📦 SKU: {row['sku']} | "
+                    f"📅 Week Start: {row['week_start']} | "
+                    f"⚠️ MAPE: {row['mape']:.2f}%"
+                )
+        else:
+            print("❌ Failed to fetch SKU accuracy:", r.text)
+
 
     def view_weekly_forecast(token):
         hdr = {"Authorization": f"Bearer {token}"}
@@ -1088,13 +1125,20 @@ def forecast_menu(token):
 
         print("\n📊 Weekly Forecast Results:")
         for row in data:
-            print(
+            actual_value = row.get("weekly_actual")
+            forecast_value = row.get("weekly_forecast", 0)
+            if actual_value is not None:
                 print(
-    f"🏬 Store: {row['store_code']} | 📦 SKU: {row['sku']} | "
-    f"📅 Week Start: {row['week_start']} | 🔮 Forecast: {row['weekly_forecast']:.2f} units"
-)
-
-            )
+                    f"🏬 Store: {row['store_code']} | 📦 SKU: {row['sku']} | "
+                    f"📅 Week Start: {row['week_start']} | "
+                    f"📊 Actual: {actual_value:.2f} units | 🔮 Forecast: {forecast_value:.2f} units"
+                )
+            else:
+                print(
+                    f"🏬 Store: {row['store_code']} | 📦 SKU: {row['sku']} | "
+                    f"📅 Week Start: {row['week_start']} | "
+                    f"🔮 Forecast: {forecast_value:.2f} units | 📊 Actual: N/A"
+                )
 
 
     def forecast_logs():
@@ -1111,8 +1155,8 @@ def forecast_menu(token):
         "4": ("Run Forecast Manually", run_forecast),
         "5": ("Store-Level Forecast (Next N Weeks)", store_level_forecast),
         "6": ("SKU-Level Forecast (Next N Weeks)", sku_level_forecast),
-        "7": ("Past Accuracy - Store", past_accuracy_store),
-        "8": ("Past Accuracy - SKU", past_accuracy_sku),
+        "7": ("Past Accuracy - Store", lambda: past_accuracy_store(token)),
+        "8": ("Past Accuracy - SKU", lambda: past_accuracy_sku(token)),
         "9": ("Chart Data with Trendline", chart_data),
         "10": ("View Weekly Forecast", lambda: view_weekly_forecast(token)),
         "11": ("Forecast Run Logs", forecast_logs),

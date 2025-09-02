@@ -1,268 +1,97 @@
-# # app/services/forecast_service.py
-# def execute_forecast_job(schedule_id=None):
-#     from app import db
-#     from app.models.forecast_schedule import ForecastSchedule
-#     from app.models.forecast_log import ForecastLog
-#     from app.models.predict import Forecast
-#     from app.models.sales import Sales
-#     from app.utils.forecast_utils import run_forecast_logic
-#     from datetime import datetime
-#     import uuid
+import polars as pl
+import traceback
+import logging
+from datetime import datetime
+from app.utils.forecast_utils import (
+    load_sales_from_db, preprocess,
+    join_regressors_hist, add_time_features, train_model,
+    df_to_predict_rows, load_regressors_from_db
+)
+from app.utils.db import bulk_insert_predict, create_forecast_log, update_forecast_log_status
 
-#     schedules = []
-#     if schedule_id:
-#         sched = ForecastSchedule.query.get(schedule_id)
-#         if sched:
-#             schedules.append(sched)
-#     else:
-#         schedules = ForecastSchedule.query.all()
+logger = logging.getLogger(__name__)
 
-#     results_summary = []
-#     for sched in schedules:
-#         n_weeks = int(sched.n_weeks)
-#         log_id = uuid.uuid4()
+def run_manual_forecast(weeks: int) -> dict:
+    forecast_log_id = None
+    try:
+        if weeks <= 0:
+            raise ValueError("weeks must be > 0")
+        h = weeks * 7
+        logger.info(f"Running manual forecast for {h} days")
 
-#         forecast_log = ForecastLog(
-#             id=log_id,
-#             run_time=datetime.utcnow(),
-#             store_id=sched.store_id,
-#             product_id=sched.product_id,
-#             n_weeks=n_weeks,
-#             schedule_id=sched.id,
-#             run_started_at=datetime.utcnow(),
-#             status="running"
-#         )
-#         db.session.add(forecast_log)
-#         db.session.flush()
+        forecast_log_id = create_forecast_log(
+            n_days=h,
+            status="running"
+        )
+        logger.info(f"Created forecast log entry: {forecast_log_id}")
 
-#         if sched.store_id and sched.product_id:
-#             combos = [(sched.store_id, sched.product_id)]
-#         else:
-#             combos = db.session.query(Sales.store_id, Sales.product_id).distinct().all()
+        # 1. Load & preprocess historical data
+        hist = preprocess(load_sales_from_db())
+        logger.info(f"History loaded and preprocessed: {hist.shape}")
 
-#         for store_id, product_id in combos:
-#             forecasts = run_forecast_logic(store_id, product_id, n_weeks)
-#             for f in forecasts:
-#                 db.session.add(Forecast(
-#                     store_id=store_id,
-#                     product_id=product_id,
-#                     date=f["date"],
-#                     predicted=f["forecast"],
-#                     forecast_log_id=log_id
-#                 ))
+        hist = join_regressors_hist(hist)
+        hist = add_time_features(hist, "date", "unique_id")
+        hist = hist.sort(["unique_id", "date"])
+        logger.info(f"History after features: {hist.shape}")
 
-#             results_summary.append({
-#                 "store_id": store_id,
-#                 "product_id": product_id,
-#                 "forecast_count": len(forecasts)
-#             })
+        # 2. Train MLForecast model
+        model = train_model(hist)
+        logger.info("Model trained")
 
-#         forecast_log.status = "completed"
-#         forecast_log.run_completed_at = datetime.utcnow()
+        # 3. Build future dataframe
+        future = model.make_future_dataframe(h=h)
+        # For possible joins, split unique_id
+        future = future.with_columns([
+            pl.col("unique_id").str.split("_").list.get(0).alias("store_id"),
+            pl.col("unique_id").str.split("_").list.get(1).alias("sku")
+        ])
+        logger.info(f"Future frame ready: {future.shape}")
 
-#     db.session.commit()
-#     return {"status": "success", "details": results_summary}
+        # 4. Load regressors from DB and join
+        hol, wth, eco = load_regressors_from_db()
+        future = future.join(
+            hol.rename({"date": "date"}), on="date", how="left"
+        ).with_columns(pl.col("is_holiday").fill_null(0))
+        future = future.join(
+            wth.rename({"date": "date"}), on=["date", "store_id"], how="left"
+        )
+        future = future.join(
+            eco.rename({"date": "date"}), on="date", how="left"
+        )
+        future = future.with_columns([
+            pl.col("temperature").fill_null(0.0),
+            pl.col("fuel_price").fill_null(0.0),
+            pl.col("cpi").fill_null(0.0),
+            pl.col("unemployment").fill_null(0.0),
+        ])
+        future = add_time_features(future, date_col="date", id_col="unique_id")
+        # Remove static features before predict
+        future_for_pred = future.drop(["store_id", "sku"])
+        logger.info(f"Future frame prepared for prediction: {future_for_pred.shape}")
 
+        # 5. Predict
+        preds = model.predict(h=h, X_df=future_for_pred)
+        print("Prediction columns:", preds.columns) 
+        logger.info(f"Predictions generated: {preds.shape}")
 
-# # app/services/forecast_service.py
-# def execute_forecast_job(schedule_id=None):
-#     from app import db
-#     from app.models.forecast_schedule import ForecastSchedule
-#     from app.models.forecast_log import ForecastLog
-#     from app.models.forecast import Forecast
-#     from app.models.sales import Sales
-#     from app.utils.forecast_utils import run_forecast_logic
-#     from sqlalchemy import text
-#     from datetime import datetime, timedelta
-#     import pandas as pd
-#     import uuid
+        # 6. Save predictions to DB with forecast_log_id
+        rows = df_to_predict_rows(preds, forecast_log_id=forecast_log_id)
+        if rows:
+            bulk_insert_predict(rows)
+            logger.info(f"Inserted {len(rows)} rows into predict table")
 
-#     schedules = []
-#     if schedule_id:
-#         sched = ForecastSchedule.query.get(schedule_id)
-#         if sched:
-#             schedules.append(sched)
-#     else:
-#         schedules = ForecastSchedule.query.all()
+        update_forecast_log_status(forecast_log_id, "completed")
+        logger.info(f"Forecast log {forecast_log_id} marked as completed")
 
-#     results_summary = []
+        return {"h": h, "rows_written": len(rows), "forecast_log_id": forecast_log_id}
 
-#     for sched in schedules:
-#         try:
-#             # Pull n_weeks directly from schedule
-#             n_weeks = int(sched.n_weeks)
-#             forecast_end_date = datetime.utcnow().date() + timedelta(weeks=n_weeks)
-
-#             log_id = uuid.uuid4()
-#             forecast_log = ForecastLog(
-#                 id=log_id,
-#                 run_time=datetime.utcnow(),
-#                 store_id=sched.store_id,
-#                 product_id=sched.product_id,
-#                 n_weeks=n_weeks,
-#                 schedule_id=sched.id,
-#                 run_started_at=datetime.utcnow(),
-#                 status="running"
-#             )
-#             db.session.add(forecast_log)
-#             db.session.flush()
-
-#             # Build fast SQL filters
-#             sql_filters = []
-#             params = {"forecast_end_date": forecast_end_date}
-
-#             if sched.store_id:
-#                 sql_filters.append("store_id = :store_id")
-#                 params["store_id"] = sched.store_id
-#             if sched.product_id:
-#                 sql_filters.append("product_id = :product_id")
-#                 params["product_id"] = sched.product_id
-
-#             where_clause = f"WHERE {' AND '.join(sql_filters)}" if sql_filters else ""
-
-#             # Fetch all sales in one query
-#             sql = text(f"""
-#                 SELECT store_id, product_id, date, SUM(quantity) AS total_qty
-#                 FROM sales
-#                 {where_clause}
-#                 GROUP BY store_id, product_id, date
-#                 ORDER BY store_id, product_id, date
-#             """)
-#             rows = db.session.execute(sql, params).fetchall()
-
-#             if not rows:
-#                 print(f"⚠ No sales data found for schedule {sched.id}")
-#                 continue
-
-#             # Convert to DataFrame for batch forecasting
-#             df = pd.DataFrame(rows, columns=["store_id", "product_id", "date", "total_qty"])
-#             forecasts_df = run_forecast_logic(df, n_weeks)  # should handle multiple store/product combos
-
-#             # Add forecast_log_id to all rows
-#             forecasts_df["forecast_log_id"] = log_id
-
-#             # Bulk insert forecasts
-#             forecast_records = [
-#                 Forecast(
-#                     store_id=row.store_id,
-#                     product_id=row.product_id,
-#                     date=row.date,
-#                     predicted=row.predicted,
-#                     forecast_log_id=row.forecast_log_id
-#                 )
-#                 for row in forecasts_df.itertuples(index=False)
-#             ]
-#             db.session.bulk_save_objects(forecast_records)
-
-#             forecast_log.status = "completed"
-#             forecast_log.run_completed_at = datetime.utcnow()
-
-#             results_summary.append({
-#                 "schedule_id": str(sched.id),
-#                 "store_id": sched.store_id,
-#                 "product_id": sched.product_id,
-#                 "forecast_count": len(forecasts_df)
-#             })
-
-#         except Exception as e:
-#             print(f"❌ Failed to process schedule {sched.id}: {e}")
-
-#     db.session.commit()
-#     return {"status": "success", "details": results_summary}
-
-
-# app/services/forecast_service.py
-
-def execute_forecast_job(schedule_id=None):
-    from app import db
-    from app.models.forecast_schedule import ForecastSchedule
-    from app.models.forecast_log import ForecastLog
-    from app.models.predict import Forecast
-    from app.models.sales import Sales
-    from app.utils.forecast_utils import run_forecast_logic
-    from datetime import datetime, date
-    import uuid
-
-    schedules = []
-    if schedule_id:
-        sched = ForecastSchedule.query.get(schedule_id)
-        if sched:
-            schedules.append(sched)
-    else:
-        schedules = ForecastSchedule.query.all()
-
-    results_summary = []
-
-    for sched in schedules:
-        try:
-            n_weeks = int(sched.n_weeks)
-            log_id = uuid.uuid4()
-
-            # ✅ Create forecast log
-            forecast_log = ForecastLog(
-                id=log_id,
-                run_time=datetime.utcnow(),
-                n_weeks=n_weeks,
-                schedule_id=sched.id,
-                run_started_at=datetime.utcnow(),
-                status="running",
-                store_id=sched.store_id if sched.store_id else None,
-                product_id=sched.product_id if sched.product_id else None
-            )
-            db.session.add(forecast_log)
-            db.session.flush()
-
-            # ✅ Determine store-product combos in ONE query
-            q = db.session.query(Sales.store_id, Sales.product_id).distinct()
-            if sched.store_id:
-                q = q.filter(Sales.store_id == sched.store_id)
-            if sched.product_id:
-                q = q.filter(Sales.product_id == sched.product_id)
-            combos = [(str(s), str(p)) for s, p in q.all()]
-
-            all_forecast_rows = []
-            now = datetime.utcnow()
-
-            # ✅ Generate all forecasts in memory before DB insert
-            for store_id, product_id in combos:
-                forecasts = run_forecast_logic(store_id, product_id, n_weeks)
-                if not forecasts:
-                    continue
-
-                for f in forecasts:
-                    forecast_date = f["date"]
-                    if hasattr(forecast_date, 'date') and callable(forecast_date.date):
-                        forecast_date = forecast_date.date()
-                    elif not isinstance(forecast_date, date):
-                        forecast_date = datetime.strptime(str(forecast_date)[:10], "%Y-%m-%d").date()
-
-                    pred_val = float(getattr(f.get("forecast", 0.0), 'item', f.get("forecast", 0.0)))
-
-                    all_forecast_rows.append(Forecast(
-                        store_id=store_id,
-                        product_id=product_id,
-                        date=forecast_date,
-                        predicted=pred_val,
-                        created_at=now,
-                        forecast_log_id=log_id
-                    ))
-
-                results_summary.append({
-                    "store_id": store_id,
-                    "product_id": product_id,
-                    "forecast_count": len(forecasts)
-                })
-
-            # ✅ Bulk insert in one go
-            if all_forecast_rows:
-                db.session.add_all(all_forecast_rows)
-
-            forecast_log.status = "completed"
-            forecast_log.run_completed_at = datetime.utcnow()
-            db.session.commit()
-
-        except Exception as e:
-            db.session.rollback()
-            print(f"❌ Forecast run failed for schedule {sched.id}: {e}")
-
-    return {"status": "success", "details": results_summary}
+    except Exception as e:
+        logger.error("Forecast failed: %s", e)
+        if forecast_log_id:
+            try:
+                update_forecast_log_status(forecast_log_id, "failed")
+                logger.info(f"Forecast log {forecast_log_id} marked as failed")
+            except Exception as log_error:
+                logger.error(f"Failed to update forecast log status: {log_error}")
+        traceback.print_exc()
+        raise
