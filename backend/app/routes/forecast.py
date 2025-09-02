@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 import polars as pl
 from datetime import timedelta, date, datetime
-from sqlalchemy import func
+from sqlalchemy import func,text
 import uuid
 import pickle
 from app import db
@@ -18,6 +18,7 @@ from app.models.store import Store
 from collections import defaultdict
 import os
 from dotenv import load_dotenv
+import logging
 from app.utils.decorators import role_required
 
 bp = Blueprint("forecast", __name__)
@@ -421,102 +422,152 @@ def sku_level_forecast():
 #     return jsonify(results), 200
 
 
-from sqlalchemy import func, case
+# @bp.get("/forecast/accuracy/store")
+# @role_required
+# def compare_all_stores_accuracy():
+#     token = request.headers.get("Authorization", "").replace("Bearer ", "")
+#     payload = decode_jwt(token)
+#     role_user_id = payload.get("role_user_id")
+#     user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
+#     if not user:
+#         return jsonify({"error": "User not found"}), 404
+
+#     lookahead_days = user.lookahead_days or 28
+#     end_date = datetime.utcnow().date()
+#     start_date = end_date - timedelta(days=lookahead_days)
+
+#     # Query predict table grouped by store_id and week, summing predicted and actual
+#     data = (
+#         db.session.query(
+#             Forecast.store_id,
+#             func.date_trunc("week", Forecast.date).label("week_start"),
+#             func.sum(Forecast.predicted).label("predicted"),
+#             func.sum(Forecast.actual).label("actual"),
+#         )
+#         .filter(Forecast.date >= start_date, Forecast.date <= end_date)
+#         .group_by(Forecast.store_id, func.date_trunc("week", Forecast.date))
+#         .order_by(Forecast.store_id, "week_start")
+#         .all()
+#     )
+
+#     results = []
+#     for row in data:
+#         predicted = float(row.predicted or 0)
+#         actual = float(row.actual or 0)
+#         if actual != 0:
+#             mape = abs((actual - predicted) / actual) * 100
+#         else:
+#             mape = None
+#         results.append({
+#             "store_id": row.store_id,
+#             "week_start": row.week_start.strftime("%Y-%m-%d"),
+#             "mape": mape,
+#             "predicted": predicted,
+#             "actual": actual,
+#         })
+
+#     return jsonify(results), 200
+
+def get_week_start(date_obj):
+    """Return the Monday of the week for given date_obj."""
+    return date_obj - timedelta(days=date_obj.weekday())
 
 @bp.get("/forecast/accuracy/store")
 @role_required
-def compare_store():
+def compare_all_stores_accuracy():
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
     payload = decode_jwt(token)
     role_user_id = payload.get("role_user_id")
-
     user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
 
     lookahead_days = user.lookahead_days or 28
-    end_date = db.session.query(func.max(Forecast.date)).scalar()
+    end_date = datetime.utcnow().date()
     start_date = end_date - timedelta(days=lookahead_days)
 
-    # Filter rows with actual > 0 to avoid division by zero
-    data = (
+    daily_data = (
         db.session.query(
             Forecast.store_id,
-            func.date_trunc("week", Forecast.date).label("week_start"),
-            func.avg(
-                func.abs(Forecast.predicted - Forecast.actual) / 
-                case((Forecast.actual != 0, Forecast.actual), else_=1)
-
-            ).label("mape")
+            Forecast.date,
+            Forecast.predicted,
+            Forecast.actual,
         )
-        .filter(
-            Forecast.date >= start_date, 
-            Forecast.date <= end_date,
-            Forecast.actual != None  # avoid null actuals
-        )
-        .group_by(Forecast.store_id, func.date_trunc("week", Forecast.date))
-        .order_by("week_start")
+        .filter(Forecast.date >= start_date, Forecast.date <= end_date)
+        .filter(Forecast.actual.isnot(None))
+        .filter(Forecast.actual != 0)
         .all()
     )
 
-    results = [
-        {
-            "store_id": row.store_id,
-            "week_start": row.week_start.strftime("%Y-%m-%d"),
-            "mape": round(row.mape * 100, 2)    # MAPE in percentage
-        }
-        for row in data
-    ]
+    weekly_errors = defaultdict(list)
+    weekly_actuals = defaultdict(float)
+
+    for row in daily_data:
+        week_start = get_week_start(row.date)
+        ape = abs(row.actual - row.predicted) / row.actual if row.actual != 0 else None
+        if ape is not None:
+            weekly_errors[(row.store_id, week_start)].append(ape)
+            weekly_actuals[(row.store_id, week_start)] += row.actual
+
+    results = []
+    for (store_id, week_start), apes in weekly_errors.items():
+        # Calculate weighted MAPE (WMAPE) if you want to weight errors by volume
+        avg_ape = sum(apes) / len(apes) if apes else None
+        results.append({
+            "store_id": store_id,
+            "week_start": week_start.strftime("%Y-%m-%d"),
+            "mape": avg_ape * 100 if avg_ape else None  # convert to percentage
+        })
 
     return jsonify(results), 200
 
 @bp.get("/forecast/accuracy/sku")
 @role_required
-def compare_sku():
+def compare_all_skus_accuracy():
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
     payload = decode_jwt(token)
     role_user_id = payload.get("role_user_id")
-
     user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
 
     lookahead_days = user.lookahead_days or 28
-    end_date = db.session.query(func.max(Forecast.date)).scalar()
+    end_date = datetime.utcnow().date()
     start_date = end_date - timedelta(days=lookahead_days)
 
-    data = (
+    daily_data = (
         db.session.query(
-            Forecast.product_id.label("sku"),
-            func.date_trunc("week", Forecast.date).label("week_start"),
-            func.avg(
-                func.abs(Forecast.predicted - Forecast.actual) / 
-                case((Forecast.actual != 0, Forecast.actual), else_=1)
-
-            ).label("mape")
+            Forecast.product_id,
+            Forecast.date,
+            Forecast.predicted,
+            Forecast.actual,
         )
-        .filter(
-            Forecast.date >= start_date, 
-            Forecast.date <= end_date,
-            Forecast.actual != None
-        )
-        .group_by(Forecast.product_id, func.date_trunc("week", Forecast.date))
-        .order_by("week_start")
+        .filter(Forecast.date >= start_date, Forecast.date <= end_date)
+        .filter(Forecast.actual.isnot(None))
+        .filter(Forecast.actual != 0)
         .all()
     )
 
-    results = [
-        {
-            "sku": row.sku,
-            "week_start": row.week_start.strftime("%Y-%m-%d"),
-            "mape": round(row.mape * 100, 2)
-        }
-        for row in data
-    ]
+    weekly_errors = defaultdict(list)
+
+    for row in daily_data:
+        week_start = get_week_start(row.date)
+        ape = abs(row.actual - row.predicted) / row.actual if row.actual != 0 else None
+        if ape is not None:
+            weekly_errors[(row.product_id, week_start)].append(ape)
+
+    results = []
+    for (sku, week_start), apes in weekly_errors.items():
+        avg_ape = sum(apes) / len(apes) if apes else None
+        results.append({
+            "sku": sku,
+            "week_start": week_start.strftime("%Y-%m-%d"),
+            "mape": avg_ape * 100 if avg_ape else None
+        })
 
     return jsonify(results), 200
 
-    
+
 @bp.route("/forecast/chart-data", methods=["GET"])
 @role_required
 def chart_data():

@@ -1028,22 +1028,6 @@ def forecast_menu(token):
         r = requests.get(url, headers=headers, params=params)
         print(r.json())
 
-    def past_accuracy_store(token):
-        url = f"{BASE_URL}/forecast/accuracy/store"
-        headers = {"Authorization": f"Bearer {token}"}
-        r = requests.get(url, headers=headers)
-        if r.ok:
-            data = r.json()
-            print("\n📊 Store Forecast Accuracy (MAPE %):")
-            for row in data:
-                print(
-                    f"🏬 Store: {row['store_id']} | "
-                    f"📅 Week Start: {row['week_start']} | "
-                    f"⚠️ MAPE: {row['mape']:.2f}%"
-                )
-        else:
-            print("❌ Failed to fetch Store accuracy:", r.text)
-
 
     def sku_level_forecast():
         url = f"{BASE_URL}/forecast/sku-level"
@@ -1058,15 +1042,39 @@ def forecast_menu(token):
         r = requests.get(url, headers=headers)
         if r.ok:
             data = r.json()
-            print("\n📊 SKU Forecast Accuracy (MAPE %):")
+            print("\n📊 SKU Forecast Accuracy (%):")
             for row in data:
+                # Use .get() with default None and fallback 'N/A' or 0
+                accuracy = row.get('accuracy_percent') or 0
+                sku = row.get('sku') or "Unknown"
+                week_start = row.get('week_start') or "Unknown"
                 print(
-                    f"📦 SKU: {row['sku']} | "
-                    f"📅 Week Start: {row['week_start']} | "
-                    f"⚠️ MAPE: {row['mape']:.2f}%"
+                    f"📦 SKU: {sku} | "
+                    f"📅 Week Start: {week_start} | "
+                    f"✅ Accuracy: {accuracy:.2f}%"
                 )
         else:
             print("❌ Failed to fetch SKU accuracy:", r.text)
+
+
+    def past_accuracy_store(token):
+        url = f"{BASE_URL}/forecast/accuracy/store"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        if r.ok:
+            data = r.json()
+            print("\n📊 Store Forecast Accuracy (%):")
+            for row in data:
+                mape = row.get('mape') or 0
+                store_id = row.get('store_id') or "Unknown"
+                week_start = row.get('week_start') or "Unknown"
+                print(
+                    f"🏬 Store: {store_id} "
+                    f"📅 Week Start: {week_start} | "
+                    f"✅ Accuracy: {mape:.2f}%"
+                )
+        else:
+            print("❌ Failed to fetch Store accuracy:", r.text)
 
 
     def view_weekly_forecast(token):
