@@ -40,6 +40,8 @@ ROUTE_ROLE_MAP = {
     "GET:/forecast/chart-data": ["admin", "editor", "viewer"],
     "POST:/forecast/weekly": ["admin", "editor", "viewer"],
     "GET:/forecast/logs": ["admin", "editor", "viewer"],
+    "GET:/forecast/accuracy/overall": ["admin", "editor", "viewer"],
+    "GET:/forecast/accuracy/detail": ["admin", "editor", "viewer"],
 
     # --- Store ---
     "POST:/store_upload":               ["admin", "editor"],

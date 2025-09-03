@@ -649,3 +649,263 @@ def weekly_forecast():
         response.append(record)
 
     return jsonify({"forecasts": response}), 200
+
+
+
+@bp.route("/forecast/accuracy/overall", methods=["GET"])
+@role_required
+def get_overall_accuracy():
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    payload = decode_jwt(token)
+    role_user_id = payload.get("role_user_id")
+    user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    lookahead_weeks = int(user.lookahead_days // 7 or 4)
+    end_date = datetime.utcnow().date()
+    start_date = end_date - timedelta(weeks=lookahead_weeks)
+
+    daily_data = (
+        db.session.query(Forecast.date, Forecast.predicted, Forecast.actual)
+        .filter(Forecast.date >= start_date, Forecast.date <= end_date)
+        .filter(Forecast.actual.isnot(None))
+        .filter(Forecast.actual != 0)
+        .all()
+    )
+
+    weekly_stats = defaultdict(lambda: {"errors": [], "abs_errors": [], "pred_sum": 0, "act_sum": 0, "count": 0})
+
+    for row in daily_data:
+        week_start = get_week_start(row.date)
+        key = week_start
+        weekly_stats[key]["errors"].append(row.predicted - row.actual)
+        weekly_stats[key]["abs_errors"].append(abs(row.predicted - row.actual))
+        weekly_stats[key]["pred_sum"] += row.predicted
+        weekly_stats[key]["act_sum"] += row.actual
+        weekly_stats[key]["count"] += 1
+
+    results = []
+    for week_start, stats in sorted(weekly_stats.items()):
+        total_actual = stats["act_sum"]
+        total_pred = stats["pred_sum"]
+        bias = (sum(stats["errors"]) / total_actual * 100) if total_actual else None
+        wmape = (sum(stats["abs_errors"]) / total_actual * 100) if total_actual else None
+        mae = (sum(stats["abs_errors"]) / stats["count"]) if stats["count"] else None
+
+        results.append({
+            "week_start": week_start.strftime("%Y-%m-%d"),
+            "actuals": round(total_actual, 2),
+            "forecast": round(total_pred, 2),
+            "bias": round(bias, 2) if bias is not None else None,
+            "wmape": round(wmape, 2) if wmape is not None else None,
+            "mae": round(mae, 2) if mae is not None else None
+        })
+
+    return jsonify(results), 200
+
+@bp.route("/forecast/accuracy/detail", methods=["GET"])
+@role_required
+# def get_detailed_accuracy():
+#     """
+#     Returns breakdown by week, sku, store.
+#     Query Params:
+#       weeks (comma-separated week_start dates) -> default = last lookahead_weeks
+#       sku (optional)
+#       store (optional) -> numeric store_id from store_data table, will be mapped to Forecast.store_id (store_code)
+#       granularity = "week" | "day"  -> default = week
+#     """
+#     token = request.headers.get("Authorization", "").replace("Bearer ", "")
+#     payload = decode_jwt(token)
+#     role_user_id = payload.get("role_user_id")
+#     user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
+#     if not user:
+#         return jsonify({"error": "User not found"}), 404
+
+#     lookahead_weeks = user.lookahead_days // 7 or 4
+#     end_date = datetime.utcnow().date()
+#     default_start_date = end_date - timedelta(weeks=lookahead_weeks)
+
+#     weeks_param = request.args.get("weeks")
+#     sku = request.args.get("sku")
+#     store = request.args.get("store")
+#     granularity = request.args.get("granularity", "week").lower()
+
+#     # Determine min/max date range
+#     if weeks_param:
+#         try:
+#             week_starts = [datetime.strptime(w.strip(), "%Y-%m-%d").date() for w in weeks_param.split(",") if w.strip()]
+#             if week_starts:
+#                 min_date = min(week_starts)
+#                 max_date = max(week_starts) + timedelta(days=6)
+#             else:
+#                 min_date, max_date = default_start_date, end_date
+#         except ValueError:
+#             return jsonify({"error": "Invalid week format. Use YYYY-MM-DD"}), 400
+#     else:
+#         min_date, max_date = default_start_date, end_date
+
+#     print(f"[DEBUG] Requested date range: {min_date} → {max_date}")
+#     if sku:
+#         print(f"[DEBUG] Filtering by SKU: {sku}")
+#     if store:
+#         print(f"[DEBUG] Filtering by Store (numeric id): {store}")
+#     print(f"[DEBUG] Granularity: {granularity}")
+
+#     query = db.session.query(
+#         Forecast.store_id, Forecast.product_id, Forecast.date, Forecast.predicted, Forecast.actual
+#     ).filter(Forecast.date >= min_date, Forecast.date <= max_date)\
+#      .filter(Forecast.actual.isnot(None))\
+#      .filter(Forecast.actual != 0)
+
+#     if sku and sku.strip():
+#         query = query.filter(Forecast.product_id == sku.strip())
+
+#     # ✅ Proper store mapping (store_id -> store_code)
+#     if store and store.strip():
+#         try:
+#             numeric_id = int(store.strip())
+#         except ValueError:
+#             return jsonify({"error": "Store ID must be numeric"}), 400
+
+#         store_obj = db.session.query(Store).filter(Store.store_id == numeric_id).first()
+#         if not store_obj:
+#             return jsonify({"message": f"Store {numeric_id} not found", "results": []}), 200
+
+#         store_code = store_obj.store_code  # e.g. STR001
+#         print(f"[DEBUG] Mapped store_id {numeric_id} → store_code {store_code}")
+#         query = query.filter(Forecast.store_id == store_code)
+
+#     daily_data = query.all()
+#     print(f"[DEBUG] Total rows fetched from DB: {len(daily_data)}")
+
+#     if not daily_data:
+#         return jsonify({"message": "No data found for the given filters", "results": []}), 200
+
+#     results = []
+#     grouped_stats = defaultdict(lambda: {"errors": [], "abs_errors": [], "pred_sum": 0, "act_sum": 0, "count": 0})
+
+#     for row in daily_data:
+#         key = (row.date,) if granularity == "day" else (get_week_start(row.date),)
+#         grouped_stats[key]["errors"].append(row.predicted - row.actual)
+#         grouped_stats[key]["abs_errors"].append(abs(row.predicted - row.actual))
+#         grouped_stats[key]["pred_sum"] += row.predicted
+#         grouped_stats[key]["act_sum"] += row.actual
+#         grouped_stats[key]["count"] += 1
+
+#     print(f"[DEBUG] Grouped stats keys: {[k[0] for k in grouped_stats.keys()]}")
+
+#     result_key = "date" if granularity == "day" else "week_start"
+#     for key, stats in grouped_stats.items():
+#         total_actual = stats["act_sum"]
+#         total_pred = stats["pred_sum"]
+#         bias = (sum(stats["errors"]) / total_actual * 100) if total_actual else None
+#         wmape = (sum(stats["abs_errors"]) / total_actual * 100) if total_actual else None
+#         mae = (sum(stats["abs_errors"]) / stats["count"]) if stats["count"] else None
+
+#         results.append({
+#             result_key: key[0].strftime("%Y-%m-%d"),
+#             "actuals": round(total_actual, 2),
+#             "predicted": round(total_pred, 2),
+#             "bias": round(bias, 2) if bias is not None else None,
+#             "wmape": round(wmape, 2) if wmape is not None else None,
+#             "mae": round(mae, 2) if mae is not None else None
+#         })
+
+#     print(f"[DEBUG] Final results count: {len(results)}")
+#     return jsonify({"results": sorted(results, key=lambda x: x[result_key])}), 200
+
+def get_detailed_accuracy():
+    """
+    Returns breakdown by week, sku, store.
+    Query Params:
+      weeks (comma-separated week_start dates) -> default = last lookahead_weeks
+      sku (comma-separated product_ids) -> optional
+      store (comma-separated numeric store_ids) -> optional
+      granularity = "week" | "day" -> default = week
+    """
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    payload = decode_jwt(token)
+    role_user_id = payload.get("role_user_id")
+    user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    lookahead_weeks = user.lookahead_days // 7 or 4
+    end_date = datetime.utcnow().date()
+    default_start_date = end_date - timedelta(weeks=lookahead_weeks)
+
+    weeks_param = request.args.get("weeks")
+    skus_param = request.args.get("sku")
+    stores_param = request.args.get("store")
+    granularity = request.args.get("granularity", "week").lower()
+
+    # Week filter
+    if weeks_param:
+        week_starts = [datetime.strptime(w.strip(), "%Y-%m-%d").date() for w in weeks_param.split(",") if w.strip()]
+        min_date = min(week_starts)
+        max_date = max(week_starts) + timedelta(days=6)
+    else:
+        min_date, max_date = default_start_date, end_date
+
+    print(f"[DEBUG] Requested date range: {min_date} → {max_date}")
+    if skus_param:
+        print(f"[DEBUG] Filtering by SKUs: {skus_param}")
+    if stores_param:
+        print(f"[DEBUG] Filtering by Stores: {stores_param}")
+    print(f"[DEBUG] Granularity: {granularity}")
+
+    query = db.session.query(
+        Forecast.store_id, Forecast.product_id, Forecast.date, Forecast.predicted, Forecast.actual
+    ).filter(Forecast.date >= min_date, Forecast.date <= max_date)\
+     .filter(Forecast.actual.isnot(None))\
+     .filter(Forecast.actual != 0)
+
+    # SKU filter
+    if skus_param:
+        skus = [s.strip() for s in skus_param.split(",") if s.strip()]
+        query = query.filter(Forecast.product_id.in_(skus))
+
+    # Store filter (map numeric store_id → store_code list)
+    if stores_param:
+        numeric_ids = [int(s.strip()) for s in stores_param.split(",") if s.strip().isdigit()]
+        if numeric_ids:
+            store_codes = [s.store_code for s in db.session.query(Store).filter(Store.store_id.in_(numeric_ids))]
+            print(f"[DEBUG] Mapped store_ids {numeric_ids} → store_codes {store_codes}")
+            if store_codes:
+                query = query.filter(Forecast.store_id.in_(store_codes))
+
+    daily_data = query.all()
+    print(f"[DEBUG] Total rows fetched from DB: {len(daily_data)}")
+
+    if not daily_data:
+        return jsonify({"message": "No data found for given filters", "results": []}), 200
+
+    # Group and aggregate results
+    grouped_stats = defaultdict(lambda: {"errors": [], "abs_errors": [], "pred_sum": 0, "act_sum": 0, "count": 0})
+    for row in daily_data:
+        key = (row.date,) if granularity == "day" else (get_week_start(row.date),)
+        grouped_stats[key]["errors"].append(row.predicted - row.actual)
+        grouped_stats[key]["abs_errors"].append(abs(row.predicted - row.actual))
+        grouped_stats[key]["pred_sum"] += row.predicted
+        grouped_stats[key]["act_sum"] += row.actual
+        grouped_stats[key]["count"] += 1
+
+    result_key = "date" if granularity == "day" else "week_start"
+    results = []
+    for key, stats in grouped_stats.items():
+        total_actual = stats["act_sum"]
+        total_pred = stats["pred_sum"]
+        bias = (sum(stats["errors"]) / total_actual * 100) if total_actual else None
+        wmape = (sum(stats["abs_errors"]) / total_actual * 100) if total_actual else None
+        mae = (sum(stats["abs_errors"]) / stats["count"]) if stats["count"] else None
+        results.append({
+            result_key: key[0].strftime("%Y-%m-%d"),
+            "actuals": round(total_actual, 2),
+            "predicted": round(total_pred, 2),
+            "bias": round(bias, 2) if bias is not None else None,
+            "wmape": round(wmape, 2) if wmape is not None else None,
+            "mae": round(mae, 2) if mae is not None else None
+        })
+
+    return jsonify({"results": sorted(results, key=lambda x: x[result_key])}), 200

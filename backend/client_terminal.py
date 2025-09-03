@@ -1174,6 +1174,130 @@ def forecast_menu(token):
         print(r.json())
 
 
+    def overall_forecast_accuracy(token):
+        url = f"{BASE_URL}/forecast/accuracy/overall"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        if r.ok:
+            data = r.json()
+            print("\n📊 Overall Forecast Accuracy (Week-wise):")
+            if not data:
+                print("🙅 No data available.")
+                return []
+            for row in data:
+                print(
+                    f"📅 Week: {row['week_start']} | "
+                    f"🟢 Actuals: {row['actuals']:.2f} | "
+                    f"🔵 Forecast: {row['forecast']:.2f} | "
+                    f"🎯 Bias: {row['bias']:.2f}% | "
+                    f"📉 WMAPE: {row['wmape']:.2f}% | "
+                    f"📏 MAE: {row['mae']:.2f}"
+                )
+            return data
+        else:
+            print("❌ Failed to fetch overall accuracy:", r.text)
+            return []
+
+
+    def drilldown_forecast_accuracy(token):
+        url = f"{BASE_URL}/forecast/accuracy/detail"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Step 1: Fetch week-level accuracy first
+        r = requests.get(url, headers=headers, params={"granularity": "week"})
+        if not r.ok:
+            print("❌ Failed to fetch forecast accuracy:", r.text)
+            return
+
+        data = r.json()
+        rows = data.get("results", []) if isinstance(data, dict) else data
+        if not rows:
+            print("🙅 No data found.")
+            return
+
+        print("\n📊 Overall Forecast Accuracy (Week-wise):")
+        for row in rows:
+            print(
+                f"📅 Week: {row['week_start']} | "
+                f"🟢 Actuals: {row['actuals']:.2f} | "
+                f"🔵 Forecast: {row['predicted']:.2f} | "
+                f"🎯 Bias: {row['bias']:.2f}% | "
+                f"📉 WMAPE: {row['wmape']:.2f}% | "
+                f"📏 MAE: {row['mae']:.2f}"
+            )
+
+        # Step 2: Ask user to pick week(s) (multi-select)
+        print("\n📅 Available Weeks:")
+        for idx, row in enumerate(rows, start=1):
+            print(f"  {idx}. {row['week_start']}")
+        week_choice = input(f"Select week(s) (comma-separated 1-{len(rows)}, leave blank for all): ").strip()
+
+        if week_choice:
+            week_indices = [int(x) for x in week_choice.split(",") if x.strip().isdigit()]
+            selected_weeks = [rows[i - 1]["week_start"] for i in week_indices if 1 <= i <= len(rows)]
+        else:
+            selected_weeks = [r["week_start"] for r in rows]  # All by default
+
+        # Step 3: Get available stores (multi-select)
+        r = requests.get(f"{BASE_URL}/stores", headers=headers, timeout=20)
+        stores = r.json().get("stores", []) if r.ok else []
+        print("\n🏬 Available Stores:")
+        if stores:
+            for s in stores:
+                print(f"  - {s['store_id']} ({s['name']} - {s['city']})")
+        else:
+            print("  🙅 No stores found.")
+
+        store_choice = input("Enter store_id(s) [comma-separated, leave blank for all]: ").strip()
+        selected_stores = [x.strip() for x in store_choice.split(",") if x.strip()] if store_choice else []
+
+        # Step 4: Get available SKUs (multi-select)
+        r = requests.get(f"{BASE_URL}/skus", headers=headers, timeout=20)
+        skus_list = r.json().get("skus", []) if r.ok else []
+        print("\n📦 Available SKUs:")
+        if skus_list:
+            for s in skus_list:
+                print(f"  - {s}")
+        else:
+            print("  🙅 No SKUs found.")
+
+        sku_choice = input("Enter SKU(s) [comma-separated, leave blank for all]: ").strip()
+        selected_skus = [x.strip() for x in sku_choice.split(",") if x.strip()] if sku_choice else []
+
+        # Step 5: Fetch day-level accuracy
+        params = {
+            "weeks": ",".join(selected_weeks),
+            "granularity": "day"
+        }
+        if selected_stores:
+            params["store"] = ",".join(selected_stores)
+        if selected_skus:
+            params["sku"] = ",".join(selected_skus)
+
+        r = requests.get(url, headers=headers, params=params)
+        if not r.ok:
+            print("❌ Failed to fetch day-level accuracy:", r.text)
+            return
+
+        data = r.json()
+        rows = data.get("results", []) if isinstance(data, dict) else data
+        if not rows:
+            print("🙅 No day-level data found for selection.")
+            return
+
+        print(f"\n📊 Day-Level Accuracy for Week(s): {', '.join(selected_weeks)}")
+        for row in rows:
+            key = row.get("date") or row.get("week_start")
+            print(
+                f"📅 {key} | "
+                f"🟢 Actuals: {row['actuals']:.2f} | "
+                f"🔵 Forecast: {row['predicted']:.2f} | "
+                f"🎯 Bias: {row['bias']:.2f}% | "
+                f"📉 WMAPE: {row['wmape']:.2f}% | "
+                f"📏 MAE: {row['mae']:.2f}"
+            )
+
+
     options = {
         "1": ("Set Forecast Schedule", set_forecast_schedule),
         "2": ("View Forecast Schedule", view_forecast_schedule),
@@ -1186,6 +1310,9 @@ def forecast_menu(token):
         "9": ("Chart Data with Trendline", chart_data),
         "10": ("View Weekly Forecast", lambda: view_weekly_forecast(token)),
         "11": ("Forecast Run Logs", forecast_logs),
+        "12": ("Overall Forecast Accuracy", lambda: overall_forecast_accuracy(token)),
+        "13": ("Drilldown Forecast Accuracy (Week/SKU/Store)", lambda: drilldown_forecast_accuracy(token)),
+        
         "0": ("Exit Forecast Menu", None)
     }
 
