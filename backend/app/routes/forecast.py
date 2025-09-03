@@ -653,57 +653,6 @@ def weekly_forecast():
 
 
 @bp.route("/forecast/accuracy/overall", methods=["GET"])
-# @role_required
-# def get_overall_accuracy():
-#     token = request.headers.get("Authorization", "").replace("Bearer ", "")
-#     payload = decode_jwt(token)
-#     role_user_id = payload.get("role_user_id")
-#     user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
-#     if not user:
-#         return jsonify({"error": "User not found"}), 404
-
-#     lookahead_weeks = int(user.lookahead_days // 7 or 4)
-#     end_date = datetime.utcnow().date()
-#     start_date = end_date - timedelta(weeks=lookahead_weeks)
-
-#     daily_data = (
-#         db.session.query(Forecast.date, Forecast.predicted, Forecast.actual)
-#         .filter(Forecast.date >= start_date, Forecast.date <= end_date)
-#         .filter(Forecast.actual.isnot(None))
-#         .filter(Forecast.actual != 0)
-#         .all()
-#     )
-
-#     weekly_stats = defaultdict(lambda: {"errors": [], "abs_errors": [], "pred_sum": 0, "act_sum": 0, "count": 0})
-
-#     for row in daily_data:
-#         week_start = get_week_start(row.date)
-#         key = week_start
-#         weekly_stats[key]["errors"].append(row.predicted - row.actual)
-#         weekly_stats[key]["abs_errors"].append(abs(row.predicted - row.actual))
-#         weekly_stats[key]["pred_sum"] += row.predicted
-#         weekly_stats[key]["act_sum"] += row.actual
-#         weekly_stats[key]["count"] += 1
-
-#     results = []
-#     for week_start, stats in sorted(weekly_stats.items()):
-#         total_actual = stats["act_sum"]
-#         total_pred = stats["pred_sum"]
-#         bias = (sum(stats["errors"]) / total_actual * 100) if total_actual else None
-#         wmape = (sum(stats["abs_errors"]) / total_actual * 100) if total_actual else None
-#         mae = (sum(stats["abs_errors"]) / stats["count"]) if stats["count"] else None
-
-#         results.append({
-#             "week_start": week_start.strftime("%Y-%m-%d"),
-#             "actuals": round(total_actual, 2),
-#             "forecast": round(total_pred, 2),
-#             "bias": round(bias, 2) if bias is not None else None,
-#             "wmape": round(wmape, 2) if wmape is not None else None,
-#             "mae": round(mae, 2) if mae is not None else None
-#         })
-
-#     return jsonify(results), 200
-
 def get_overall_accuracy():
     """
     Returns overall forecast accuracy for past N weeks (default = user's lookahead_weeks).
