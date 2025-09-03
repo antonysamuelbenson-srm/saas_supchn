@@ -531,6 +531,7 @@ const ForecastPage = () => {
     
     const [activeTab, setActiveTab] = useState('forecast');
     const [chartData, setChartData] = useState([]);
+    const [weeksToShow, setWeeksToShow] = useState(8);
     const [accuracyData, setAccuracyData] = useState([]);
     const [logData, setLogData] = useState([]);
     const [stores, setStores] = useState([]);
@@ -549,61 +550,93 @@ const ForecastPage = () => {
     });
     const [error, setError] = useState(null);
 
+
+    const fetchLogs = useCallback(async () => {
+        const token = getToken();
+        if (!token) return;
+        setLoading(prev => ({ ...prev, logs: true }));
+        try {
+            const res = await fetch(`${API_BASE_URL}/forecast/logs`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error('Failed to fetch logs');
+            const data = await res.json();
+            
+            // Correctly access the nested 'logs' array here
+            setLogData(data.logs || []); 
+
+        } catch (err) {
+            setError(err);
+            setLogData([]);
+        } finally {
+            setLoading(prev => ({ ...prev, logs: false }));
+        }
+    }, []);
+
+
     // --- API Fetching Functions ---
     const getToken = () => localStorage.getItem('token');
 
     const fetchForecastData = useCallback(async (currentFilterType, value) => {
-        const token = getToken();
-        if (!token) {
-            setError({ message: "No authentication token found. Please log in." });
-            setLoading(prev => ({ ...prev, chart: false }));
-            return;
+    const token = getToken();
+    if (!token) {
+        setError({ message: "No authentication token found. Please log in." });
+        setLoading(prev => ({ ...prev, chart: false }));
+        return;
+    }
+
+    setLoading(prev => ({ ...prev, chart: true }));
+    setError(null);
+
+    // Use the dynamic 'weeksToShow' state instead of a hardcoded value.
+    const body = { weeks: weeksToShow };
+
+    if (currentFilterType === 'store' && value) {
+        body.store_ids = [value];
+    } else if (currentFilterType === 'sku' && value) {
+        body.skus = [value];
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/forecast/weekly`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch forecast data (Status: ${response.status})`);
         }
-        setLoading(prev => ({ ...prev, chart: true }));
-        setError(null);
 
-        const body = { weeks: 8 }; // Default weeks
-        if (currentFilterType === 'store' && value) {
-            body.store_ids = [value];
-        } else if (currentFilterType === 'sku' && value) {
-            body.skus = [value];
-        }
+        const data = await response.json();
+        
+        // Aggregate the forecast data by week
+        const aggregatedData = (data.forecasts || []).reduce((accumulator, current) => {
+            const week = current.week_start;
+            if (!accumulator[week]) {
+                accumulator[week] = { date: week, forecast: 0, actual: null };
+            }
+            accumulator[week].forecast += current.weekly_forecast;
+            if (current.weekly_actual !== null) {
+                accumulator[week].actual = (accumulator[week].actual || 0) + current.weekly_actual;
+            }
+            return accumulator;
+        }, {});
 
-        try {
-            const res = await fetch(`${API_BASE_URL}/forecast/weekly`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(body),
-            });
+        // Format the aggregated data into an array and sort by date
+        const formattedData = Object.values(aggregatedData).sort((a, b) => new Date(a.date) - new Date(b.date));
+        setChartData(formattedData);
 
-            if (!res.ok) throw new Error(`Failed to fetch forecast data (Status: ${res.status})`);
-            const data = await res.json();
-            
-            const aggregatedData = (data.forecasts || []).reduce((acc, curr) => {
-                const week = curr.week_start;
-                if (!acc[week]) {
-                    acc[week] = { date: week, forecast: 0, actual: null };
-                }
-                acc[week].forecast += curr.weekly_forecast;
-                if (curr.weekly_actual !== null) {
-                    acc[week].actual = (acc[week].actual || 0) + curr.weekly_actual;
-                }
-                return acc;
-            }, {});
-
-            const formattedData = Object.values(aggregatedData).sort((a, b) => new Date(a.date) - new Date(b.date));
-            setChartData(formattedData);
-
-        } catch (err) {
-            setError(err);
-            setChartData([]);
-        } finally {
-            setLoading(prev => ({ ...prev, chart: false }));
-        }
-    }, []);
+    } catch (error) {
+        setError(error);
+        setChartData([]);
+    } finally {
+        setLoading(prev => ({ ...prev, chart: false }));
+    }
+}, [weeksToShow]); // Add 'weeksToShow' as a dependency
 
     const fetchStores = useCallback(async () => {
         const token = getToken();
@@ -643,43 +676,42 @@ const fetchSkus = useCallback(async () => {
         }
     }, []);
 
-    const fetchAccuracyData = useCallback(async (level = 'store') => {
-        const token = getToken();
-        if (!token) return;
-        setLoading(prev => ({ ...prev, accuracy: true }));
-        try {
-            const res = await fetch(`${API_BASE_URL}/forecast/accuracy/${level}`, {
-                headers: { 'Authorization': `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error(`Failed to fetch ${level}-level accuracy`);
-            const data = await res.json();
-            setAccuracyData(data || []);
-        } catch (err) {
-            setError(err);
-            setAccuracyData([]);
-        } finally {
-            setLoading(prev => ({ ...prev, accuracy: false }));
-        }
-    }, []);
+const fetchAccuracyData = useCallback(async (level = 'store') => {
+    const token = getToken();
+    if (!token) return;
+    setLoading(prev => ({ ...prev, accuracy: true }));
+    try {
+        const res = await fetch(`${API_BASE_URL}/forecast/accuracy/${level}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`Failed to fetch ${level}-level accuracy`);
+        const flatData = await res.json();
 
-    const fetchLogs = useCallback(async () => {
-        const token = getToken();
-        if (!token) return;
-        setLoading(prev => ({ ...prev, logs: true }));
-        try {
-            const res = await fetch(`${API_BASE_URL}/forecast/logs`, {
-                headers: { 'Authorization': `Bearer ${token}` },
+        // ✨ TRANSFORM THE FLAT DATA INTO A NESTED STRUCTURE ✨
+        const groupedData = (flatData || []).reduce((acc, item) => {
+            const identifier = item.store_id || item.sku;
+            if (!acc[identifier]) {
+                acc[identifier] = {
+                    [level === 'store' ? 'store_id' : 'product_id']: identifier,
+                    weekly_accuracy: []
+                };
+            }
+            acc[identifier].weekly_accuracy.push({
+                week_start: item.week_start,
+                mape: item.mape
             });
-            if (!res.ok) throw new Error('Failed to fetch logs');
-            const data = await res.json();
-            setLogData(data.logs || []);
-        } catch (err) {
-            setError(err);
-            setLogData([]);
-        } finally {
-            setLoading(prev => ({ ...prev, logs: false }));
-        }
-    }, []);
+            return acc;
+        }, {});
+
+        setAccuracyData(Object.values(groupedData)); // Set the newly structured data
+
+    } catch (err) {
+        setError(err);
+        setAccuracyData([]);
+    } finally {
+        setLoading(prev => ({ ...prev, accuracy: false }));
+    }
+}, []);
 
     // Initial data load effect
     useEffect(() => {
@@ -689,6 +721,14 @@ const fetchSkus = useCallback(async () => {
 
     // Effect to refetch data when filters change
     useEffect(() => {
+
+            if (weeksToShow < 1) {
+                setChartData([]); // Optionally clear the chart
+                return; 
+    }
+
+
+
         if (filterType === 'all') {
             fetchForecastData('all');
         } else if (filterType === 'store' && selectedStore) {
@@ -696,12 +736,13 @@ const fetchSkus = useCallback(async () => {
         } else if (filterType === 'sku' && selectedSku) {
             fetchForecastData('sku', selectedSku);
         }
-    }, [filterType, selectedStore, selectedSku, fetchForecastData]);
+    }, [filterType, selectedStore, selectedSku, weeksToShow, fetchForecastData]);
     
+// This is the corrected line
     const tabs = [
         { id: 'forecast', title: 'Forecast Visualization', onClick: null },
         { id: 'accuracy', title: 'Performance & Accuracy', onClick: () => fetchAccuracyData('store') },
-        { id: 'logs', title: 'Run History', onClick: fetchLogs },
+        { id: 'logs', title: 'Run History', onClick: () => fetchLogs() },
     ];
     
     return (
@@ -739,7 +780,7 @@ const fetchSkus = useCallback(async () => {
                     <AnimatePresence mode="wait">
                         {activeTab === 'forecast' && (
                             <motion.div key="forecast" variants={panelVariants} initial="hidden" animate="visible" exit="exit">
-                                <FilterControls 
+                                <FilterControls
                                     filterType={filterType}
                                     setFilterType={setFilterType}
                                     selectedStore={selectedStore}
@@ -748,6 +789,8 @@ const fetchSkus = useCallback(async () => {
                                     setSelectedSku={setSelectedSku}
                                     stores={stores}
                                     skus={skus}
+                                    weeksToShow={weeksToShow}         // ✨ Pass the state
+                                    setWeeksToShow={setWeeksToShow} // ✨ Pass the setter function
                                 />
                                 <ForecastLineChart loading={loading.chart} data={chartData} />
                             </motion.div>
@@ -771,7 +814,7 @@ const fetchSkus = useCallback(async () => {
 
 // --- Child Components ---
 
-const FilterControls = ({ filterType, setFilterType, selectedStore, setSelectedStore, selectedSku, setSelectedSku, stores, skus }) => (
+const FilterControls = ({ filterType, setFilterType, selectedStore, setSelectedStore, selectedSku, setSelectedSku, stores, skus, weeksToShow, setWeeksToShow }) => (
     <div className="flex flex-wrap items-center gap-4 mb-8 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
         <div className="flex items-center gap-2">
             <label htmlFor="filterType" className="font-semibold text-slate-300">View By:</label>
@@ -789,6 +832,18 @@ const FilterControls = ({ filterType, setFilterType, selectedStore, setSelectedS
                 <option value="store">Store</option>
                 <option value="sku">SKU</option>
             </select>
+            <div className="flex items-center gap-2">
+            <label htmlFor="weeksInput" className="font-semibold text-slate-300">Weeks:</label>
+            <input
+                id="weeksInput"
+                type="number"
+                value={weeksToShow}
+                onChange={(e) => setWeeksToShow(Number(e.target.value))}
+                className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 p-2 w-20"
+                min="1"
+                max="52"
+            />
+        </div>
         </div>
         
         <AnimatePresence>
@@ -955,34 +1010,57 @@ const AccuracyPanel = ({ loading, data, fetchData }) => (
     </div>
 );
 
-const LogsPanel = ({ loading, data }) => (
-    <div className="bg-slate-800/50 p-6 rounded-xl shadow-lg border border-slate-700">
-        <h2 className="text-xl font-semibold text-white mb-4">Forecast Run History</h2>
-        {loading ? <LoadingSpinner /> : (
-            <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                    <thead className="border-b-2 border-slate-600">
-                        <tr>
-                            <th className="p-3 text-sm font-semibold uppercase text-slate-400">Run Time (UTC)</th>
-                            <th className="p-3 text-sm font-semibold uppercase text-slate-400">Store ID</th>
-                            <th className="p-3 text-sm font-semibold uppercase text-slate-400">Product ID</th>
-                            <th className="p-3 text-sm font-semibold uppercase text-slate-400">Forecast Horizon</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {Array.isArray(data) && data.map((log, index) => (
-                            <tr key={index} className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors">
-                                <td className="p-3 whitespace-nowrap"><FiClock className="inline mr-2 text-slate-400" />{log.run_time}</td>
-                                <td className="p-3">{log.store_id || 'All'}</td>
-                                <td className="p-3">{log.product_id || 'All'}</td>
-                                <td className="p-3">{log.n_weeks} weeks</td>
+const LogsPanel = ({ loading, data }) => {
+    // Helper function to determine the color of the status badge
+    const getStatusBadge = (status) => {
+        switch (status?.toLowerCase()) {
+            case 'completed':
+                return 'bg-green-500/20 text-green-400';
+            case 'running':
+                return 'bg-yellow-500/20 text-yellow-400';
+            case 'failed':
+                return 'bg-red-500/20 text-red-400';
+            default:
+                return 'bg-slate-600/50 text-slate-300';
+        }
+    };
+
+    return (
+        <div className="bg-slate-800/50 p-6 rounded-xl shadow-lg border border-slate-700">
+            <h2 className="text-xl font-semibold text-white mb-4">Forecast Run History</h2>
+            {loading ? <LoadingSpinner /> : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="border-b-2 border-slate-600">
+                            <tr>
+                                <th className="p-3 text-sm font-semibold uppercase text-slate-400">Run Time (UTC)</th>
+                                <th className="p-3 text-sm font-semibold uppercase text-slate-400">Forecast Horizon</th>
+                                <th className="p-3 text-sm font-semibold uppercase text-slate-400">Status</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        )}
-    </div>
-);
+                        </thead>
+                        <tbody>
+                            {Array.isArray(data) && data.map((log) => (
+                                <tr key={log.id} className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors">
+                                    <td className="p-3 whitespace-nowrap">
+                                        <FiClock className="inline mr-2 text-slate-400" />
+                                        {log.run_time}
+                                    </td>
+                                    <td className="p-3">
+                                        {log.n_weeks !== null ? `${log.n_weeks} weeks` : 'N/A'}
+                                    </td>
+                                    <td className="p-3">
+                                        <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${getStatusBadge(log.status)}`}>
+                                            {log.status || 'Unknown'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+};  
 
 export default ForecastPage;

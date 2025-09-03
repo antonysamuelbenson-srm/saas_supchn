@@ -474,11 +474,11 @@ def chart_data():
         return jsonify({"error": str(e)}), 500
 
 # 🚩 Forecast Run Logs
+# In your Flask backend
 @bp.route("/forecast/logs", methods=["GET"])
 @role_required
 def forecast_logs():
     try:
-        # Get latest 10 logs
         logs = (
             ForecastLog.query
             .order_by(ForecastLog.run_time.desc())
@@ -486,12 +486,17 @@ def forecast_logs():
             .all()
         )
 
+        # In your Flask route file
         data = [{
             "id": str(log.id),
             "run_time": log.run_time.strftime("%Y-%m-%d %H:%M:%S") if log.run_time else None,
-            "run_started_at": log.run_started_at.strftime("%Y-%m-%d %H:%M:%S") if log.run_started_at else None,
-            "run_completed_at": log.run_completed_at.strftime("%Y-%m-%d %H:%M:%S") if log.run_completed_at else None,
-            "status": log.status
+            "status": log.status,
+
+            # --- FIX THE MISMATCH ---
+            "store_id": "N/A", # Or some default value
+            "product_id": "N/A", # Or some default value
+            "n_weeks": log.n_days / 7 if log.n_days else None # Use the correct field
+
         } for log in logs]
 
         return jsonify({"logs": data}), 200
