@@ -338,6 +338,7 @@ def get_week_start(date_obj):
     """Return the Monday of the week for given date_obj."""
     return date_obj - timedelta(days=date_obj.weekday())
 
+
 @bp.get("/forecast/accuracy/store")
 @role_required
 def compare_all_stores_accuracy():
@@ -365,27 +366,45 @@ def compare_all_stores_accuracy():
         .all()
     )
 
-    weekly_errors = defaultdict(list)
-    weekly_actuals = defaultdict(float)
+    print(f"DEBUG: daily_data count = {len(daily_data)}", flush=True)
+    weekly_stats = defaultdict(lambda: {"errors": [], "abs_errors": [], "pred_sum": 0, "act_sum": 0, "count": 0})
 
     for row in daily_data:
         week_start = get_week_start(row.date)
-        ape = abs(row.actual - row.predicted) / row.actual if row.actual != 0 else None
-        if ape is not None:
-            weekly_errors[(row.store_id, week_start)].append(ape)
-            weekly_actuals[(row.store_id, week_start)] += row.actual
+        key = (row.store_id, week_start)
+
+        error = row.predicted - row.actual
+        abs_error = abs(error)
+
+        weekly_stats[key]["errors"].append(error)
+        weekly_stats[key]["abs_errors"].append(abs_error)
+        weekly_stats[key]["pred_sum"] += row.predicted
+        weekly_stats[key]["act_sum"] += row.actual
+        weekly_stats[key]["count"] += 1
 
     results = []
-    for (store_id, week_start), apes in weekly_errors.items():
-        # Calculate weighted MAPE (WMAPE) if you want to weight errors by volume
-        avg_ape = sum(apes) / len(apes) if apes else None
+    for (store_id, week_start), stats in weekly_stats.items():
+        total_actual = stats["act_sum"]
+        total_pred = stats["pred_sum"]
+        abs_errors = stats["abs_errors"]
+        errors = stats["errors"]
+
+        bias = (sum(errors) / total_actual * 100) if total_actual else None
+        wmape = (sum(abs_errors) / total_actual * 100) if total_actual else None
+        mae = (sum(abs_errors) / stats["count"]) if stats["count"] else None
+
         results.append({
             "store_id": store_id,
             "week_start": week_start.strftime("%Y-%m-%d"),
-            "mape": avg_ape * 100 if avg_ape else None  # convert to percentage
+            "bias": round(bias, 2) if bias is not None else None,
+            "wmape": round(wmape, 2) if wmape is not None else None,
+            "mae": round(mae, 2) if mae is not None else None,
+            "actuals": round(total_actual, 2),
+            "predicted": round(total_pred, 2)
         })
-
+    print("DEBUG: results =", results, flush=True)
     return jsonify(results), 200
+
 
 @bp.get("/forecast/accuracy/sku")
 @role_required
@@ -414,25 +433,43 @@ def compare_all_skus_accuracy():
         .all()
     )
 
-    weekly_errors = defaultdict(list)
+    print(f"DEBUG: daily_data count = {len(daily_data)}", flush=True)
+    weekly_stats = defaultdict(lambda: {"errors": [], "abs_errors": [], "pred_sum": 0, "act_sum": 0, "count": 0})
 
     for row in daily_data:
         week_start = get_week_start(row.date)
-        ape = abs(row.actual - row.predicted) / row.actual if row.actual != 0 else None
-        print(f"SKU: {row.product_id}, Date: {row.date}, Predicted: {row.predicted}, Actual: {row.actual}, APE: {ape}")
-        if ape is not None:
-            weekly_errors[(row.product_id, week_start)].append(ape)
+        key = (row.product_id, week_start)
+
+        error = row.predicted - row.actual
+        abs_error = abs(error)
+
+        weekly_stats[key]["errors"].append(error)
+        weekly_stats[key]["abs_errors"].append(abs_error)
+        weekly_stats[key]["pred_sum"] += row.predicted
+        weekly_stats[key]["act_sum"] += row.actual
+        weekly_stats[key]["count"] += 1
 
     results = []
-    for (sku, week_start), apes in weekly_errors.items():
-        avg_ape = sum(apes) / len(apes) if apes else None
-        print(f"Weekly MAPE for SKU {sku} week {week_start.strftime('%Y-%m-%d')}: {avg_ape * 100:.4f}%")
+    for (sku, week_start), stats in weekly_stats.items():
+        total_actual = stats["act_sum"]
+        total_pred = stats["pred_sum"]
+        abs_errors = stats["abs_errors"]
+        errors = stats["errors"]
+
+        bias = (sum(errors) / total_actual * 100) if total_actual else None
+        wmape = (sum(abs_errors) / total_actual * 100) if total_actual else None
+        mae = (sum(abs_errors) / stats["count"]) if stats["count"] else None
+
         results.append({
             "sku": sku,
             "week_start": week_start.strftime("%Y-%m-%d"),
-            "mape": avg_ape * 100 if avg_ape else None
+            "bias": round(bias, 2) if bias is not None else None,
+            "wmape": round(wmape, 2) if wmape is not None else None,
+            "mae": round(mae, 2) if mae is not None else None,
+            "actuals": round(total_actual, 2),
+            "predicted": round(total_pred, 2)
         })
-
+    print("DEBUG: results =", results, flush=True)
     return jsonify(results), 200
 
 

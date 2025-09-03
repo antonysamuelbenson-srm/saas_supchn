@@ -1042,20 +1042,27 @@ def forecast_menu(token):
         r = requests.get(url, headers=headers)
         if r.ok:
             data = r.json()
-            print("\n📊 SKU Forecast Accuracy (%):")
+            print("\n📊 SKU Forecast Accuracy:")
             for row in data:
-                mape = row.get('mape')
                 sku = row.get('sku') or "Unknown"
                 week_start = row.get('week_start') or "Unknown"
-                accuracy_str = f"{mape:.2f}%" if mape is not None else "N/A"
+                bias = row.get('bias')
+                wmape = row.get('wmape')
+                mae = row.get('mae')
+                actuals = row.get('actuals')
+                predicted = row.get('predicted')
+
                 print(
                     f"📦 SKU: {sku} | "
                     f"📅 Week Start: {week_start} | "
-                    f"✅ Accuracy: {accuracy_str}"
+                    f"🎯 Bias: {bias:.2f}% | "
+                    f"📉 WMAPE: {wmape:.2f}% | "
+                    f"📏 MAE: {mae:.2f} | "
+                    f"🟢 Actuals: {actuals:.2f} | "
+                    f"🔵 Predicted: {predicted:.2f}"
                 )
         else:
             print("❌ Failed to fetch SKU accuracy:", r.text)
-
 
 
     def past_accuracy_store(token):
@@ -1064,18 +1071,28 @@ def forecast_menu(token):
         r = requests.get(url, headers=headers)
         if r.ok:
             data = r.json()
-            print("\n📊 Store Forecast Accuracy (%):")
+            print("\n📊 Store Forecast Accuracy:")
             for row in data:
-                mape = row.get('mape') or 0
                 store_id = row.get('store_id') or "Unknown"
                 week_start = row.get('week_start') or "Unknown"
+                bias = row.get('bias')
+                wmape = row.get('wmape')
+                mae = row.get('mae')
+                actuals = row.get('actuals')
+                predicted = row.get('predicted')
+
                 print(
-                    f"🏬 Store: {store_id} "
+                    f"🏬 Store: {store_id} | "
                     f"📅 Week Start: {week_start} | "
-                    f"✅ Accuracy: {mape:.2f}%"
+                    f"🎯 Bias: {bias:.2f}% | "
+                    f"📉 WMAPE: {wmape:.2f}% | "
+                    f"📏 MAE: {mae:.2f} | "
+                    f"🟢 Actuals: {actuals:.2f} | "
+                    f"🔵 Predicted: {predicted:.2f}"
                 )
         else:
             print("❌ Failed to fetch Store accuracy:", r.text)
+
 
 
     def view_weekly_forecast(token):
