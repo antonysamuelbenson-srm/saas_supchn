@@ -1177,27 +1177,37 @@ def forecast_menu(token):
     def overall_forecast_accuracy(token):
         url = f"{BASE_URL}/forecast/accuracy/overall"
         headers = {"Authorization": f"Bearer {token}"}
-        r = requests.get(url, headers=headers)
-        if r.ok:
-            data = r.json()
-            print("\n📊 Overall Forecast Accuracy (Week-wise):")
-            if not data:
-                print("🙅 No data available.")
-                return []
-            for row in data:
-                print(
-                    f"📅 Week: {row['week_start']} | "
-                    f"🟢 Actuals: {row['actuals']:.2f} | "
-                    f"🔵 Forecast: {row['forecast']:.2f} | "
-                    f"🎯 Bias: {row['bias']:.2f}% | "
-                    f"📉 WMAPE: {row['wmape']:.2f}% | "
-                    f"📏 MAE: {row['mae']:.2f}"
-                )
-            return data
-        else:
+
+        weeks_input = input("Enter number of past weeks [leave blank for default lookahead]: ").strip()
+        params = {}
+        if weeks_input.isdigit() and int(weeks_input) > 0:
+            params["weeks"] = int(weeks_input)
+
+        r = requests.get(url, headers=headers, params=params)
+
+        if not r.ok:
             print("❌ Failed to fetch overall accuracy:", r.text)
             return []
 
+        data = r.json()
+        rows = data.get("results", []) if isinstance(data, dict) else data
+
+        print("\n📊 Overall Forecast Accuracy (Week-wise):")
+        if not rows:
+            print("🙅 No data available.")
+            return []
+
+        for row in rows:
+            print(
+                f"📅 Week: {row['week_start']} | "
+                f"🟢 Actuals: {row['actuals']:.2f} | "
+                f"🔵 Forecast: {row['forecast']:.2f} | "
+                f"🎯 Bias: {row['bias']:.2f}% | "
+                f"📉 WMAPE: {row['wmape']:.2f}% | "
+                f"📏 MAE: {row['mae']:.2f}"
+            )
+
+        return rows
 
     def drilldown_forecast_accuracy(token):
         url = f"{BASE_URL}/forecast/accuracy/detail"
