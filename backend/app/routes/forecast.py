@@ -578,21 +578,33 @@ def weekly_forecast():
     body = request.get_json(silent=True) or {}
     store_ids = body.get("store_ids")
     skus = body.get("skus")
-    weeks = body.get("weeks", 4)
 
-    if not isinstance(weeks, int) or weeks <= 0:
-        return jsonify({"error": "Invalid weeks value"}), 400
-
+    # ✅ Fetch user and lookahead_days
     user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    lookahead_days = user.lookahead_days or (weeks * 7)
-    today = datetime.utcnow().date()
-    start_date = today - timedelta(days=weeks * 7)
-    end_date = today + timedelta(days=weeks * 7)
+    lookahead_days = user.lookahead_days or 28  # fallback = 4 weeks
+    lookahead_weeks = max(1, lookahead_days // 7)
 
-    # Map store_ids to store_codes
+    # ✅ Past weeks = lookahead_weeks unless user overrides
+    past_weeks = body.get("past_weeks", lookahead_weeks)
+    if not isinstance(past_weeks, int) or past_weeks <= 0:
+        return jsonify({"error": "Invalid past_weeks value"}), 400
+
+    # ✅ Future weeks = lookahead_weeks unless user overrides
+    future_weeks = body.get("future_weeks", lookahead_weeks)
+    if not isinstance(future_weeks, int) or future_weeks < 0:
+        return jsonify({"error": "Invalid future_weeks value"}), 400
+
+    today = datetime.utcnow().date()
+    start_date = today - timedelta(weeks=past_weeks)
+    end_date = today + timedelta(weeks=future_weeks)
+
+    print(f"[DEBUG] Weekly forecast range: {start_date} → {end_date} "
+          f"(past {past_weeks} weeks, future {future_weeks} weeks)")
+
+    # ✅ Map store_ids to store_codes
     store_codes = None
     if store_ids and isinstance(store_ids, list):
         code_rows = (
@@ -602,7 +614,7 @@ def weekly_forecast():
         )
         store_codes = [row.store_code for row in code_rows]
 
-    # Single query to fetch both predicted and actual values
+    # ✅ Query forecast/actuals in range
     query = (
         db.session.query(
             Forecast.store_id.label("store_code"),
@@ -614,7 +626,6 @@ def weekly_forecast():
         .filter(Forecast.date >= start_date, Forecast.date <= end_date)
     )
 
-    # Apply filters for store_codes and skus
     if store_codes:
         query = query.filter(Forecast.store_id.in_(store_codes))
     if skus and isinstance(skus, list):
@@ -628,24 +639,16 @@ def weekly_forecast():
 
     response = []
     for row in results:
-        # Convert sums to int if present
-        weekly_forecast = int(row.weekly_forecast) if row.weekly_forecast is not None else None
-        weekly_actual = int(row.weekly_actual) if row.weekly_actual is not None else None
-
-        # Skip if both are missing
-        if weekly_forecast is None and weekly_actual is None:
+        if row.weekly_forecast is None and row.weekly_actual is None:
             continue
 
         record = {
             "store_code": row.store_code,
             "sku": row.sku,
-            "week_start": row.week_start.strftime("%Y-%m-%d")
+            "week_start": row.week_start.strftime("%Y-%m-%d"),
+            "weekly_forecast": int(row.weekly_forecast) if row.weekly_forecast else None,
+            "weekly_actual": int(row.weekly_actual) if row.weekly_actual else None
         }
-        if weekly_forecast is not None:
-            record["weekly_forecast"] = weekly_forecast
-        if weekly_actual is not None:
-            record["weekly_actual"] = weekly_actual
-
         response.append(record)
 
     return jsonify({"forecasts": response}), 200

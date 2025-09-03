@@ -1093,8 +1093,7 @@ def forecast_menu(token):
         else:
             print("❌ Failed to fetch Store accuracy:", r.text)
 
-
-
+    
     def view_weekly_forecast(token):
         hdr = {"Authorization": f"Bearer {token}"}
 
@@ -1120,23 +1119,26 @@ def forecast_menu(token):
 
         # Ask user for filters
         print("\n🔎 Forecast Filters")
-        store_ids_in = input("Enter store code(s) (comma-separated, leave blank for all): ").strip()
+        store_ids_in = input("Enter store id(s) (comma-separated, leave blank for all): ").strip()
         skus_in = input("Enter SKUs (comma-separated, leave blank for all): ").strip()
-        weeks_in = input("Enter weeks of forecast (default=4): ").strip()
+
+        # ✅ Only allow future weeks override
+        future_weeks_in = input("Enter number of future weeks (leave blank for user default): ").strip()
 
         try:
             store_ids = [s.strip() for s in store_ids_in.split(",") if s.strip()] if store_ids_in else None
-            skus = [s.strip() for s in skus_in.split(",")] if skus_in else None 
-            weeks = int(weeks_in) if weeks_in else 4
-        except Exception:
-            print("🚫 Invalid input.")
+            skus = [s.strip() for s in skus_in.split(",") if s.strip()] if skus_in else None
+            future_weeks = int(future_weeks_in) if future_weeks_in else None  # None => backend uses lookahead_days
+        except ValueError:
+            print("🚫 Invalid input. Please enter numeric value for future weeks.")
             return
 
         payload = {
             "store_ids": store_ids,
-            "skus": skus,
-            "weeks": weeks
+            "skus": skus
         }
+        if future_weeks is not None:
+            payload["future_weeks"] = future_weeks  # ✅ send only if user explicitly provided
 
         # Call backend
         r = requests.post(f"{BASE_URL}/forecast/weekly", json=payload, headers=hdr, timeout=20)
@@ -1153,6 +1155,7 @@ def forecast_menu(token):
         for row in data:
             actual_value = row.get("weekly_actual")
             forecast_value = row.get("weekly_forecast", 0)
+
             if actual_value is not None:
                 print(
                     f"🏬 Store: {row['store_code']} | 📦 SKU: {row['sku']} | "
@@ -1165,6 +1168,7 @@ def forecast_menu(token):
                     f"📅 Week Start: {row['week_start']} | "
                     f"🔮 Forecast: {forecast_value:.2f} units | 📊 Actual: N/A"
                 )
+
 
 
     def forecast_logs():
