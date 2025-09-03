@@ -586,15 +586,24 @@ def weekly_forecast():
 
     response = []
     for row in results:
-        # Use actual if present, else forecast for weekly forecast value
-        value = float(row.weekly_actual) if row.weekly_actual is not None else float(row.weekly_forecast or 0)
+        # Convert sums to int if present
+        weekly_forecast = int(row.weekly_forecast) if row.weekly_forecast is not None else None
+        weekly_actual = int(row.weekly_actual) if row.weekly_actual is not None else None
 
-        response.append({
+        # Skip if both are missing
+        if weekly_forecast is None and weekly_actual is None:
+            continue
+
+        record = {
             "store_code": row.store_code,
             "sku": row.sku,
-            "week_start": row.week_start.strftime("%Y-%m-%d"),
-            "weekly_forecast": value,  # Matches expected key in client app
-            "weekly_actual": float(row.weekly_actual) if row.weekly_actual is not None else None
-        })
+            "week_start": row.week_start.strftime("%Y-%m-%d")
+        }
+        if weekly_forecast is not None:
+            record["weekly_forecast"] = weekly_forecast
+        if weekly_actual is not None:
+            record["weekly_actual"] = weekly_actual
+
+        response.append(record)
 
     return jsonify({"forecasts": response}), 200
