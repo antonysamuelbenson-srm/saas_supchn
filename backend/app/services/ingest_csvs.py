@@ -238,7 +238,7 @@ def insert_transfer_cost_data(rows, role_user_id, session):
 def insert_total_store_data(rows, role_user_id, session):
     for row in rows:
         record = session.query(totalStoreData).filter_by(
-            node_name=row["node_name"],
+            store_code=row["store_code"],
             sku=row["sku"]
         ).first()
 
@@ -247,7 +247,7 @@ def insert_total_store_data(rows, role_user_id, session):
             record.reorder_level = int(row["reorder_level"])
         else:
             record = totalStoreData(
-                node_name=row["node_name"],
+                store_code=row["store_code"],
                 sku=row["sku"],
                 safety_stock_level=int(row["safety_stock_level"]),
                 reorder_level=int(row["reorder_level"])
