@@ -15,36 +15,40 @@ bp = Blueprint("availability_rate", __name__)
 def get_week_start(date):
     return date - timedelta(days=date.weekday())
 
-
 @bp.route("/availability/recompute", methods=["POST"])
 @role_required
 def recompute_availability_rate():
+    # Step 1: Fetch forecasted demand (eligible SKUs)
     forecast_rows = db.session.query(
         ForecastDaily.forecast_date,
         ForecastDaily.store_id,
         ForecastDaily.sku,
-    ).filter(ForecastDaily.forecast_date != None).all()
+        ForecastDaily.forecast_qty
+    ).filter(ForecastDaily.forecast_date.isnot(None)).all()
 
-    weekly_eligible = defaultdict(set)
+    # {week_start: {(store_id, sku): [daily_forecast_qtys]}}
+    weekly_demand = defaultdict(lambda: defaultdict(list))
     for row in forecast_rows:
         week = get_week_start(row.forecast_date)
-        weekly_eligible[week].add((row.store_id, row.sku))
+        weekly_demand[week][(row.store_id, row.sku)].append(row.forecast_qty or 0)
 
+    # Step 2: Fetch inventory data
     inventory_rows = db.session.query(
         InventorySnapshot.snapshot_date,
         InventorySnapshot.store_id,
         InventorySnapshot.sku,
         InventorySnapshot.qty
-    ).filter(InventorySnapshot.snapshot_date != None).all()
+    ).filter(InventorySnapshot.snapshot_date.isnot(None)).all()
 
-    inventory_by_week = defaultdict(lambda: defaultdict(list))
+    # {week_start: {(store_id, sku): [daily_qtys]}}
+    weekly_inventory = defaultdict(lambda: defaultdict(list))
     for row in inventory_rows:
         week = get_week_start(row.snapshot_date)
-        inventory_by_week[week][(row.store_id, row.sku)].append(row.qty)
+        weekly_inventory[week][(row.store_id, row.sku)].append(row.qty or 0)
 
     inserted = 0
 
-    for week, sku_set in weekly_eligible.items():
+    for week, sku_demands in weekly_demand.items():
         if week > date.today():
             continue
 
@@ -53,11 +57,25 @@ def recompute_availability_rate():
         if exists:
             continue
 
-        eligible_count = len(sku_set)
+        eligible_count = len(sku_demands)
         oos_count = 0
-        for key in sku_set:
-            qtys = inventory_by_week.get(week, {}).get(key, [])
-            if not qtys or all(q <= 0 for q in qtys):
+
+        for key, demand_list in sku_demands.items():
+            daily_demand = demand_list
+            daily_inventory = weekly_inventory.get(week, {}).get(key, [])
+
+            # If no inventory recorded at all, consider it OOS
+            if not daily_inventory:
+                oos_count += 1
+                continue
+
+            # Pad inventory list to match demand days if needed
+            if len(daily_inventory) < len(daily_demand):
+                daily_inventory += [0] * (len(daily_demand) - len(daily_inventory))
+
+            # OOS if ANY day inventory < demand
+            insufficient = any(inv < dem for inv, dem in zip(daily_inventory, daily_demand))
+            if insufficient:
                 oos_count += 1
 
         if eligible_count == 0:
@@ -73,6 +91,7 @@ def recompute_availability_rate():
 
     db.session.commit()
     return jsonify({"message": f"Inserted {inserted} availability rate entries"}), 201
+
 
 @bp.route("/availability", methods=["GET"])
 @role_required
