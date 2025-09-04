@@ -59,7 +59,7 @@ def apply_formula():
             return jsonify({"error": "Invalid formula choice"}), 400
 
         updated = update_reorder_config(None, formula=chosen_formula, store_ids=store_ids)
-        alerts_count = generate_alerts(None)
+        alerts_count = generate_alerts()
 
 
         return jsonify({
