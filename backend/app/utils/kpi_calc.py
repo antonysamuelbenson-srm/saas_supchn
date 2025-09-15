@@ -158,10 +158,11 @@ def generate_alerts() -> int:
     stores = Store.query.all()
 
     # Aggregate max qty in lookback days per (store, sku)
+    inv_rows_sorted = sorted(inv_rows, key=lambda r: r.snapshot_date)
     inv_agg = {}
-    for r in inv_rows:
+    for r in inv_rows_sorted:
         key = (r.store_id, r.sku.strip())
-        inv_agg[key] = max(inv_agg.get(key, 0.0), float(r.qty))
+        inv_agg[key] = float(r.qty)
 
     rop_map = { (r.store_id, r.sku.strip()): (float(r.reorder_point or 0.0), float(r.safety_stock or 0.0)) 
                for r in rop_rows }
