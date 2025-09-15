@@ -43,6 +43,8 @@ ROUTE_ROLE_MAP = {
     "GET:/forecast/accuracy/overall": ["admin", "editor", "viewer"],
     "GET:/forecast/accuracy/detail": ["admin", "editor", "viewer"],
 
+    "GET:/forecast/accuracy":              ["admin", "editor", "viewer"],
+
     # --- Store ---
     "POST:/store_upload":               ["admin", "editor"],
     "GET:/stores":                     ["admin", "editor", "viewer"],

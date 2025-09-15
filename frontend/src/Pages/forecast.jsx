@@ -2206,6 +2206,7 @@ import { FiBarChart2, FiCpu, FiClock, FiAlertCircle, FiTrendingUp, FiTrendingDow
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from "react-router-dom";
+import AccuracyDashboard from './AccuracyDashboard';
 
 // --- API Configuration ---
 const API_BASE_URL = 'http://127.0.0.1:5500';
@@ -2516,12 +2517,8 @@ const ForecastPage = () => {
                         )}
                         {activeTab === 'accuracy' && (
                             <motion.div key="accuracy" variants={panelVariants} initial="hidden" animate="visible" exit="exit">
-                                <AccuracyPanel 
-                                    loading={loading.accuracy} 
-                                    data={accuracyData || []} 
-                                    fetchData={fetchAccuracyData}
-                                    getToken={getToken} // Pass getToken for internal fetching
-                                />
+                                {/* === THIS IS THE ONLY LINE YOU NEED FOR THIS TAB NOW === */}
+                                <AccuracyDashboard />
                             </motion.div>
                         )}
                         {activeTab === 'logs' && (

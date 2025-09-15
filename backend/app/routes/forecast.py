@@ -817,3 +817,104 @@ def get_detailed_accuracy():
         })
 
     return jsonify({"results": sorted(results, key=lambda x: x[result_key])}), 200
+
+
+# In your Flask backend file (e.g., routes.py)
+
+from flask import request, jsonify
+from datetime import datetime, timedelta
+from collections import defaultdict
+
+# Make sure other necessary imports like 'bp', 'db', 'Forecast', 'User', etc. are present
+
+# Helper function to get the start of the week (Monday)
+def get_week_start(d):
+    return d - timedelta(days=d.weekday())
+
+# --- UNIFIED ACCURACY ENDPOINT ---
+@bp.route("/forecast/accuracy", methods=["GET"])
+@role_required
+def get_forecast_accuracy():
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    payload = decode_jwt(token)
+    if not payload: return jsonify({"error": "Invalid token"}), 403
+    
+    role_user_id = payload.get("role_user_id")
+    user = db.session.query(User).filter_by(role_user_id=role_user_id).first()
+    if not user: return jsonify({"error": "User not found"}), 404
+
+    week_starts_str = request.args.get('weeks')
+    skus_str = request.args.get('skus')
+    store_ids_str = request.args.get('stores')
+
+    if week_starts_str:
+        try:
+            week_start_dates = [datetime.strptime(d, "%Y-%m-%d").date() for d in week_starts_str.split(',')]
+            start_date, end_date = min(week_start_dates), max(week_start_dates) + timedelta(days=6)
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
+    else:
+        lookahead_days = user.lookahead_days or 28
+        end_date = datetime.utcnow().date()
+        start_date = end_date - timedelta(days=lookahead_days)
+
+    base_query = db.session.query(
+        Forecast.store_id, Forecast.product_id.label('sku'),
+        Forecast.date, Forecast.predicted, Forecast.actual
+    ).filter(
+        Forecast.date >= start_date, Forecast.date <= end_date,
+        Forecast.actual.isnot(None), Forecast.actual != 0
+    )
+
+    if skus_str: base_query = base_query.filter(Forecast.product_id.in_(skus_str.split(',')))
+    if store_ids_str: base_query = base_query.filter(Forecast.store_id.in_(store_ids_str.split(',')))
+    
+    daily_data = base_query.all()
+
+    if week_starts_str:
+        daily_data = [row for row in daily_data if get_week_start(row.date) in week_start_dates]
+
+    granular_stats = defaultdict(lambda: {"abs_errors": [], "pred_sum": 0, "act_sum": 0, "count": 0})
+    for row in daily_data:
+        key = (get_week_start(row.date), row.sku, row.store_id)
+        error = abs(row.predicted - row.actual)
+        granular_stats[key]["abs_errors"].append(error)
+        granular_stats[key]["pred_sum"] += row.predicted
+        granular_stats[key]["act_sum"] += row.actual
+        granular_stats[key]["count"] += 1
+
+    granular_results = []
+    for (week_start, sku, store_id), stats in granular_stats.items():
+        total_actual = stats["act_sum"]
+        wmape = (sum(stats["abs_errors"]) / total_actual * 100) if total_actual else None
+        mae = (sum(stats["abs_errors"]) / stats["count"]) if stats["count"] else None
+        granular_results.append({
+            "week_start": week_start.strftime("%Y-%m-%d"), "sku": sku, "store_id": store_id,
+            "actuals": round(total_actual, 2), "forecast": round(stats["pred_sum"], 2),
+            "wmape": round(wmape, 2) if wmape is not None else None, "mae": round(mae, 2) if mae is not None else None,
+        })
+        
+    total_actual_overall = sum(row.actual for row in daily_data)
+    total_predicted_overall = sum(row.predicted for row in daily_data)
+    total_abs_error_overall = sum(abs(row.predicted - row.actual) for row in daily_data)
+    overall_wmape = (total_abs_error_overall / total_actual_overall * 100) if total_actual_overall else 0
+    overall_mae = (total_abs_error_overall / len(daily_data)) if daily_data else 0
+
+    return jsonify({
+        "overall": { "actuals": round(total_actual_overall, 2), "forecast": round(total_predicted_overall, 2), "wmape": round(overall_wmape, 2), "mae": round(overall_mae, 2) },
+        "granular": sorted(granular_results, key=lambda x: (x['week_start'], x['store_id'], x['sku']))
+    }), 200
+
+# --- FILTER DROPDOWN ENDPOINTS ---
+
+# ⭐ THIS IS THE CORRECTED FUNCTION ⭐
+@bp.route("/stores", methods=["GET"])
+@role_required
+def get_stores():
+    """Returns a list of all stores using the string-based store_code for consistency."""
+    try:
+        stores = db.session.query(Store.store_code, Store.name).all()
+        store_list = [{"value": s.store_code, "label": f"{s.name} ({s.store_code})"} for s in stores]
+        return jsonify({"stores": store_list}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
