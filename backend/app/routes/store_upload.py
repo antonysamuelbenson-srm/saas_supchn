@@ -6,6 +6,7 @@ from collections import Counter
 from app.models.inventory import InventorySnapshot
 from app.models.forecast import ForecastDaily
 from app.models.predict import Forecast
+from app.models.predict import Forecast
 from app.models.user import User
 from app.models.store import Store
 from app.models.reorder_config import ReorderConfig
@@ -305,6 +306,7 @@ def single_store_summary(store_id: int):
 #         "alerts": alert_count
 #     }), 200
 
+
 @bp.route("/store/<int:store_id>/hover", methods=["GET"])
 def hovered_store_stats(store_id):
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
@@ -319,6 +321,37 @@ def hovered_store_stats(store_id):
                         .eq("store_id", str(store_id))
                         .order("snapshot_date", desc=True)
                         .limit(1)
+    # Inventory info
+    # checks the latest snapshot 
+    latest_snapshot = (supabase.table("inventory")
+                        .select("snapshot_date")
+                        .eq("store_id", str(store_id))
+                        .order("snapshot_date", desc=True)
+                        .limit(1)
+                        .execute()).data
+
+    inv_rows = []
+    if latest_snapshot:
+        latest_date = latest_snapshot[0]["snapshot_date"]
+        inv_rows = (supabase.table("inventory")
+                    .select("sku,qty")
+                    .eq("store_id", str(store_id))
+                    .eq("snapshot_date", latest_date)
+                    .execute()).data or []
+
+    distinct_skus = set()
+    total_inventory_units = 0
+    for row in inv_rows:
+        if row.get("sku"):
+            distinct_skus.add(row["sku"])
+        if row.get("qty") is not None:
+            total_inventory_units += row["qty"]
+
+        # Step 1: Fetch lookahead_days for the user
+    user_row = (supabase.table("user")
+                        .select("lookahead_days")
+                        .eq("role_user_id", role_user_id)
+                        .single()
                         .execute()).data
 
     inv_rows = []
@@ -357,7 +390,11 @@ def hovered_store_stats(store_id):
     total_forecast_units = sum(f.predicted for f in forecast_rows if f.predicted is not None)
 
     # --- Alerts ---
+    # --- Alerts ---
     alerts_rows = (supabase.table("alert")
+                    .select("id")
+                    .eq("store_id", str(store_id))
+                    .execute()).data or []
                     .select("id")
                     .eq("store_id", str(store_id))
                     .execute()).data or []
@@ -367,8 +404,11 @@ def hovered_store_stats(store_id):
         "distinct_skus": len(distinct_skus),
         "inventory_units": int(round(total_inventory_units)),
         "forecast_units": int(round(total_forecast_units)),
+        "inventory_units": int(round(total_inventory_units)),
+        "forecast_units": int(round(total_forecast_units)),
         "alerts": alert_count
     }), 200
+
 
 
 @bp.route("/stores/with-alert-status", methods=["GET"])
