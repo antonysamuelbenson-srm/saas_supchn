@@ -1,4 +1,4 @@
-/* @import "leaflet/dist/leaflet.css";
+@import "leaflet/dist/leaflet.css";
 @import url('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
 
 html,
@@ -34,45 +34,4 @@ body,
 @tailwind utilities;
 
 @plugin "daisyui";
- */
 
-
- /* 1. Tailwind directives MUST come first */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* 2. You can add plugins like DaisyUI after the core directives */
-@plugin "daisyui";
-
-
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-}
-
-.blinking-marker {
-  animation: blink 1s infinite ease-in-out;
-  width: 20px;
-  height: 20px;
-  background: red;
-  border-radius: 50%;
-  border: 3px solid white;
-}
-
-@keyframes blink {
-  0%, 100% {
-    opacity: 1;
-    box-shadow: 0 0 5px 2px red;
-  }
-  50% {
-    opacity: 0.3;
-    box-shadow: 0 0 15px 4px red;
-  }
-}
-
-
-/* 3. All other imports and custom styles come LAST */

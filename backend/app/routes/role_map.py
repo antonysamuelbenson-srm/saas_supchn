@@ -42,21 +42,6 @@ ROUTE_ROLE_MAP = {
     "GET:/forecast/logs": ["admin", "editor", "viewer"],
     "GET:/forecast/accuracy/overall": ["admin", "editor", "viewer"],
     "GET:/forecast/accuracy/detail": ["admin", "editor", "viewer"],
-    "POST:/forecast/schedule/horizon": ["admin", "editor"],
-    "POST:/forecast/schedule": ["admin", "editor", "viewer"],
-    "GET:/forecast/schedule": ["admin", "editor", "viewer"],
-    "POST:/forecast/run": ["admin", "editor", "viewer"],
-    "GET:/forecast/store-level": ["admin", "editor", "viewer"],
-    "GET:/forecast/sku-level": ["admin", "editor", "viewer"],
-    "GET:/forecast/accuracy/store": ["admin", "editor", "viewer"],
-    "GET:/forecast/accuracy/sku": ["admin", "editor", "viewer"],
-    "GET:/forecast/chart-data": ["admin", "editor", "viewer"],
-    "POST:/forecast/weekly": ["admin", "editor", "viewer"],
-    "GET:/forecast/logs": ["admin", "editor", "viewer"],
-    "GET:/forecast/accuracy/overall": ["admin", "editor", "viewer"],
-    "GET:/forecast/accuracy/detail": ["admin", "editor", "viewer"],
-
-    "GET:/forecast/accuracy":              ["admin", "editor", "viewer"],
 
     # --- Store ---
     "POST:/store_upload":               ["admin", "editor"],
@@ -65,10 +50,6 @@ ROUTE_ROLE_MAP = {
     "GET:/store/<int:store_id>/hover":             ["admin", "editor", "viewer"],
     "GET:/stores/with-alert-status":               ["admin", "editor", "viewer"],
     "GET:/store/<int:store_id>/with-alert-status": ["admin", "editor", "viewer"],
-
-       # -----display all skus  -----
-    "GET:/skus":                       ["admin", "editor", "viewer"],
-
 
        # -----display all skus  -----
     "GET:/skus":                       ["admin", "editor", "viewer"],
