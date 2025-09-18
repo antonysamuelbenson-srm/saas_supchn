@@ -209,13 +209,18 @@ def insert_transfer_cost_data(rows, role_user_id, session):
 
         if record:
             record.transfer_cost = float(row["transfer_cost"])
+            record.lead_time = int(row["lead_time"])   # new column
         else:
             record = transferCostDta(
                 start_location=row["start_location"],
                 end_location=row["end_location"],
-                transfer_cost=float(row["transfer_cost"])
+                transfer_cost=float(row["transfer_cost"]),
+                lead_time=int(row["lead_time"])        # new column
             )
             session.add(record)
+
+    session.commit()
+
 
 
 

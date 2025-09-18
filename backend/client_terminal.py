@@ -5,7 +5,8 @@ import json, uuid
 from datetime import date
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from app.routes import forecast_data
+
+from tabulate import tabulate
 
 load_dotenv()
 url: str = os.environ.get("SUPABASE_URL")
@@ -14,7 +15,7 @@ supabase: Client = create_client(url, key)
 
 from pathlib import Path
 
-BASE_URL = "http://127.0.0.1:5000"
+BASE_URL = "http://127.0.0.1:5500"
 
 def signup():
     print("\n🔐 SIGNUP")
@@ -267,14 +268,14 @@ def settings_menu(token: str):
             set_lead_times(token)
 
         elif choice == "3":
-            lookahead = input("Enter forecast lookahead (in days): ").strip()
+            lookahead = input("Enter forecast lookahead (in weeks): ").strip()
             if not lookahead.isdigit():
                 print("❌ Invalid input. Must be a number.")
                 continue
             response = requests.post(
-                f"{BASE_URL}/config/set-lookahead-days",
+                f"{BASE_URL}/user/lookahead_days",
                 headers=hdr,
-                json={"lookahead_days": int(lookahead)}
+                json={"weeks": int(lookahead)}
             )
             if response.ok:
                 print("✅ Lookahead updated successfully.")
@@ -893,11 +894,28 @@ MENU_OPTIONS = {
     "13": {"desc": "Place Reorder", "route": "POST:/reorder/place"},
     "14": {
     "desc": "View Weekly Availability Rate",
-    "route": "GET:/availability"
+    "route": "GET:/availability"},
+    "15": {
+        "desc": "Forecast",
+        "route" : None,
+        "submenu": {
+            "1": {"desc": "Set Forecast Schedule", "route": "POST:/forecast/schedule"},
+            "2": {"desc": "Update Forecast Horizon", "route": "POST:/forecast/schedule/horizon"},
+            "3": {"desc": "View Forecast Schedules", "route": "GET:/forecast/schedule"},
+            "4": {"desc": "Manual Forecast Runner", "route": "POST:/forecast/run"},
+            "5": {"desc": "Store-level Forecast (Next N Weeks)", "route": "GET:/forecast/store-level"},
+            "6": {"desc": "Store-level Past Accuracy", "route": "GET:/forecast/accuracy/store"},
+            "7": {"desc": "SKU-level Forecast (Next N Weeks)", "route": "GET:/forecast/sku-level"},
+            "8": {"desc": "SKU-level Past Accuracy", "route": "GET:/forecast/accuracy/sku"},
+            "9": {"desc": "Forecast Chart Data", "route": "GET:/forecast/chart-data"},
+            "10": {"desc": "Weekly forecasts", "route": "POST:/forecast/weekly"},
+            "11": {"desc": "Forecast Run Logs", "route": "GET:/forecast/logs"}
+        
+        }
+    },
+    "16" : {"desc": "Rebalancer", "route": "POST:/rebalance"}
 }
 
-
-}
 
 def normalize_route(route):
     # Replace all <...> segments with <param> to match your ROUTE_ROLE_MAP style
@@ -919,6 +937,517 @@ def show_menu(allowed_routes):
         norm_route = normalize_route(route)
         if norm_route in normalized_allowed:
             print(f"{key}. {opt['desc']}")
+
+
+def forecast_menu(token):
+
+    def view_forecast_schedule():
+        url = f"{BASE_URL}/forecast/schedule"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        print(r.json())
+
+    def set_forecast_schedule():
+        url = f"{BASE_URL}/forecast/schedule"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Optional store/product
+        store_id = input("Enter store ID [leave blank for all stores]: ").strip() or None
+        product_id = input("Enter product ID [leave blank for all products]: ").strip() or None
+
+        # Frequency selection
+        valid_frequencies = ["hourly", "daily", "weekly", "monthly"]
+        while True:
+            frequency = input(f"Select frequency {valid_frequencies}: ").strip().lower()
+            if frequency in valid_frequencies:
+                break
+            print("Invalid frequency, choose from the options above.")
+
+        # Optional time/day
+        time_of_day = input("Enter time of day (HH:MM) [default 00:00]: ").strip() or "00:00"
+        day_of_week = input("Enter day of week [default Saturday]: ").strip() or "Saturday"
+
+        payload = {
+            "store_id": store_id,
+            "product_id": product_id,
+            "frequency": frequency,
+            "time_of_day": time_of_day,
+            "day_of_week": day_of_week
+        }
+
+        r = requests.post(url, json=payload, headers=headers)
+        print(r.json())
+
+
+    def update_forecast_horizon():
+        url = f"{BASE_URL}/forecast/schedule/horizon"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Prompt user for n_days
+        while True:
+            n_days_input = input("Enter forecast horizon in days (e.g., 7): ").strip()
+            if n_days_input.isdigit() and int(n_days_input) > 0:
+                n_days = int(n_days_input)
+                break
+            print("Please enter a valid positive integer for n_weeks.")
+
+        payload = {"n_weeks": n_days}
+
+        r = requests.post(url, json=payload, headers=headers)
+        print(r.json())
+
+    def run_forecast():
+        url = f"{BASE_URL}/run"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # ask user for input
+        try:
+            weeks_input = input("Enter number of weeks for forecast [default 4]: ").strip()
+            weeks = int(weeks_input) if weeks_input else 4
+        except ValueError:
+            print("❌ Invalid input. Please enter an integer.")
+            return
+
+        payload = {"weeks": weeks}
+
+        try:
+            r = requests.post(url, headers=headers, json=payload)
+            r.raise_for_status()
+            print(r.json())
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
+
+
+    def chart_data():
+        url = f"{BASE_URL}/forecast/chart-data"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        print(r.json())
+
+    def store_level_forecast():
+        url = f"{BASE_URL}/forecast/store-level"
+        headers = {"Authorization": f"Bearer {token}"}
+        params = {"n_weeks": 4}
+        r = requests.get(url, headers=headers, params=params)
+        print(r.json())
+
+
+    def sku_level_forecast():
+        url = f"{BASE_URL}/forecast/sku-level"
+        headers = {"Authorization": f"Bearer {token}"}
+        params = {"n_weeks": 4}
+        r = requests.get(url, headers=headers, params=params)
+        print(r.json())
+
+    def past_accuracy_sku(token):
+        url = f"{BASE_URL}/forecast/accuracy/sku"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        if r.ok:
+            data = r.json()
+            print("\n📊 SKU Forecast Accuracy:")
+            for row in data:
+                sku = row.get('sku') or "Unknown"
+                week_start = row.get('week_start') or "Unknown"
+                bias = row.get('bias')
+                wmape = row.get('wmape')
+                mae = row.get('mae')
+                actuals = row.get('actuals')
+                predicted = row.get('predicted')
+
+                print(
+                    f"📦 SKU: {sku} | "
+                    f"📅 Week Start: {week_start} | "
+                    f"🎯 Bias: {bias:.2f}% | "
+                    f"📉 WMAPE: {wmape:.2f}% | "
+                    f"📏 MAE: {mae:.2f} | "
+                    f"🟢 Actuals: {actuals:.2f} | "
+                    f"🔵 Predicted: {predicted:.2f}"
+                )
+        else:
+            print("❌ Failed to fetch SKU accuracy:", r.text)
+
+
+    def past_accuracy_store(token):
+        url = f"{BASE_URL}/forecast/accuracy/store"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        if r.ok:
+            data = r.json()
+            print("\n📊 Store Forecast Accuracy:")
+            for row in data:
+                store_id = row.get('store_id') or "Unknown"
+                week_start = row.get('week_start') or "Unknown"
+                bias = row.get('bias')
+                wmape = row.get('wmape')
+                mae = row.get('mae')
+                actuals = row.get('actuals')
+                predicted = row.get('predicted')
+
+                print(
+                    f"🏬 Store: {store_id} | "
+                    f"📅 Week Start: {week_start} | "
+                    f"🎯 Bias: {bias:.2f}% | "
+                    f"📉 WMAPE: {wmape:.2f}% | "
+                    f"📏 MAE: {mae:.2f} | "
+                    f"🟢 Actuals: {actuals:.2f} | "
+                    f"🔵 Predicted: {predicted:.2f}"
+                )
+        else:
+            print("❌ Failed to fetch Store accuracy:", r.text)
+
+    
+    def view_weekly_forecast(token):
+        hdr = {"Authorization": f"Bearer {token}"}
+
+        # Fetch available stores
+        r = requests.get(f"{BASE_URL}/stores", headers=hdr, timeout=20)
+        stores = r.json().get("stores", []) if r.ok else []
+        print("\n🏬 Available Stores:")
+        if stores:
+            for s in stores:
+                print(f"  - {s['store_id']} ({s['name']} - {s['city']})")
+        else:
+            print("  🙅 No stores found.")
+
+        # Fetch available SKUs
+        r = requests.get(f"{BASE_URL}/skus", headers=hdr, timeout=20)
+        skus_list = r.json().get("skus", []) if r.ok else []
+        print("\n📦 Available SKUs:")
+        if skus_list:
+            for s in skus_list:
+                print(f"  - {s}")
+        else:
+            print("  🙅 No SKUs found.")
+
+        # Ask user for filters
+        print("\n🔎 Forecast Filters")
+        store_ids_in = input("Enter store id(s) (comma-separated, leave blank for all): ").strip()
+        skus_in = input("Enter SKUs (comma-separated, leave blank for all): ").strip()
+
+        # ✅ Only allow future weeks override
+        future_weeks_in = input("Enter number of future weeks (leave blank for user default): ").strip()
+
+        try:
+            store_ids = [s.strip() for s in store_ids_in.split(",") if s.strip()] if store_ids_in else None
+            skus = [s.strip() for s in skus_in.split(",") if s.strip()] if skus_in else None
+            future_weeks = int(future_weeks_in) if future_weeks_in else None  # None => backend uses lookahead_days
+        except ValueError:
+            print("🚫 Invalid input. Please enter numeric value for future weeks.")
+            return
+
+        payload = {
+            "store_ids": store_ids,
+            "skus": skus
+        }
+        if future_weeks is not None:
+            payload["future_weeks"] = future_weeks  # ✅ send only if user explicitly provided
+
+        # Call backend
+        r = requests.post(f"{BASE_URL}/forecast/weekly", json=payload, headers=hdr, timeout=20)
+        if not r.ok:
+            print("❌ Failed to fetch weekly forecast:", r.text)
+            return
+
+        data = r.json().get("forecasts", [])
+        if not data:
+            print("🙅 No forecast data available for given filters.")
+            return
+
+        print("\n📊 Weekly Forecast Results:")
+        for row in data:
+            actual_value = row.get("weekly_actual")
+            forecast_value = row.get("weekly_forecast", 0)
+
+            if actual_value is not None:
+                print(
+                    f"🏬 Store: {row['store_code']} | 📦 SKU: {row['sku']} | "
+                    f"📅 Week Start: {row['week_start']} | "
+                    f"📊 Actual: {actual_value:.2f} units | 🔮 Forecast: {forecast_value:.2f} units"
+                )
+            else:
+                print(
+                    f"🏬 Store: {row['store_code']} | 📦 SKU: {row['sku']} | "
+                    f"📅 Week Start: {row['week_start']} | "
+                    f"🔮 Forecast: {forecast_value:.2f} units | 📊 Actual: N/A"
+                )
+
+
+
+    def forecast_logs():
+        url = f"{BASE_URL}/forecast/logs"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        print(r.json())
+
+
+    def overall_forecast_accuracy(token):
+        url = f"{BASE_URL}/forecast/accuracy/overall"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        weeks_input = input("Enter number of past weeks [leave blank for default lookahead]: ").strip()
+        params = {}
+        if weeks_input.isdigit() and int(weeks_input) > 0:
+            params["weeks"] = int(weeks_input)
+
+        r = requests.get(url, headers=headers, params=params)
+
+        if not r.ok:
+            print("❌ Failed to fetch overall accuracy:", r.text)
+            return []
+
+        data = r.json()
+        rows = data.get("results", []) if isinstance(data, dict) else data
+
+        print("\n📊 Overall Forecast Accuracy (Week-wise):")
+        if not rows:
+            print("🙅 No data available.")
+            return []
+
+        for row in rows:
+            print(
+                f"📅 Week: {row['week_start']} | "
+                f"🟢 Actuals: {row['actuals']:.2f} | "
+                f"🔵 Forecast: {row['forecast']:.2f} | "
+                f"🎯 Bias: {row['bias']:.2f}% | "
+                f"📉 WMAPE: {row['wmape']:.2f}% | "
+                f"📏 MAE: {row['mae']:.2f}"
+            )
+
+        return rows
+
+    def drilldown_forecast_accuracy(token):
+        url = f"{BASE_URL}/forecast/accuracy/detail"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Step 1: Fetch week-level accuracy first
+        r = requests.get(url, headers=headers, params={"granularity": "week"})
+        if not r.ok:
+            print("❌ Failed to fetch forecast accuracy:", r.text)
+            return
+
+        data = r.json()
+        rows = data.get("results", []) if isinstance(data, dict) else data
+        if not rows:
+            print("🙅 No data found.")
+            return
+
+        print("\n📊 Overall Forecast Accuracy (Week-wise):")
+        for row in rows:
+            print(
+                f"📅 Week: {row['week_start']} | "
+                f"🟢 Actuals: {row['actuals']:.2f} | "
+                f"🔵 Forecast: {row['predicted']:.2f} | "
+                f"🎯 Bias: {row['bias']:.2f}% | "
+                f"📉 WMAPE: {row['wmape']:.2f}% | "
+                f"📏 MAE: {row['mae']:.2f}"
+            )
+
+        # Step 2: Ask user to pick week(s) (multi-select)
+        print("\n📅 Available Weeks:")
+        for idx, row in enumerate(rows, start=1):
+            print(f"  {idx}. {row['week_start']}")
+        week_choice = input(f"Select week(s) (comma-separated 1-{len(rows)}, leave blank for all): ").strip()
+
+        if week_choice:
+            week_indices = [int(x) for x in week_choice.split(",") if x.strip().isdigit()]
+            selected_weeks = [rows[i - 1]["week_start"] for i in week_indices if 1 <= i <= len(rows)]
+        else:
+            selected_weeks = [r["week_start"] for r in rows]  # All by default
+
+        # Step 3: Get available stores (multi-select)
+        r = requests.get(f"{BASE_URL}/stores", headers=headers, timeout=20)
+        stores = r.json().get("stores", []) if r.ok else []
+        print("\n🏬 Available Stores:")
+        if stores:
+            for s in stores:
+                print(f"  - {s['store_id']} ({s['name']} - {s['city']})")
+        else:
+            print("  🙅 No stores found.")
+
+        store_choice = input("Enter store_id(s) [comma-separated, leave blank for all]: ").strip()
+        selected_stores = [x.strip() for x in store_choice.split(",") if x.strip()] if store_choice else []
+
+        # Step 4: Get available SKUs (multi-select)
+        r = requests.get(f"{BASE_URL}/skus", headers=headers, timeout=20)
+        skus_list = r.json().get("skus", []) if r.ok else []
+        print("\n📦 Available SKUs:")
+        if skus_list:
+            for s in skus_list:
+                print(f"  - {s}")
+        else:
+            print("  🙅 No SKUs found.")
+
+        sku_choice = input("Enter SKU(s) [comma-separated, leave blank for all]: ").strip()
+        selected_skus = [x.strip() for x in sku_choice.split(",") if x.strip()] if sku_choice else []
+
+        # Step 5: Fetch day-level accuracy
+        params = {
+            "weeks": ",".join(selected_weeks),
+            "granularity": "day"
+        }
+        if selected_stores:
+            params["store"] = ",".join(selected_stores)
+        if selected_skus:
+            params["sku"] = ",".join(selected_skus)
+
+        r = requests.get(url, headers=headers, params=params)
+        if not r.ok:
+            print("❌ Failed to fetch day-level accuracy:", r.text)
+            return
+
+        data = r.json()
+        rows = data.get("results", []) if isinstance(data, dict) else data
+        if not rows:
+            print("🙅 No day-level data found for selection.")
+            return
+
+        print(f"\n📊 Day-Level Accuracy for Week(s): {', '.join(selected_weeks)}")
+        for row in rows:
+            key = row.get("date") or row.get("week_start")
+            print(
+                f"📅 {key} | "
+                f"🟢 Actuals: {row['actuals']:.2f} | "
+                f"🔵 Forecast: {row['predicted']:.2f} | "
+                f"🎯 Bias: {row['bias']:.2f}% | "
+                f"📉 WMAPE: {row['wmape']:.2f}% | "
+                f"📏 MAE: {row['mae']:.2f}"
+            )
+
+
+    options = {
+        "1": ("Set Forecast Schedule", set_forecast_schedule),
+        "2": ("View Forecast Schedule", view_forecast_schedule),
+        "3": ("Update Forecast Horizon (N weeks)", update_forecast_horizon),
+        "4": ("Run Forecast Manually", run_forecast),
+        "5": ("Store-Level Forecast (Next N Weeks)", store_level_forecast),
+        "6": ("SKU-Level Forecast (Next N Weeks)", sku_level_forecast),
+        "7": ("Past Accuracy - Store", lambda: past_accuracy_store(token)),
+        "8": ("Past Accuracy - SKU", lambda: past_accuracy_sku(token)),
+        "9": ("Chart Data with Trendline", chart_data),
+        "10": ("View Weekly Forecast", lambda: view_weekly_forecast(token)),
+        "11": ("Forecast Run Logs", forecast_logs),
+        "12": ("Overall Forecast Accuracy", lambda: overall_forecast_accuracy(token)),
+        "13": ("Drilldown Forecast Accuracy (Week/SKU/Store)", lambda: drilldown_forecast_accuracy(token)),
+        
+        "0": ("Exit Forecast Menu", None)
+    }
+
+    while True:
+        print("\n📊 Forecast Module Menu")
+        for key, (desc, _) in options.items():
+            print(f"{key}. {desc}")
+
+        choice = input("Select an option: ").strip()
+        if choice == "0":
+            break
+        elif choice in options:
+            options[choice][1]()
+        else:
+            print("❌ Invalid choice. Try again.")
+
+def rebalancer(token):
+    """
+    Client function to trigger inventory rebalancing and optionally download the results.
+    """
+    url = f"{BASE_URL}/rebalance"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    print("📦 Inventory Rebalancing Client\n")
+
+    try:
+        ddos_days = int(input("Enter Desired Days of Supply (DDOS): ").strip())
+    except ValueError:
+        print("❌ Invalid input. Please enter a number.")
+        return
+
+    payload = {"ddos_days": ddos_days}
+
+    # Make the single API call to get the detailed allocations
+    try:
+        url = f"{BASE_URL}/rebalance"
+        resp = requests.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+
+        data = resp.json()
+        allocations = data.get("allocations", [])
+
+        if not allocations:
+            print("\n✅ No transfers required. Inventory is already balanced.")
+            return
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ API request failed: {e}")
+        return
+
+    # Now, present the menu to the user
+    while True:
+        print("\n--- Options ---")
+        print("1. View Detailed SKU-level Transfers & Download")
+        print("2. View Transfer Summary by Route")
+        print("3. Exit")
+        
+        choice = input("Enter your choice (1-3): ").strip()
+
+        if choice == '1':
+            # Display detailed SKU-level transfers
+            print("\n📊 Recommended Transfers (Detailed):\n")
+            table = [
+                [i + 1, a["src"], a["dst"], a["sku"], a["units"]]
+                for i, a in enumerate(allocations)
+            ]
+            headers_ = ["#", "Source", "Destination", "SKU", "Units"]
+            print(tabulate(table, headers=headers_, tablefmt="fancy_grid"))
+            
+            # Then, immediately ask about downloading
+            download_choice = input("\nDo you want to download these results as a CSV? (y/n): ").strip().lower()
+
+            if download_choice == 'y':
+                # Make a separate API call to the download endpoint
+                try:
+                    download_url = f"{BASE_URL}/rebalance/download"
+                    download_resp = requests.post(download_url, json=payload, headers=headers)
+                    download_resp.raise_for_status()
+                    
+                    # Save the CSV content to a file
+                    filename = f"rebalancing_recommendations_{date.today().strftime('%Y-%m-%d')}.csv"
+                    with open(filename, "w", newline="") as f:
+                        f.write(download_resp.text)
+                    
+                    print(f"✅ Successfully downloaded recommendations to '{filename}'.")
+                    
+                except requests.exceptions.RequestException as e:
+                    print(f"❌ API request failed for download: {e}")
+
+        elif choice == '2':
+            # Make a separate API call to get the summary
+            try:
+                summary_url = f"{BASE_URL}/rebalance/summary"
+                summary_resp = requests.post(summary_url, json=payload, headers=headers)
+                summary_resp.raise_for_status()
+                
+                summary_data = summary_resp.json().get("summary", [])
+                
+                if not summary_data:
+                    print("\n✅ No transfers required. Inventory is already balanced.")
+                else:
+                    print("\n📊 Transfer Summary by Route:\n")
+                    summary_table = [
+                        [i + 1, s["src"], s["dest"], s["distinct_skus"], s["total_units"]]
+                        for i, s in enumerate(summary_data)
+                    ]
+                    summary_headers = ["#", "Source", "Destination", "Distinct SKUs", "Total Units"]
+                    print(tabulate(summary_table, headers=summary_headers, tablefmt="fancy_grid"))
+
+            except requests.exceptions.RequestException as e:
+                print(f"❌ API request failed for summary: {e}")
+
+        elif choice == '3':
+            print("Goodbye!")
+            break
+
+        else:
+            print("Invalid choice. Please enter a number from 1 to 3.")
 
 
 def main():
@@ -988,7 +1517,10 @@ def main():
                         place_reorder(token)
                     elif action=="14":
                         display_availability_from_db(token)
-
+                    elif action == "15":
+                        forecast_menu(token)
+                    elif action =="16" :
+                        rebalancer(token)
                     else:
                         print("❌ Invalid choice.")
         else:
