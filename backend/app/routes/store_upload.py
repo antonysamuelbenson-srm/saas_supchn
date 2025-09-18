@@ -5,6 +5,7 @@ from app.utils.jwt_utils import decode_jwt
 from collections import Counter
 from app.models.inventory import InventorySnapshot
 from app.models.forecast import ForecastDaily
+from app.models.predict import Forecast
 from app.models.user import User
 from app.models.store import Store
 from app.models.reorder_config import ReorderConfig
@@ -232,6 +233,79 @@ def single_store_summary(store_id: int):
     return jsonify({store_key: {"alerts": alert_out, "items": items_out}}), 200
 
 
+# @bp.route("/store/<int:store_id>/hover", methods=["GET"])
+# def hovered_store_stats(store_id):
+#     token = request.headers.get("Authorization", "").replace("Bearer ", "")
+#     payload = decode_jwt(token)
+#     role_user_id = payload.get("role_user_id")
+#     if not role_user_id:
+#         return jsonify({"error": "Unauthorized"}), 401
+
+#     # Inventory info
+#     # checks the latest snapshot 
+#     latest_snapshot = (supabase.table("inventory")
+#                     .select("snapshot_date")
+#                     .eq("store_id", str(store_id))
+#                     .order("snapshot_date", desc=True)   # newest first
+#                     .limit(1)
+#                     .execute()).data
+
+#     if latest_snapshot:
+#         latest_date = latest_snapshot[0]["snapshot_date"]
+#         inv_rows = (supabase.table("inventory")
+#                 .select("sku,qty")
+#                 .eq("store_id", str(store_id))
+#                 .eq("snapshot_date", latest_date)
+#                 .execute()).data or []
+
+#     distinct_skus = set()
+#     total_inventory_units = 0
+#     for row in inv_rows:
+#         if row.get("sku"):
+#             distinct_skus.add(row["sku"])
+#         if row.get("qty") is not None:
+#             total_inventory_units += row["qty"]
+
+#         # Step 1: Fetch lookahead_days for the user
+#     user_row = (supabase.table("user")
+#                         .select("lookahead_days")
+#                         .eq("role_user_id", role_user_id)
+#                         .single()
+#                         .execute()).data
+
+#     lookahead_days = user_row.get("lookahead_days", 7)  # default to 7 if missing or null
+
+#     # Step 2: Forecast info using user-defined lookahead
+#     today = date.today().isoformat()
+#     future = (date.today() + timedelta(days=lookahead_days)).isoformat()
+
+#     forecast_rows = (supabase.table("forecast_daily")
+#                              .select("forecast_qty")
+#                              .eq("store_id", str(store_id))
+#                              .gte("forecast_date", today)
+#                              .lte("forecast_date", future)
+#                              .execute()).data or []
+
+#     total_forecast_units = sum(
+#         row["forecast_qty"] for row in forecast_rows if row.get("forecast_qty") is not None
+#     )
+
+#     # Alerts count
+#     alerts_rows = (supabase.table("alert")
+#                             .select("id")
+#                             .eq("store_id", str(store_id))
+#                             .execute()).data or []
+
+#     alert_count = len(alerts_rows)
+
+#     return jsonify({
+#         "distinct_skus": len(distinct_skus),
+#         "inventory_units": total_inventory_units,
+#         "forecast_units": total_forecast_units,
+#         "alerts": alert_count
+#     }), 200
+
+
 @bp.route("/store/<int:store_id>/hover", methods=["GET"])
 def hovered_store_stats(store_id):
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
@@ -240,6 +314,12 @@ def hovered_store_stats(store_id):
     if not role_user_id:
         return jsonify({"error": "Unauthorized"}), 401
 
+    # --- Inventory info ---
+    latest_snapshot = (supabase.table("inventory")
+                        .select("snapshot_date")
+                        .eq("store_id", str(store_id))
+                        .order("snapshot_date", desc=True)
+                        .limit(1)
     # Inventory info
     # checks the latest snapshot 
     latest_snapshot = (supabase.table("inventory")
@@ -272,37 +352,55 @@ def hovered_store_stats(store_id):
                         .single()
                         .execute()).data
 
-    lookahead_days = user_row.get("lookahead_days", 7)  # default to 7 if missing or null
+    inv_rows = []
+    if latest_snapshot:
+        latest_date = latest_snapshot[0]["snapshot_date"]
+        inv_rows = (supabase.table("inventory")
+                    .select("sku,qty")
+                    .eq("store_id", str(store_id))
+                    .eq("snapshot_date", latest_date)
+                    .execute()).data or []
 
-    # Step 2: Forecast info using user-defined lookahead
-    today = date.today().isoformat()
-    future = (date.today() + timedelta(days=lookahead_days)).isoformat()
+    distinct_skus = {row["sku"] for row in inv_rows if row.get("sku")}
+    total_inventory_units = sum(row["qty"] for row in inv_rows if row.get("qty") is not None)
 
-    forecast_rows = (supabase.table("forecast_daily")
-                             .select("forecast_qty")
-                             .eq("store_id", str(store_id))
-                             .gte("forecast_date", today)
-                             .lte("forecast_date", future)
-                             .execute()).data or []
+    # --- User config ---
+    user_row = db.session.query(User).filter_by(role_user_id=role_user_id).first()
+    lookahead_days = user_row.lookahead_days if user_row and user_row.lookahead_days else 7
 
-    total_forecast_units = sum(
-        row["forecast_qty"] for row in forecast_rows if row.get("forecast_qty") is not None
-    )
+    # --- Forecast info from ORM ---
+    store_code = (db.session.query(Store.store_code)
+                  .filter(Store.store_id == store_id)
+                  .scalar())
 
-    # Alerts count
+    if not store_code:
+        return jsonify({"error": "Store not found"}), 404
+
+    today = date.today()
+    future = today + timedelta(days=lookahead_days)
+
+    forecast_rows = (db.session.query(Forecast)
+                     .filter(Forecast.store_id == store_code)
+                     .filter(Forecast.date >= today)
+                     .filter(Forecast.date <= future)
+                     .all())
+
+    total_forecast_units = sum(f.predicted for f in forecast_rows if f.predicted is not None)
+
+    # --- Alerts ---
     alerts_rows = (supabase.table("alert")
-                            .select("id")
-                            .eq("store_id", str(store_id))
-                            .execute()).data or []
-
+                    .select("id")
+                    .eq("store_id", str(store_id))
+                    .execute()).data or []
     alert_count = len(alerts_rows)
 
     return jsonify({
         "distinct_skus": len(distinct_skus),
-        "inventory_units": total_inventory_units,
-        "forecast_units": total_forecast_units,
+        "inventory_units": int(round(total_inventory_units)),
+        "forecast_units": int(round(total_forecast_units)),
         "alerts": alert_count
     }), 200
+
 
 @bp.route("/stores/with-alert-status", methods=["GET"])
 @role_required
