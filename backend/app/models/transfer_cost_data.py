@@ -10,6 +10,7 @@ class transferCostDta(db.Model):
     start_location = db.Column(db.String, nullable=False)
     end_location = db.Column(db.String, nullable=False)
     transfer_cost = db.Column(db.Float, nullable=False)
+    lead_time = db.Column(db.Integer, nullable=False)
 
     __table_args__ = (
     UniqueConstraint("start_location", "end_location", name="uniq_transfer_cost"),

@@ -144,7 +144,7 @@ REQUIRED_COLS = {
     "inventory": ["snapshot_date", "store_code", "sku", "qty", "product_name"],
     "forecast":  ["forecast_date", "store_code", "sku", "forecast_qty"],
     "total_store_data": ["store_code", "sku", "safety_stock_level", "reorder_level"],
-    "transfer_cost_data": ["start_location", "end_location", "transfer_cost"],
+    "transfer_cost_data": ["start_location", "end_location", "transfer_cost","lead_time"],
     "capacity": ["store_id", "warehouse_name", "max_capacity"]
 }
 
