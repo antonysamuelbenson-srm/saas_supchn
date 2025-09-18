@@ -28,7 +28,7 @@ def create_app():
 
 
     # ✅ Register Blueprints INSIDE this function
-    from app.routes import auth, dashboard, alerts, upload, config, store_upload, node_location_update, reorder, availability, admin, forecast, rebalancer
+    from app.routes import auth, dashboard, alerts, upload, config, store_upload, node_location_update, reorder, availability, admin, forecast
     app.register_blueprint(auth.bp)
     app.register_blueprint(admin.bp, url_prefix="/admin")
     app.register_blueprint(dashboard.bp)
@@ -41,7 +41,6 @@ def create_app():
     app.register_blueprint(reorder.bp)
     app.register_blueprint(availability.bp)
     app.register_blueprint(forecast.bp)
-    app.register_blueprint(rebalancer.bp)
 
     return app
 
