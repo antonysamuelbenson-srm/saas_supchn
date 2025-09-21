@@ -313,12 +313,36 @@ def hovered_store_stats(store_id):
     if not role_user_id:
         return jsonify({"error": "Unauthorized"}), 401
 
-    # --- Inventory info ---
+    # Inventory info
+    # checks the latest snapshot 
     latest_snapshot = (supabase.table("inventory")
-                        .select("snapshot_date")
-                        .eq("store_id", str(store_id))
-                        .order("snapshot_date", desc=True)
-                        .limit(1)
+                    .select("snapshot_date")
+                    .eq("store_id", str(store_id))
+                    .order("snapshot_date", desc=True)   # newest first
+                    .limit(1)
+                    .execute()).data
+
+    if latest_snapshot:
+        latest_date = latest_snapshot[0]["snapshot_date"]
+        inv_rows = (supabase.table("inventory")
+                .select("sku,qty")
+                .eq("store_id", str(store_id))
+                .eq("snapshot_date", latest_date)
+                .execute()).data or []
+
+    distinct_skus = set()
+    total_inventory_units = 0
+    for row in inv_rows:
+        if row.get("sku"):
+            distinct_skus.add(row["sku"])
+        if row.get("qty") is not None:
+            total_inventory_units += row["qty"]
+
+        # Step 1: Fetch lookahead_days for the user
+    user_row = (supabase.table("user")
+                        .select("lookahead_days")
+                        .eq("role_user_id", role_user_id)
+                        .single()
                         .execute()).data
 
     inv_rows = []

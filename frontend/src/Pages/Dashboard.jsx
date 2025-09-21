@@ -767,7 +767,7 @@ import axios from "axios";
 import {
   FiMenu, FiX, FiDatabase, FiTrendingUp, FiSettings,
   FiUpload, FiBarChart2, FiLogOut, FiRefreshCw, FiShoppingBag,
-  FiAlertTriangle, FiCheckCircle, FiInfo
+  FiAlertTriangle, FiCheckCircle, FiInfo, FiBox, FiCalendar
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -912,11 +912,10 @@ const MetricCard = React.memo(({ icon, title, value, subValue = null }) => (
   </motion.div>
 ));
 
-const Header = React.memo(({ lastUpdated, onRefresh }) => (
+const Header = React.memo(({ onRefresh }) => (
   <header className="relative flex justify-center items-center mb-6">
     <div className="text-center">
       <h1 className="text-3xl font-bold text-white">Control Tower Dashboard</h1>
-      <p className="text-sm text-slate-400 mt-1">Last updated: {new Date(lastUpdated).toLocaleString()}</p>
     </div>
     <button 
       onClick={onRefresh} 
@@ -940,23 +939,25 @@ const Sidebar = React.memo(({ isOpen, onClose, permissions }) => {
                         <button onClick={onClose} className="text-slate-400 hover:text-white"><FiX size={24} /></button>
                     </div>
                     <nav className="space-y-3">
-                        {hasPermission("POST:/store_upload") && (
-                            <button onClick={() => navigate("/file-upload")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiUpload className="mr-3" /> File Upload</button>
-                        )}
-                        {hasPermission("GET:/admin/users") && (
-                            <button onClick={() => navigate("/adminprivileges")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiSettings className="mr-3" /> Manage Users</button>
-                        )}
-                        {hasPermission("GET:/dashboard") && (
-                            <button className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiBarChart2 className="mr-3" /> Reports</button>
-                        )}
-                        <button onClick={() => navigate("/rebalancer")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiRefreshCw className="mr-3" /> Rebalancer</button>
-                        {hasPermission("POST:/config/apply-formula") && (
-                            <button onClick={() => navigate("/Config")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiShoppingBag className="mr-3" /> Configuration</button>
-                        )}
-                        <div className="!mt-auto pt-4 border-t border-slate-700">
-                             <button onClick={() => navigate("/")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiLogOut className="mr-3" /> Logout</button>
-                        </div>
-                    </nav>
+                      {hasPermission("POST:/store_upload") && (
+                          <button onClick={() => navigate("/file-upload")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiUpload className="mr-3" /> File Upload</button>
+                      )}
+                      {hasPermission("GET:/admin/users") && (
+                          <button onClick={() => navigate("/adminprivileges")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiSettings className="mr-3" /> Manage Users</button>
+                      )}
+                      {hasPermission("GET:/dashboard") && (
+                          <button className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiBarChart2 className="mr-3" /> Reports</button>
+                      )}
+                      {/* Added Forecast Button */}
+                      <button onClick={() => navigate("/forecast")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiTrendingUp className="mr-3" /> Forecast</button>
+                      <button onClick={() => navigate("/rebalancer")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiRefreshCw className="mr-3" /> Rebalancer</button>
+                      {hasPermission("POST:/config/apply-formula") && (
+                          <button onClick={() => navigate("/Config")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiShoppingBag className="mr-3" /> Configuration</button>
+                      )}
+                      <div className="!mt-auto pt-4 border-t border-slate-700">
+                          <button onClick={() => navigate("/")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiLogOut className="mr-3" /> Logout</button>
+                      </div>
+                  </nav>
                 </>
             )}  
         </div>
@@ -1076,7 +1077,8 @@ function Dashboard() {
               severity: a.severity || "Low",
               message: a.message,
               type: a.type ? a.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : "General",
-              store_id: a.store_id
+              store_id: a.store_id,
+              sku: a.sku // Add this line
             })),
             locations
           });
@@ -1119,13 +1121,13 @@ function Dashboard() {
       <main className="flex-1 p-6 transition-all duration-300">
         <Header lastUpdated={data.metrics.timestamp} onRefresh={() => window.location.reload()} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-120px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 ">
           {/* Main Content Column */}
           <div className="lg:col-span-2 space-y-6 flex flex-col">
 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <MetricCard icon={<FiTrendingUp size={24} className="text-blue-400" />} title="Current Demand" value={data.metrics.current_demand.toLocaleString()} />
-              <MetricCard icon={<FiDatabase size={24} className="text-green-400" />} title="Inventory Position" value={data.metrics.inventory_position.toLocaleString()}  />
-              <MetricCard icon={<FiAlertTriangle size={24} className="text-yellow-400" />} title="Weeks Of Supply" value={data.metrics.weeks_of_supply.toLocaleString()} />
+ <MetricCard icon={<FiTrendingUp size={24} className="text-blue-400" />} title="Current Demand" value={data.metrics.current_demand.toLocaleString()} />
+    <MetricCard icon={<FiBox size={24} className="text-green-400" />} title="Inventory Position" value={data.metrics.inventory_position.toLocaleString()}  />
+    <MetricCard icon={<FiCalendar size={24} className="text-yellow-400" />} title="Weeks Of Supply" value={data.metrics.weeks_of_supply.toLocaleString()} />
             </div>
 
             {/* Network View Map */}
@@ -1137,7 +1139,7 @@ function Dashboard() {
                   <span className="bg-yellow-900/50 px-2 py-1 rounded text-yellow-300">{data.metrics.skus_below_threshold} Below Threshold</span>
                 </div>
               </div>
-              <div className="rounded-lg overflow-hidden relative flex-1">
+              <div className="rounded-lg overflow-hidden relative h-[60vh]">
                 <MapContainer center={[20, 0]} zoom={2} style={{ height: "100%", width: "100%", backgroundColor: '#f0f0f0' }} scrollWheelZoom={true}>
                   <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
                   <ResetMapViewButton locations={data.locations} />
@@ -1184,7 +1186,7 @@ function Dashboard() {
           {/* Right Column */}
           <div className="lg:col-span-1 space-y-6 flex flex-col">
             {/* Alerts Panel */}
-            <div className="bg-slate-800 rounded-lg p-4 shadow-lg border border-slate-700 flex flex-col h-2/5">
+            <div className="bg-slate-800 rounded-lg p-4 shadow-lg border border-slate-700 flex flex-col h-[285px]">
               <div className="flex justify-between items-center mb-4 flex-shrink-0">
                 <h3 className="text-lg font-bold text-white">Alerts</h3>
                 <span className="text-sm bg-red-900/50 px-2 py-1 rounded text-red-300 font-semibold">{data.alerts.length} Total</span>
@@ -1198,7 +1200,7 @@ function Dashboard() {
                         {alert.severity === 'Low' && <FiCheckCircle className="text-green-400 mr-3 mt-1 flex-shrink-0" />}
                       <div>
                         <p className="text-sm font-semibold text-slate-200">{alert.message}</p>
-                        <p className="text-xs text-slate-400 mt-1">{alert.type} (Store: {alert.store_id})</p>
+                        <p className="text-xs text-slate-400 mt-1">{alert.type} (SKU: {alert.sku}, Store: {alert.store_id})</p>
                       </div>
                     </div>
                   </div>
@@ -1209,7 +1211,7 @@ function Dashboard() {
             </div>
 
 {/* Availability Chart */}
-            <div className="bg-slate-800 rounded-lg p-4 shadow-lg border border-slate-700 flex-1 flex flex-col">
+            <div className="bg-slate-800 rounded-lg p-4 shadow-lg border border-slate-700 flex flex-col h-[320px]">
                 <h3 className="text-lg font-bold text-white">SKU Availability Rate</h3>
                 <p className="text-sm text-slate-400 mb-4 flex-shrink-0">Weekly historical availability.</p>
                 <div className="w-full flex-1">
