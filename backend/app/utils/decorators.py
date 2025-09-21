@@ -17,6 +17,11 @@ _route_map = Map(_route_rules)
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # 💡 KEY CHANGE: Add the CORS preflight check here as well
+        if request.method == 'OPTIONS':
+            return jsonify({'message': 'CORS preflight successful'}), 200
+
+        # --- Your existing logic continues below ---
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
         if not token:
             return jsonify({"error": "Missing token"}), 401
@@ -38,6 +43,8 @@ def admin_required(f):
 def role_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
+        if request.method == 'OPTIONS':
+            return jsonify({'message': 'CORS preflight successful'}), 200
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
         if not token:
             return jsonify({"error": "Missing token"}), 401
