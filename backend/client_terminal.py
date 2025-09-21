@@ -6,8 +6,6 @@ from datetime import date
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
-from tabulate import tabulate
-
 load_dotenv()
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("ANON_KEY")
@@ -912,8 +910,7 @@ MENU_OPTIONS = {
             "11": {"desc": "Forecast Run Logs", "route": "GET:/forecast/logs"}
         
         }
-    },
-    "16" : {"desc": "Rebalancer", "route": "POST:/rebalance"}
+    }
 }
 
 
@@ -1346,109 +1343,6 @@ def forecast_menu(token):
         else:
             print("❌ Invalid choice. Try again.")
 
-def rebalancer(token):
-    """
-    Client function to trigger inventory rebalancing and optionally download the results.
-    """
-    url = f"{BASE_URL}/rebalance"
-    headers = {"Authorization": f"Bearer {token}"}
-
-    print("📦 Inventory Rebalancing Client\n")
-
-    try:
-        ddos_days = int(input("Enter Desired Days of Supply (DDOS): ").strip())
-    except ValueError:
-        print("❌ Invalid input. Please enter a number.")
-        return
-
-    payload = {"ddos_days": ddos_days}
-
-    # Make the single API call to get the detailed allocations
-    try:
-        url = f"{BASE_URL}/rebalance"
-        resp = requests.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
-
-        data = resp.json()
-        allocations = data.get("allocations", [])
-
-        if not allocations:
-            print("\n✅ No transfers required. Inventory is already balanced.")
-            return
-
-    except requests.exceptions.RequestException as e:
-        print(f"❌ API request failed: {e}")
-        return
-
-    # Now, present the menu to the user
-    while True:
-        print("\n--- Options ---")
-        print("1. View Detailed SKU-level Transfers & Download")
-        print("2. View Transfer Summary by Route")
-        print("3. Exit")
-        
-        choice = input("Enter your choice (1-3): ").strip()
-
-        if choice == '1':
-            # Display detailed SKU-level transfers
-            print("\n📊 Recommended Transfers (Detailed):\n")
-            table = [
-                [i + 1, a["src"], a["dst"], a["sku"], a["units"]]
-                for i, a in enumerate(allocations)
-            ]
-            headers_ = ["#", "Source", "Destination", "SKU", "Units"]
-            print(tabulate(table, headers=headers_, tablefmt="fancy_grid"))
-            
-            # Then, immediately ask about downloading
-            download_choice = input("\nDo you want to download these results as a CSV? (y/n): ").strip().lower()
-
-            if download_choice == 'y':
-                # Make a separate API call to the download endpoint
-                try:
-                    download_url = f"{BASE_URL}/rebalance/download"
-                    download_resp = requests.post(download_url, json=payload, headers=headers)
-                    download_resp.raise_for_status()
-                    
-                    # Save the CSV content to a file
-                    filename = f"rebalancing_recommendations_{date.today().strftime('%Y-%m-%d')}.csv"
-                    with open(filename, "w", newline="") as f:
-                        f.write(download_resp.text)
-                    
-                    print(f"✅ Successfully downloaded recommendations to '{filename}'.")
-                    
-                except requests.exceptions.RequestException as e:
-                    print(f"❌ API request failed for download: {e}")
-
-        elif choice == '2':
-            # Make a separate API call to get the summary
-            try:
-                summary_url = f"{BASE_URL}/rebalance/summary"
-                summary_resp = requests.post(summary_url, json=payload, headers=headers)
-                summary_resp.raise_for_status()
-                
-                summary_data = summary_resp.json().get("summary", [])
-                
-                if not summary_data:
-                    print("\n✅ No transfers required. Inventory is already balanced.")
-                else:
-                    print("\n📊 Transfer Summary by Route:\n")
-                    summary_table = [
-                        [i + 1, s["src"], s["dest"], s["distinct_skus"], s["total_units"]]
-                        for i, s in enumerate(summary_data)
-                    ]
-                    summary_headers = ["#", "Source", "Destination", "Distinct SKUs", "Total Units"]
-                    print(tabulate(summary_table, headers=summary_headers, tablefmt="fancy_grid"))
-
-            except requests.exceptions.RequestException as e:
-                print(f"❌ API request failed for summary: {e}")
-
-        elif choice == '3':
-            print("Goodbye!")
-            break
-
-        else:
-            print("Invalid choice. Please enter a number from 1 to 3.")
-
 
 def main():
     while True:
@@ -1519,8 +1413,7 @@ def main():
                         display_availability_from_db(token)
                     elif action == "15":
                         forecast_menu(token)
-                    elif action =="16" :
-                        rebalancer(token)
+
                     else:
                         print("❌ Invalid choice.")
         else:
