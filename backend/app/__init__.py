@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, app
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 from flask_cors import CORS
@@ -18,17 +18,17 @@ def create_app():
     from app.models import user
     db.init_app(app)
     # CORS(app, resources={r"/*": {"origins": "*"}})
-    CORS(
-        app,
-        origins=["http://localhost:5173"],  # only allow your frontend
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization"],
-        supports_credentials=True
-    )
+    CORS(app, resources={r"/api/*": {
+        "origins": "http://localhost:5173",
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }})
+
 
 
     # ✅ Register Blueprints INSIDE this function
-    from app.routes import auth, dashboard, alerts, upload, config, store_upload, node_location_update, reorder, availability, admin, forecast
+    from app.routes import auth, dashboard, alerts, upload, config, store_upload, node_location_update, reorder, availability, admin, forecast, rebalancer
     app.register_blueprint(auth.bp)
     app.register_blueprint(admin.bp, url_prefix="/admin")
     app.register_blueprint(dashboard.bp)
@@ -41,6 +41,7 @@ def create_app():
     app.register_blueprint(reorder.bp)
     app.register_blueprint(availability.bp)
     app.register_blueprint(forecast.bp)
+    app.register_blueprint(rebalancer.bp, url_prefix='/api')
 
     return app
 

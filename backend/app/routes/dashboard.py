@@ -227,11 +227,25 @@ def recompute_dashboard_metrics():
         current_demand = sum(float(r.predicted or 0) for r in forecast_rows)
 
         # ── Metrics ──────────────────────────────────────────
-        inv_total = r2(sum(float(r["qty"]) for r in inv_rows))
-        adu_vals = [float(r["avg_daily_usage"]) for r in rc_rows if r["avg_daily_usage"]]
-        avg_adu = (sum(adu_vals) / len(adu_vals)) if adu_vals else None
-        weeks_of_supply = r2(inv_total / (avg_adu * 7), 1) if avg_adu else None
-        rop_total = sum(float(r["reorder_point"] or 0) for r in rc_rows)
+        
+        # ── Weeks of Supply Calculation ─────────────────────────
+        inv_total = r2(sum(float(r.qty) for r in inv_rows))
+
+        # Use forecast first
+        if forecast_rows:
+            unique_days = len(set(f.date for f in forecast_rows))
+            if unique_days > 0:
+                total_forecast = sum(float(f.predicted or 0) for f in forecast_rows)
+                avg_daily = total_forecast / unique_days
+                weeks_of_supply = r2(inv_total / (avg_daily * 7), 1)
+            else:
+                weeks_of_supply = None
+        else:
+            # Fallback to reorder_config
+            adu_vals = [float(r["avg_daily_usage"]) for r in rc_rows if r["avg_daily_usage"]]
+            avg_adu = (sum(adu_vals) / len(adu_vals)) if adu_vals else None
+            weeks_of_supply = r2(inv_total / (avg_adu * 7), 1) if avg_adu else None
+
         inventory_position = r2(inv_total)
 
         rc_map = {(r["store_id"], r["sku"]): r for r in rc_rows}
