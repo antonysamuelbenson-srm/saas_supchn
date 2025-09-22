@@ -18,12 +18,20 @@ def create_app():
     from app.models import user
     db.init_app(app)
     # CORS(app, resources={r"/*": {"origins": "*"}})
-    CORS(app, resources={r"/api/*": {
-        "origins": "http://localhost:5173",
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True
-    }})
+    # CORS(app, resources={r"/api/*": {
+    #     "origins": "http://localhost:5173",
+    #     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    #     "allow_headers": ["Content-Type", "Authorization"],
+    #     "supports_credentials": True
+    # }})
+
+    # Replace your current CORS line with this simpler version:
+    CORS(app,
+        origins="http://localhost:5173",
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
+        supports_credentials=True
+    )
 
 
 

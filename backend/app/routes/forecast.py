@@ -918,3 +918,26 @@ def get_stores():
         return jsonify({"stores": store_list}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+
+# # In your Flask backend file (e.g., routes.py)
+
+# # In your Flask backend file (e.g., routes.py)
+
+# @bp.route("/stores", methods=["GET"])
+# @role_required
+# def get_stores():
+#     """Returns a list of all stores formatted for the filter dropdown."""
+#     try:
+#         # 1. Query the database for the store ID and name
+#         stores = db.session.query(Store.store_id, Store.name).all()
+        
+#         # 2. Format the data into {value, label} objects for the frontend
+#         store_list = [{"value": s.store_id, "label": f"{s.name} (ID: {s.store_id})"} for s in stores]
+        
+#         # 3. Return the correctly formatted JSON
+#         return jsonify({"stores": store_list}), 200
+#     except Exception as e:
+#         print(f"Error in /stores endpoint: {e}") 
+#         return jsonify({"error": str(e)}), 500
