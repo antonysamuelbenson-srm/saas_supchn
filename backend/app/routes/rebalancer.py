@@ -1,5 +1,10 @@
 from flask import Blueprint, request, jsonify, Response
-from app.services.rebalancer_services import run_rebalancer, convert_to_csv, get_transfer_summary
+from app.services.rebalancer_services import (
+    run_rebalancer, 
+    convert_to_csv, 
+    get_transfer_summary,
+    get_transfer_details
+)
 from app.utils.decorators import role_required
 import logging
 from datetime import date
@@ -20,12 +25,22 @@ def get_rebalancing_recommendations():
         if not isinstance(ddos_days, int) or ddos_days <= 0:
             return jsonify({"error": "ddos_days must be a positive integer."}), 400
 
-        allocations = run_rebalancer(ddos_days)
+        allocations, shortages_excesses, transfer_info_map = run_rebalancer(ddos_days)
 
         if "error" in allocations:
             return jsonify(allocations), 500
         
-        return jsonify({"allocations": allocations, "message": "Rebalancing completed successfully."}), 200
+        # Get enriched, detailed recommendations
+        detailed_allocations = get_transfer_details(allocations, shortages_excesses, transfer_info_map, ddos_days)
+        
+        # Get summary data and include it in the response
+        summary_data = get_transfer_summary(allocations, shortages_excesses, transfer_info_map, ddos_days)
+        
+        return jsonify({
+            "allocations": detailed_allocations,
+            "summary": summary_data,
+            "message": "Rebalancing completed successfully."
+        }), 200
 
     except Exception as e:
         logger.error(f"An unhandled error occurred in the route: {e}", exc_info=True)
@@ -44,12 +59,15 @@ def download_rebalancing_results():
         if not isinstance(ddos_days, int) or ddos_days <= 0:
             return jsonify({"error": "ddos_days must be a positive integer."}), 400
 
-        allocations = run_rebalancer(ddos_days)
+        allocations, shortages_excesses, transfer_info_map = run_rebalancer(ddos_days)
         
         if "error" in allocations:
             return jsonify(allocations), 500
+        
+        # Get enriched, detailed recommendations
+        detailed_allocations = get_transfer_details(allocations, shortages_excesses, transfer_info_map, ddos_days)
 
-        csv_data = convert_to_csv(allocations)
+        csv_data = convert_to_csv(detailed_allocations)
         filename = f"rebalancing_recommendations_{date.today().strftime('%Y-%m-%d')}.csv"
         
         response = Response(csv_data, mimetype="text/csv")
@@ -74,12 +92,12 @@ def get_rebalancing_summary():
         if not isinstance(ddos_days, int) or ddos_days <= 0:
             return jsonify({"error": "ddos_days must be a positive integer."}), 400
 
-        allocations = run_rebalancer(ddos_days)
+        allocations, shortages_excesses, transfer_info_map = run_rebalancer(ddos_days)
 
         if "error" in allocations:
             return jsonify(allocations), 500
         
-        summary = get_transfer_summary(allocations)
+        summary = get_transfer_summary(allocations, shortages_excesses, transfer_info_map, ddos_days)
         
         return jsonify({"summary": summary, "message": "Rebalancing summary completed successfully."}), 200
 
