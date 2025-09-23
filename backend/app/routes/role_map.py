@@ -82,8 +82,6 @@ ROUTE_ROLE_MAP = {
 
         # --- Rebalancer ---
     "POST:/api/rebalance": ["admin"],
-    "POST:/api/rebalance/download": ["admin"],
-    "POST:/api/rebalance/summary": ["admin"],
 
 
 }
