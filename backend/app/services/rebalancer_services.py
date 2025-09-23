@@ -30,7 +30,7 @@ def compute_shortages_excesses(ddos_days: int):
         .join(Store, Store.store_id == InventorySnapshot.store_id)
         .outerjoin(
             Forecast,
-            (Forecast.store_id == Store.store_code) & 
+            (Forecast.store_id == Store.store_code) &
             (Forecast.product_id == InventorySnapshot.sku) &
             (Forecast.date >= today) &
             (Forecast.date < future)
@@ -54,6 +54,7 @@ def compute_shortages_excesses(ddos_days: int):
             "sku": r.sku,
             "inventory": int(inv_qty),
             "target": int(tgt_qty),
+            "forecast": int(tgt_qty), # Store forecast explicitly
             "shortage": short,
             "excess": excess,
         })
@@ -82,16 +83,47 @@ def get_transfer_costs():
 def convert_to_csv(data):
     """
     Converts a list of dictionaries to a CSV formatted string.
+    
+    This function has been updated to use explicit column names to ensure
+    consistent and correct headers in the output file.
     """
     if not data:
         return ""
     
     output = StringIO()
-    keys = data[0].keys()
-    writer = csv.DictWriter(output, fieldnames=keys)
     
+    # Explicitly define the column names for the CSV file
+    fieldnames = [
+        "Source",
+        "Destination",
+        "SKU",
+        "Units",
+        "Source Inventory",
+        "Destination Inventory",
+        "Source DOS",
+        "Destination DOS",
+        "Arrival Date"
+    ]
+    
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    
+    # Create a new list of dictionaries with keys matching the fieldnames
+    rows = []
+    for row in data:
+        rows.append({
+            "Source": row["src"],
+            "Destination": row["dst"],
+            "SKU": row["sku"],
+            "Units": row["units"],
+            "Source Inventory": row["src_current_inventory"],
+            "Destination Inventory": row["dst_current_inventory"],
+            "Source DOS": row["src_days_of_supply"],
+            "Destination DOS": row["dst_days_of_supply"],
+            "Arrival Date": row["arrival_date"]
+        })
+
     writer.writeheader()
-    writer.writerows(data)
+    writer.writerows(rows)
     
     return output.getvalue()
 
@@ -100,14 +132,14 @@ def run_rebalancer(ddos_days: int):
     Main rebalancer logic to run the Pulp optimization model.
     """
     if ddos_days <= 0:
-        return {"error": "DDOS days must be a positive integer."}
+        return {"error": "DDOS days must be a positive integer."}, None, None
     
     try:
         shortages_excesses = compute_shortages_excesses(ddos_days)
         transfer_info_map = get_transfer_costs()
 
         if not transfer_info_map:
-            return []
+            return [], shortages_excesses, transfer_info_map
 
         excess = {(r["store"], r["sku"]): r["excess"] for r in shortages_excesses if r["excess"] > 0}
         shortage = {(r["store"], r["sku"]): r["shortage"] for r in shortages_excesses if r["shortage"] > 0}
@@ -167,17 +199,92 @@ def run_rebalancer(ddos_days: int):
                     units = int(var.varValue)
                     allocations.append({"src": src, "dst": dst, "sku": sku, "units": units})
         
-        return allocations
+        return allocations, shortages_excesses, transfer_info_map
 
     except Exception as e:
         logger.error(f"An error occurred during rebalancing: {e}", exc_info=True)
-        return {"error": "Internal server error."}
+        return {"error": "Internal server error."}, None, None
     
-def get_transfer_summary(allocations: list):
+def get_supply_details(store: str, sku: str, shortages_excesses: list, ddos_days: int):
     """
-    Aggregates rebalancing allocations to provide a summary by src-dest pair.
+    Helper function to get inventory and days of supply for a store/sku.
     """
-    summary = defaultdict(lambda: {"distinct_skus": set(), "total_units": 0})
+    # Use a dictionary for faster lookups.
+    data_map = {(item["store"], item["sku"]): item for item in shortages_excesses}
+    
+    item = data_map.get((store, sku))
+    
+    if item:
+        inv = item["inventory"]
+        forecast = item["forecast"]
+        
+        # Daily demand is forecast divided by DDOS days. Handle division by zero.
+        daily_demand = forecast / ddos_days if ddos_days > 0 else 0
+        
+        # Days of Supply (DOS) is current inventory divided by daily demand. Handle division by zero.
+        dos = inv / daily_demand if daily_demand > 0 else float('inf')
+        
+        return inv, round(dos, 2)
+    
+    return 0, 0
+
+def get_transfer_group_supply_details(store: str, skus: set, shortages_excesses: list, ddos_days: int):
+    """
+    Computes overall inventory and days of supply for a store, for a specific group of SKUs.
+    """
+    total_inventory = 0
+    total_forecast = 0
+    
+    for item in shortages_excesses:
+        if item["store"] == store and item["sku"] in skus:
+            total_inventory += item["inventory"]
+            total_forecast += item["forecast"]
+            
+    # Daily demand is total forecast divided by DDOS days. Handle division by zero.
+    daily_demand = total_forecast / ddos_days if ddos_days > 0 else 0
+    
+    # Days of Supply (DOS) is total inventory divided by daily demand.
+    overall_dos = total_inventory / daily_demand if daily_demand > 0 else float('inf')
+    
+    return overall_dos, total_inventory
+
+def get_transfer_details(allocations: list, shortages_excesses: list, transfer_info_map: dict, ddos_days: int):
+    """
+    Enriches the allocation data with detailed information for the download view.
+    """
+    detailed_allocations = []
+    today = date.today()
+    for allocation in allocations:
+        src = allocation['src']
+        dst = allocation['dst']
+        sku = allocation['sku']
+        units = allocation['units']
+        
+        src_inv, src_dos = get_supply_details(src, sku, shortages_excesses, ddos_days)
+        dst_inv, dst_dos = get_supply_details(dst, sku, shortages_excesses, ddos_days)
+        
+        lead_time = transfer_info_map.get(src, {}).get(dst, {}).get('lead_time', 0)
+        arrival_date = today + timedelta(days=lead_time)
+        
+        detailed_allocations.append({
+            "src": src,
+            "dst": dst,
+            "sku": sku,
+            "units": units,
+            "src_current_inventory": src_inv,
+            "dst_current_inventory": dst_inv,
+            "src_days_of_supply": src_dos,
+            "dst_days_of_supply": dst_dos,
+            "arrival_date": arrival_date.isoformat()
+        })
+    return detailed_allocations
+
+def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_info_map: dict, ddos_days: int):
+    """
+    Aggregates rebalancing allocations to provide a summary by src-dest pair,
+    including DOS for the transferred SKUs and arrival dates.
+    """
+    summary = defaultdict(lambda: {"distinct_skus": set(), "total_units": 0, "arrival_date": None})
     
     for allocation in allocations:
         src = allocation['src']
@@ -185,16 +292,29 @@ def get_transfer_summary(allocations: list):
         sku = allocation['sku']
         units = allocation['units']
         
+        # Calculate arrival date
+        lead_time = transfer_info_map.get(src, {}).get(dst, {}).get('lead_time', 0)
+        arrival_date = date.today() + timedelta(days=lead_time)
+        
         summary[(src, dst)]["distinct_skus"].add(sku)
         summary[(src, dst)]["total_units"] += units
+        summary[(src, dst)]["arrival_date"] = arrival_date.isoformat()
         
     formatted_summary = []
     for (src, dst), data in summary.items():
+        # Use the new helper function to get DOS for the transferred group of SKUs
+        skus_in_transfer = data["distinct_skus"]
+        src_dos, _ = get_transfer_group_supply_details(src, skus_in_transfer, shortages_excesses, ddos_days)
+        dst_dos, _ = get_transfer_group_supply_details(dst, skus_in_transfer, shortages_excesses, ddos_days)
+        
         formatted_summary.append({
             "src": src,
             "dest": dst,
             "distinct_skus": len(data["distinct_skus"]),
-            "total_units": data["total_units"]
+            "total_units": data["total_units"],
+            "src_days_of_supply": round(src_dos, 2),
+            "dst_days_of_supply": round(dst_dos, 2),
+            "arrival_date": data["arrival_date"]
         })
         
     return formatted_summary
