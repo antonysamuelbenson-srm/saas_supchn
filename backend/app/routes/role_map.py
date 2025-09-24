@@ -83,5 +83,8 @@ ROUTE_ROLE_MAP = {
         # --- Rebalancer ---
     "POST:/api/rebalance": ["admin"],
 
+    # ---filters ---
+    "GET:/store_inventory_summary": ["admin", "viewer"],  # Adjust roles as needed
+
 
 }

@@ -914,7 +914,8 @@ MENU_OPTIONS = {
         
         }
     },
-    "16" : {"desc": "Rebalancer", "route": "POST:/api/rebalance"}
+    "16" : {"desc": "Rebalancer", "route": "POST:/api/rebalance"},
+    "17": {"desc": "Inventory Levels Filter", "route": "GET:/store_inventory_summary"}  # Add this line
 }
 
 
@@ -1468,6 +1469,123 @@ def rebalancer(token):
         else:
             print("Invalid choice. Please enter a number from 1 to 4.")
 
+def inventory_levels_filter(token):
+    """
+    Interactive inventory levels filter using existing API endpoints
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    def get_inventory_levels_api(level_filter=None, store_ids=None):
+        """Fetch inventory levels via API"""
+        url = f"{BASE_URL}/store_inventory_summary"  # You'll need to create this endpoint
+        params = {}
+        
+        if level_filter:
+            params['level_category'] = level_filter
+        if store_ids:
+            params['store_ids'] = ','.join(map(str, store_ids))
+            
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=20)
+            if response.ok:
+                return response.json().get('data', [])
+            else:
+                print(f"❌ API Error: {response.status_code} - {response.text}")
+                return []
+        except Exception as e:
+            print(f"❌ Request failed: {e}")
+            return []
+    
+    def display_results(data, title):
+        print(f"\n📊 {title}")
+        print("-" * len(title))
+        
+        if not data:
+            print("❌ No data found for the selected criteria.")
+            return
+        
+        for row in data:
+            print(f"🏬 Store: {row.get('store_name', 'N/A')} (ID: {row.get('store_id', 'N/A')})")
+            print(f"   📍 Location: {row.get('store_location', 'N/A')}")
+            print(f"   📦 Current: {row.get('current_inventory', 0)} / {row.get('max_capacity', 0)} units")
+            print(f"   📊 Level: {row.get('inventory_percentage', 0):.1f}% ({row.get('level_category', 'N/A')})")
+            print(f"   🎯 Target: {row.get('target_level', 0)} | Safety: {row.get('safety_stock', 0)}")
+            print(f"   ⚡ Status: {row.get('operational_status', 'N/A')}")
+            print(f"   🕒 Updated: {row.get('last_updated', 'N/A')}")
+            print()
+        
+        print(f"📈 Total Records: {len(data)}")
+    
+    # Main menu loop
+    while True:
+        print("\n" + "="*50)
+        print("📊 INVENTORY LEVELS FILTER")
+        print("="*50)
+        print("1. 🔴 Low Inventory Stores (< 20%)")
+        print("2. 🟡 Medium Inventory Stores (20% - 80%)")
+        print("3. 🟢 High Inventory Stores (> 80%)")
+        print("4. 📈 All Stores")
+        print("5. 🔍 Custom Store Filter")
+        print("6. 📊 Summary Statistics")
+        print("7. ❌ Back to Main Menu")
+        print("="*50)
+        
+        choice = input("Enter your choice (1-7): ").strip()
+        
+        if choice == "1":
+            data = get_inventory_levels_api(level_filter='Low')
+            display_results(data, "LOW INVENTORY STORES (< 20%)")
+            
+        elif choice == "2":
+            data = get_inventory_levels_api(level_filter='Medium')
+            display_results(data, "MEDIUM INVENTORY STORES (20% - 80%)")
+            
+        elif choice == "3":
+            data = get_inventory_levels_api(level_filter='High')
+            display_results(data, "HIGH INVENTORY STORES (> 80%)")
+            
+        elif choice == "4":
+            data = get_inventory_levels_api()
+            display_results(data, "ALL STORES")
+            
+        elif choice == "5":
+            print("\n🔍 Custom Store Filter")
+            try:
+                store_ids_input = input("Enter store IDs (comma-separated, e.g., 167,168,169): ")
+                store_ids = [int(x.strip()) for x in store_ids_input.split(',') if x.strip()]
+                
+                level_input = input("Enter level filter (Low/Medium/High or press Enter for all): ").strip()
+                level_filter = level_input if level_input in ['Low', 'Medium', 'High'] else None
+                
+                data = get_inventory_levels_api(level_filter=level_filter, store_ids=store_ids)
+                display_results(data, "CUSTOM FILTER RESULTS")
+                
+            except ValueError:
+                print("❌ Invalid store IDs format. Please enter numbers separated by commas.")
+        
+        elif choice == "6":
+            # Use existing API or create a summary endpoint
+            url = f"{BASE_URL}/store_inventory_summary/stats"
+            try:
+                response = requests.get(url, headers=headers, timeout=20)
+                if response.ok:
+                    stats = response.json().get('data', [])
+                    print("\n📊 INVENTORY LEVEL SUMMARY")
+                    for row in stats:
+                        print(f"{row['level_category']:>6}: {row['store_count']} stores "
+                              f"(avg: {row['avg_percentage']}%, "
+                              f"range: {row['min_percentage']}%-{row['max_percentage']}%)")
+                else:
+                    print(f"❌ Failed to fetch summary: {response.text}")
+            except Exception as e:
+                print(f"❌ Error getting summary: {e}")
+        
+        elif choice == "7":
+            break
+        else:
+            print("❌ Invalid choice. Please enter 1-7.")
+        
+        input("\nPress Enter to continue...")
 
 
 def main():
@@ -1541,10 +1659,11 @@ def main():
                         forecast_menu(token)
                     elif action =="16" :
                         rebalancer(token)
+                    elif action == "17":  
+                        inventory_levels_filter(token)
                     else:
                         print("❌ Invalid choice.")
-        else:
-            print("❌ Invalid input. Enter 1 or 2.")
+
 
 
 if __name__ == "__main__":
