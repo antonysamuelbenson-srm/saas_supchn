@@ -867,7 +867,11 @@ def get_forecast_accuracy():
     )
 
     if skus_str: base_query = base_query.filter(Forecast.product_id.in_(skus_str.split(',')))
-    if store_ids_str: base_query = base_query.filter(Forecast.store_id.in_(store_ids_str.split(',')))
+    
+    if store_ids_str:
+        # This is the corrected line. It converts the store IDs to integers.
+        store_ids = [int(s_id) for s_id in store_ids_str.split(',')]
+        base_query = base_query.filter(Forecast.store_id.in_(store_ids))
     
     daily_data = base_query.all()
 
@@ -904,7 +908,6 @@ def get_forecast_accuracy():
         "overall": { "actuals": round(total_actual_overall, 2), "forecast": round(total_predicted_overall, 2), "wmape": round(overall_wmape, 2), "mae": round(overall_mae, 2) },
         "granular": sorted(granular_results, key=lambda x: (x['week_start'], x['store_id'], x['sku']))
     }), 200
-
 # --- FILTER DROPDOWN ENDPOINTS ---
 
 # ⭐ THIS IS THE CORRECTED FUNCTION ⭐
