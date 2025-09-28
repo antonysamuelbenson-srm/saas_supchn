@@ -1348,11 +1348,127 @@ def forecast_menu(token):
             print("❌ Invalid choice. Try again.")
 
 
+# def rebalancer(token):
+#     """
+#     Client function to trigger inventory rebalancing, fetching all required
+#     data in a single API call.
+#     """
+#     headers = {"Authorization": f"Bearer {token}"}
+    
+#     # helper function to convert the data to a CSV string
+#     def convert_to_csv_client(data):
+#         if not data:
+#             return ""
+        
+#         output = StringIO()
+        
+#         fieldnames = [
+#             "Source",
+#             "Destination",
+#             "SKU",
+#             "Units",
+#             "Source Inventory",
+#             "Destination Inventory",
+#             "Source DOS",
+#             "Destination DOS",
+#             "Arrival Date"
+#         ]
+        
+#         writer = csv.DictWriter(output, fieldnames=fieldnames)
+#         writer.writeheader()
+        
+#         rows = []
+#         for row in data:
+#             rows.append({
+#                 "Source": row["src"],
+#                 "Destination": row["dst"],
+#                 "SKU": row["sku"],
+#                 "Units": row["units"],
+#                 "Source Inventory": row["src_current_inventory"],
+#                 "Destination Inventory": row["dst_current_inventory"],
+#                 "Source DOS": row["src_days_of_supply"],
+#                 "Destination DOS": row["dst_days_of_supply"],
+#                 "Arrival Date": row["arrival_date"]
+#             })
+#         writer.writerows(rows)
+#         return output.getvalue()
+
+
+#     print("📦 Inventory Rebalancing Client\n")
+
+#     try:
+#         ddos_days = int(input("Enter Desired Days of Supply (DDOS): ").strip())
+#     except ValueError:
+#         print("❌ Invalid input. Please enter a number.")
+#         return
+
+#     payload = {"ddos_days": ddos_days}
+
+#     try:
+#         # Make a single, efficient API call to get both detailed and summary data
+#         print("⏳ Calculating rebalancing recommendations...")
+#         url = f"{BASE_URL}/api/rebalance"
+#         resp = requests.post(url, json=payload, headers=headers)
+#         resp.raise_for_status()
+
+#         data = resp.json()
+#         allocations = data.get("allocations", [])
+#         summary_data = data.get("summary", [])
+
+#         if not allocations:
+#             print("\n✅ No transfers required. Inventory is already balanced.")
+#             return
+
+#     except requests.exceptions.RequestException as e:
+#         print(f"❌ API request failed: {e}")
+#         # Exit gracefully if the initial request fails
+#         return
+
+#     # Now, present the menu using the data you already have
+#     while True:
+#         print("\n--- Options ---")
+#         print("1. View Detailed SKU-level Transfers")
+#         print("2. View Transfer Summary by Route")
+#         print("3. Download Results as CSV")
+#         print("4. Exit")
+        
+#         choice = input("Enter your choice (1-4): ").strip()
+
+#         if choice == '1':
+#             print("\n📊 Recommended Transfers (Detailed):\n")
+#             table = [
+#                 [i + 1, a["src"], a["dst"], a["sku"], a["units"], a["src_days_of_supply"], a["dst_days_of_supply"], a["src_current_inventory"], a["dst_current_inventory"], a["arrival_date"]]
+#                 for i, a in enumerate(allocations)
+#             ]
+#             headers_ = ["#", "Source", "Destination", "SKU", "Units", "Src DOS", "Dst DOS", "Src Inv", "Dst Inv", "Arrival Date"]
+#             print(tabulate(table, headers=headers_, tablefmt="fancy_grid"))
+
+#         elif choice == '2':
+#             print("\n📊 Transfer Summary by Route:\n")
+#             summary_table = [
+#                 [i + 1, s["src"], s["dest"], s["distinct_skus"], s["total_units"], s["src_days_of_supply"], s["dst_days_of_supply"], s["arrival_date"]]
+#                 for i, s in enumerate(summary_data)
+#             ]
+#             summary_headers = ["#", "Source", "Destination", "Distinct SKUs", "Total Units", "Src DOS", "Dst DOS", "Arrival Date"]
+#             print(tabulate(summary_table, headers=summary_headers, tablefmt="fancy_grid"))
+
+#         elif choice == '3':
+#             csv_data = convert_to_csv_client(allocations)
+#             filename = f"rebalancing_recommendations_{date.today().strftime('%Y-%m-%d')}.csv"
+            
+#             with open(filename, "w", newline="") as f:
+#                 f.write(csv_data)
+            
+#             print(f"✅ Successfully downloaded recommendations to '{filename}'.")
+
+#         elif choice == '4':
+#             print("Goodbye!")
+#             break
+
+#         else:
+#             print("Invalid choice. Please enter a number from 1 to 4.")
+
 def rebalancer(token):
-    """
-    Client function to trigger inventory rebalancing, fetching all required
-    data in a single API call.
-    """
     headers = {"Authorization": f"Bearer {token}"}
     
     # helper function to convert the data to a CSV string
@@ -1371,6 +1487,13 @@ def rebalancer(token):
             "Destination Inventory",
             "Source DOS",
             "Destination DOS",
+            "Source Avg Daily Forecast",
+            "Destination Avg Daily Forecast",
+            "Source Excess",
+            "Destination Shortage",
+            "Network Deficit",
+            "DDOS Shortage",
+            "Total Unfulfilled Shortage",
             "Arrival Date"
         ]
         
@@ -1388,6 +1511,13 @@ def rebalancer(token):
                 "Destination Inventory": row["dst_current_inventory"],
                 "Source DOS": row["src_days_of_supply"],
                 "Destination DOS": row["dst_days_of_supply"],
+                "Source Avg Daily Forecast": row["src_daily_forecast"],
+                "Destination Avg Daily Forecast": row["dst_daily_forecast"],
+                "Source Excess": row["src_excess"],
+                "Destination Shortage": row["dst_shortage"],
+                "Network Deficit": row["network_deficit"],
+                "DDOS Shortage": row["ddos_shortage"],
+                "Total Unfulfilled Shortage": row["total_unfulfilled_shortage"],
                 "Arrival Date": row["arrival_date"]
             })
         writer.writerows(rows)
@@ -1437,19 +1567,19 @@ def rebalancer(token):
         if choice == '1':
             print("\n📊 Recommended Transfers (Detailed):\n")
             table = [
-                [i + 1, a["src"], a["dst"], a["sku"], a["units"], a["src_days_of_supply"], a["dst_days_of_supply"], a["src_current_inventory"], a["dst_current_inventory"], a["arrival_date"]]
+                [i + 1, a["src"], a["dst"], a["sku"], a["units"], a["src_days_of_supply"], a["dst_days_of_supply"], a["src_current_inventory"], a["dst_current_inventory"], a["src_daily_forecast"], a["dst_daily_forecast"], a["src_excess"], a["dst_shortage"], a["network_deficit"], a["ddos_shortage"], a["total_unfulfilled_shortage"], a["arrival_date"]]
                 for i, a in enumerate(allocations)
             ]
-            headers_ = ["#", "Source", "Destination", "SKU", "Units", "Src DOS", "Dst DOS", "Src Inv", "Dst Inv", "Arrival Date"]
+            headers_ = ["#", "Source", "Destination", "SKU", "Units", "Src DOS", "Dst DOS", "Src Inv", "Dst Inv", "Src Avg Daily Forecast", "Dst Avg Daily Forecast", "Src Excess", "Dst Shortage", "Network Deficit", "DDOS Shortage", "Total Unfulfilled Shortage", "Arrival Date"]
             print(tabulate(table, headers=headers_, tablefmt="fancy_grid"))
 
         elif choice == '2':
             print("\n📊 Transfer Summary by Route:\n")
             summary_table = [
-                [i + 1, s["src"], s["dest"], s["distinct_skus"], s["total_units"], s["src_days_of_supply"], s["dst_days_of_supply"], s["arrival_date"]]
+                [i + 1, s["src"], s["dest"], s["distinct_skus"], s["total_units"], s["src_days_of_supply"], s["dst_days_of_supply"], s["src_daily_forecast"], s["dst_daily_forecast"], s["arrival_date"]]
                 for i, s in enumerate(summary_data)
             ]
-            summary_headers = ["#", "Source", "Destination", "Distinct SKUs", "Total Units", "Src DOS", "Dst DOS", "Arrival Date"]
+            summary_headers = ["#", "Source", "Destination", "Distinct SKUs", "Total Units", "Src DOS", "Dst DOS", "Src Avg Daily Forecast", "Dst Avg Daily Forecast", "Arrival Date"]
             print(tabulate(summary_table, headers=summary_headers, tablefmt="fancy_grid"))
 
         elif choice == '3':
@@ -1467,6 +1597,7 @@ def rebalancer(token):
 
         else:
             print("Invalid choice. Please enter a number from 1 to 4.")
+
 
 
 
