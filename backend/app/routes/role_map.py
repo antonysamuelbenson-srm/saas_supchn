@@ -85,6 +85,8 @@ ROUTE_ROLE_MAP = {
 
     # ---filters ---
     "GET:/store_inventory_summary": ["admin", "viewer"],  # Adjust roles as needed
+    "GET /api/weeks-of-supply/store-summary" : ["admin", "viewer"],
+    "POST /api/weeks-of-supply/refresh" : ["admin", "viewer"]
 
 
 }

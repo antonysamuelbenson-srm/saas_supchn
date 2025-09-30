@@ -890,12 +890,10 @@ MENU_OPTIONS = {
     "8": {"desc": "Check Stockouts After Reorder(store alert on map)", "route": "POST:/alerts/check-stockout-after-reorder"},
     "9": {"desc": "Individual store map alert", "route": "GET:/stores/with-alert-status"},
     "10": {"desc": "Show Forecasted Data", "route": "GET:/forecast/store/<int:store_id>"},
-    "11": {"desc": "Admin Privileges", "route": "GET:/admin/users"},  # Admin-only example
+    "11": {"desc": "Admin Privileges", "route": "GET:/admin/users"},
     "12": {"desc": "Logout", "route": None},
     "13": {"desc": "Place Reorder", "route": "POST:/reorder/place"},
-    "14": {
-    "desc": "View Weekly Availability Rate",
-    "route": "GET:/availability"},
+    "14": {"desc": "View Weekly Availability Rate", "route": "GET:/availability"},
     "15": {
         "desc": "Forecast",
         "route" : None,
@@ -911,13 +909,20 @@ MENU_OPTIONS = {
             "9": {"desc": "Forecast Chart Data", "route": "GET:/forecast/chart-data"},
             "10": {"desc": "Weekly forecasts", "route": "POST:/forecast/weekly"},
             "11": {"desc": "Forecast Run Logs", "route": "GET:/forecast/logs"}
-        
         }
     },
-    "16" : {"desc": "Rebalancer", "route": "POST:/api/rebalance"},
-    "17": {"desc": "Inventory Levels Filter", "route": "GET:/store_inventory_summary"}  # Add this line
+    "16": {"desc": "Rebalancer", "route": "POST:/api/rebalance"},
+    "17": {"desc": "Inventory Levels Filter", "route": "GET:/store_inventory_summary"},
+    "18": {
+        "desc": "Weeks of Supply Analysis",
+        "route": None,
+        "submenu": {
+            "1": {"desc": "View Store Summary", "route": "GET:/api/weeks-of-supply/store-summary"},
+            "2": {"desc": "Refresh Weeks of Supply Data", "route": "POST:/api/weeks-of-supply/refresh"},
+            "3": {"desc": "Back to Main Menu", "route": None}
+        }
+    }
 }
-
 
 def normalize_route(route):
     # Replace all <...> segments with <param> to match your ROUTE_ROLE_MAP style
@@ -1588,6 +1593,274 @@ def inventory_levels_filter(token):
         input("\nPress Enter to continue...")
 
 
+def weeks_of_supply_menu(token):
+    """Handle weeks of supply analysis menu"""
+    while True:
+        print("\n==== 📊 Weeks of Supply Analysis ====")
+        print("1. View Store Summary")
+        print("2. Recalculate Categories with Custom Thresholds")
+        print("3. Refresh Weeks of Supply Data")
+        print("4. Back to Main Menu")
+        
+        choice = input("\nEnter your choice: ").strip()
+        
+        if choice == "1":
+            view_weeks_of_supply_by_store(token)
+        elif choice == "2":
+            recalculate_categories_with_thresholds(token)
+        elif choice == "3":
+            refresh_weeks_of_supply(token)
+        elif choice == "4":
+            break
+        else:
+            print("❌ Invalid choice.")
+
+
+def recalculate_categories_with_thresholds(token):
+    """Recalculate categories based on custom week thresholds"""
+    print("\n🔧 Configure Category Thresholds")
+    print("="*60)
+    print("Current default thresholds:")
+    print("  🔴 Critical: < 2 weeks")
+    print("  🟠 Low: 2-4 weeks")
+    print("  🟢 Adequate: 4-8 weeks")
+    print("  🔵 High: >= 8 weeks")
+    print("="*60)
+    
+    try:
+        # Get custom thresholds from user
+        print("\nEnter new thresholds (press Enter to use defaults):")
+        
+        critical_input = input("Critical threshold (default: 2 weeks): ").strip()
+        critical_threshold = float(critical_input) if critical_input else 2
+        
+        low_input = input("Low threshold (default: 4 weeks): ").strip()
+        low_threshold = float(low_input) if low_input else 4
+        
+        adequate_input = input("Adequate threshold (default: 8 weeks): ").strip()
+        adequate_threshold = float(adequate_input) if adequate_input else 8
+        
+        # Validate thresholds
+        if critical_threshold <= 0 or low_threshold <= 0 or adequate_threshold <= 0:
+            print("❌ All thresholds must be positive numbers.")
+            return
+        
+        if not (critical_threshold < low_threshold < adequate_threshold):
+            print("❌ Thresholds must be in ascending order: critical < low < adequate")
+            return
+        
+        # Confirm with user
+        print(f"\n📋 New threshold configuration:")
+        print(f"  🔴 Critical: < {critical_threshold} weeks")
+        print(f"  🟠 Low: {critical_threshold} - {low_threshold} weeks")
+        print(f"  🟢 Adequate: {low_threshold} - {adequate_threshold} weeks")
+        print(f"  🔵 High: >= {adequate_threshold} weeks")
+        
+        confirm = input("\nProceed with recalculation? (y/n): ").strip().lower()
+        
+        if confirm != 'y':
+            print("⚠️  Operation cancelled.")
+            return
+        
+        print("\n🔄 Recalculating categories...")
+        
+        # Send POST request with thresholds
+        resp = requests.post(
+            f"{BASE_URL}/weeks-of-supply/recalculate-categories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "critical_threshold": critical_threshold,
+                "low_threshold": low_threshold,
+                "adequate_threshold": adequate_threshold
+            }
+        )
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            print(f"\n✅ Success! Categories recalculated for {data.get('rows_affected', 0)} records.")
+            print("\n📊 Applied thresholds:")
+            thresholds = data.get('thresholds', {})
+            print(f"  🔴 Critical: {thresholds.get('critical', 'N/A')}")
+            print(f"  🟠 Low: {thresholds.get('low', 'N/A')}")
+            print(f"  🟢 Adequate: {thresholds.get('adequate', 'N/A')}")
+            print(f"  🔵 High: {thresholds.get('high', 'N/A')}")
+        else:
+            error_data = resp.json()
+            print(f"❌ Error: {error_data.get('error', 'Unknown error')}")
+    
+    except ValueError:
+        print("❌ Invalid input. Please enter valid numbers.")
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+    
+    input("\nPress Enter to continue...")
+
+
+def refresh_weeks_of_supply(token):
+    """Manually refresh weeks of supply calculations"""
+    print("\n🔄 Refreshing weeks of supply data...")
+    
+    try:
+        resp = requests.post(
+            f"{BASE_URL}/weeks-of-supply/refresh",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            print(f"✅ Success! {data.get('rows_affected', 0)} records updated.")
+        else:
+            print(f"❌ Error: {resp.json().get('error', 'Unknown error')}")
+    
+    except Exception as e:
+        print(f"❌ Error refreshing data: {str(e)}")
+
+
+def view_weeks_of_supply_by_store(token):
+    """View weeks of supply analysis - store selection and SKU details"""
+    
+    # Step 1: Get store summary
+    print("\n📦 Fetching store summary...")
+    
+    try:
+        resp = requests.get(
+            f"{BASE_URL}/weeks-of-supply/store-summary",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if resp.status_code != 200:
+            print(f"❌ Error: {resp.json().get('error', 'Unknown error')}")
+            return
+        
+        stores = resp.json().get('data', [])
+        
+        if not stores:
+            print("\n⚠️  No data available. Please refresh weeks of supply data first (Option 3).")
+            return
+        
+        # Display store list
+        print("\n" + "="*80)
+        print("📍 AVAILABLE STORES")
+        print("="*80)
+        print(f"{'#':<5} {'Store ID':<15} {'Total SKUs':<12} {'Critical':<10} {'Low':<10} {'Adequate':<10} {'High':<10}")
+        print("-"*80)
+        
+        for idx, store in enumerate(stores, 1):
+            print(f"{idx:<5} {store['store_id']:<15} {store['total_skus']:<12} "
+                  f"{store['critical_count']:<10} {store['low_count']:<10} "
+                  f"{store['adequate_count']:<10} {store['high_count']:<10}")
+        
+        print("="*80)
+        
+        # Step 2: Let user select a store
+        store_choice = input("\nEnter store number to view SKU details (or 'q' to go back): ").strip()
+        
+        if store_choice.lower() == 'q':
+            return
+        
+        try:
+            store_idx = int(store_choice) - 1
+            if store_idx < 0 or store_idx >= len(stores):
+                print("❌ Invalid store number.")
+                return
+            
+            selected_store = stores[store_idx]
+            store_id = selected_store['store_id']
+            
+            # Step 3: Show store overview
+            print(f"\n{'='*100}")
+            print(f"📦 STORE ID: {store_id}")
+            print(f"{'='*100}")
+            print(f"📊 Total SKUs: {selected_store['total_skus']}")
+            print(f"🔴 Critical: {selected_store['critical_count']}")
+            print(f"🟠 Low: {selected_store['low_count']}")
+            print(f"🟢 Adequate: {selected_store['adequate_count']}")
+            print(f"🔵 High: {selected_store['high_count']}")
+            print(f"📈 Avg Weeks of Supply: {float(selected_store.get('avg_weeks_of_supply', 0)):.2f}")
+            print(f"{'='*100}\n")
+            
+            # Step 4: Filter options
+            print("Filter by category (optional):")
+            print("1. Critical only")
+            print("2. Low only")
+            print("3. Adequate only")
+            print("4. High only")
+            print("5. All categories")
+            
+            filter_choice = input("\nEnter filter choice (default: 5 - All): ").strip() or "5"
+            
+            category_map = {
+                "1": "Critical",
+                "2": "Low",
+                "3": "Adequate",
+                "4": "High",
+                "5": None
+            }
+            
+            category_filter = category_map.get(filter_choice)
+            
+            # Step 5: Fetch SKU details
+            params = {}
+            if category_filter:
+                params['category'] = category_filter
+            
+            sku_resp = requests.get(
+                f"{BASE_URL}/weeks-of-supply/sku-details/{store_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                params=params
+            )
+            
+            if sku_resp.status_code != 200:
+                print(f"❌ Error: {sku_resp.json().get('error', 'Unknown error')}")
+                return
+            
+            skus = sku_resp.json().get('data', [])
+            
+            if not skus:
+                print("\n⚠️  No SKUs found with the selected filter.")
+                return
+            
+            # Step 6: Display SKU details
+            print(f"\n{'='*100}")
+            print(f"📦 SKU DETAILS - Store ID: {store_id} {f'(Filter: {category_filter})' if category_filter else '(All)'}")
+            print(f"{'='*100}")
+            print(f"{'SKU':<20} {'Current Inv':<15} {'Weekly Demand':<15} {'Weeks Left':<15} {'Category':<15}")
+            print("-"*100)
+            
+            for sku in skus:
+                # Color coding for terminal
+                category = sku['category']
+                if category == 'Critical':
+                    category_display = f"🔴 {category}"
+                elif category == 'Low':
+                    category_display = f"🟠 {category}"
+                elif category == 'Adequate':
+                    category_display = f"🟢 {category}"
+                else:
+                    category_display = f"🔵 {category}"
+                
+                weeks_left = float(sku['weeks_of_supply'])
+                weeks_display = f"{weeks_left:.1f}" if weeks_left < 999 else "999+"
+                
+                print(f"{sku['sku']:<20} "
+                      f"{int(sku['current_inventory']):<15} "
+                      f"{float(sku['avg_weekly_demand']):<15.2f} "
+                      f"{weeks_display:<15} {category_display:<15}")
+            
+            print("="*100)
+            print(f"\n📊 Showing {len(skus)} SKU(s)")
+            
+            # Option to export or view more details
+            input("\nPress Enter to continue...")
+            
+        except ValueError:
+            print("❌ Invalid input. Please enter a number.")
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+    
+    except Exception as e:
+        print(f"❌ Error fetching store summary: {str(e)}")
+        
 def main():
     while True:
         print("\n==== Inventory Maintainer ====")
@@ -1623,8 +1896,6 @@ def main():
                             print("❌ You don't have permission for this action.")
                             continue
 
-
-                    # action = input("Enter your choice: ").strip()
                     if action == "1":
                         upload_csv(token)
                     elif action == "2":
@@ -1634,9 +1905,9 @@ def main():
                         view_dashboard(token)
                     elif action == "4":
                         view_store_summary(token)
-                    elif action=="5":
+                    elif action == "5":
                         settings_menu(token)
-                    elif action=="6":
+                    elif action == "6":
                         add_store(token)
                     elif action == "7":
                         view_hovered_store_stats(token)
@@ -1653,18 +1924,18 @@ def main():
                         break
                     elif action == "13":
                         place_reorder(token)
-                    elif action=="14":
+                    elif action == "14":
                         display_availability_from_db(token)
                     elif action == "15":
                         forecast_menu(token)
-                    elif action =="16" :
+                    elif action == "16":
                         rebalancer(token)
                     elif action == "17":  
                         inventory_levels_filter(token)
+                    elif action == "18":  # NEW: Weeks of Supply
+                        weeks_of_supply_menu(token)
                     else:
                         print("❌ Invalid choice.")
-
-
 
 if __name__ == "__main__":
     main()

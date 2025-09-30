@@ -20,16 +20,16 @@ def create_app():
     
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False  # Disable tracking for performance
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     ANON_KEY = os.getenv("ANON_KEY")
 
     # Initialize database
-    from app.models import user, inventory_levels  # Add inventory_levels here
+    from app.models import user, inventory_levels
     db.init_app(app)
 
     # Configure CORS
     CORS(app,
-        origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # Support both localhost formats
+        origins=["http://localhost:5173", "http://127.0.0.1:5173"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization"],
         supports_credentials=True
@@ -40,7 +40,7 @@ def create_app():
         from app.routes import (
             auth, dashboard, alerts, upload, config, store_upload, 
             node_location_update, reorder, availability, admin, 
-            forecast, rebalancer, store_inventory_summary
+            forecast, rebalancer, store_inventory_summary, weeks_of_supply
         )
         
         app.register_blueprint(auth.bp)
@@ -56,6 +56,8 @@ def create_app():
         app.register_blueprint(forecast.bp)
         app.register_blueprint(rebalancer.bp, url_prefix='/api')
         app.register_blueprint(store_inventory_summary.store_inventory_bp)
+        # Remove url_prefix here since it's already defined in the blueprint
+        app.register_blueprint(weeks_of_supply.weeks_of_supply_bp)
         
         print("✅ All blueprints registered successfully!")
         
