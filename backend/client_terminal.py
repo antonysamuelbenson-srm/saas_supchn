@@ -915,6 +915,7 @@ MENU_OPTIONS = {
         }
     },
     "16" : {"desc": "Rebalancer", "route": "POST:/api/rebalance"}
+    "17" : {"desc" : "Chat", "route": "POST:/chat"},
 }
 
 
@@ -1478,6 +1479,51 @@ def rebalancer(token):
         else:
             print("Invalid choice. Please enter a number from 1 to 4.")
 
+def chat(token: str):
+    url = f"{BASE_URL}/chat"
+    
+    print("\n--- Starting Chat Session ---")
+    print("Enter 'exit' or 'quit' to return to the main menu.")
+    
+    while True:
+        user_query = input("You: ")
+        
+        if user_query.lower() in ['exit', 'quit']:
+            print("--- Chat Session Ended. Returning to Main Menu. ---\n")
+            break
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "query": user_query
+        }
+
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status() 
+
+            response_data = response.json()
+            print(f"AI: {response_data.get('response', 'Error: Could not retrieve response.')}")
+            
+        except requests.exceptions.HTTPError as http_err:
+            try:
+                error_detail = response.json().get('error', 'No specific error message provided.')
+            except json.JSONDecodeError:
+                error_detail = "Server returned non-JSON error."
+                
+            print(f"\n--- [API HTTP Error] ---")
+            print(f"HTTP Status: {response.status_code}")
+            print(f"Detail: {error_detail}")
+            print("------------------------\n")
+            break
+            
+        except requests.exceptions.RequestException as e:
+            print(f"\n--- [API Connection Error] ---")
+            print(f"Error communicating with server: {e}")
+            print("------------------------------\n")
+            break
+
 def main():
     while True:
         print("\n==== Inventory Maintainer ====")
@@ -1549,6 +1595,8 @@ def main():
                         forecast_menu(token)
                     elif action =="16" :
                         rebalancer(token)
+                    elif action == "17":
+                        chat(token) 
                     else:
                         print("❌ Invalid choice.")
         else:
