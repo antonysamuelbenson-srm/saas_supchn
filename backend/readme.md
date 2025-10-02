@@ -267,6 +267,7 @@ Because both app/ and routes/ have __init__.py, Python lets you do:
 
 
 ==================For AI module===========================================
+
 For now the LLM used is Mistral via Ollama as there we some server side and storage issues for using models via hugginface. 
 * In order to run and test through client terminal, open a new terminal and run the following command :
 
