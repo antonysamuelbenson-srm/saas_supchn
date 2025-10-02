@@ -2,6 +2,7 @@
 <img width="261" alt="Screenshot 2025-06-18 at 2 26 46 PM" src="https://github.com/user-attachments/assets/4d572935-01ff-4058-9dce-b8303c2c3825" />
 
 current tree for backend :
+```bash
 .
 ├── app
 │   ├── forecast_scheduler.py
@@ -98,7 +99,7 @@ current tree for backend :
 └── test.py
 
 8 directories, 86 files
-
+```
 
 📁 app/ — Main Flask application package
 This folder contains all the logic of your backend: models, API routes, and utility functions.
