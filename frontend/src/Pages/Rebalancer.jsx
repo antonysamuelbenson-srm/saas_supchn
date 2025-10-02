@@ -252,13 +252,18 @@
 
 // export default Rebalancer;
 
-import React, { useState, useEffect } from 'react';
+
+
+
+
+import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { FiSliders, FiDownload, FiPlayCircle, FiArrowLeft, FiLoader, FiAlertTriangle, FiFileText, FiMap } from 'react-icons/fi';
 import { motion } from 'framer-motion';
-import RebalanceMap from './RebalanceMap'; // Assuming RebalanceMap.jsx is in the same directory
+import TransferMap from '../components/TransferMap'; // Import the map component
 
+// Set the base URL for your API
 const BASE_URL = "http://localhost:5500";
 
 const Rebalancer = () => {
@@ -268,33 +273,6 @@ const Rebalancer = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [hasRun, setHasRun] = useState(false);
-    const [stores, setStores] = useState([]);
-    const [showMap, setShowMap] = useState(false);
-
-    // --- START: FIX FOR 403 FORBIDDEN ---
-    useEffect(() => {
-        const fetchStores = async () => {
-            const token = localStorage.getItem("token"); // Get token from local storage
-            if (!token) {
-                setError("Authentication token not found. Please log in again.");
-                return;
-            }
-
-            try {
-                const response = await axios.get(`${BASE_URL}/api/rebalance/stores`, {
-                    headers: {
-                        Authorization: `Bearer ${token}` // Add the token to the request header
-                    }
-                });
-                setStores(response.data);
-            } catch (err) {
-                console.error("Failed to fetch stores:", err);
-                setError("Could not load store location data. Please check your permissions.");
-            }
-        };
-        fetchStores();
-    }, []);
-    // --- END: FIX ---
 
     const handleRunRebalancer = async () => {
         setLoading(true);
@@ -305,16 +283,13 @@ const Rebalancer = () => {
 
         try {
             const response = await axios.post(
-                `${BASE_URL}/api/rebalance/summary`,
+                `${BASE_URL}/api/rebalance`,
                 { ddos_days: parseInt(ddos, 10) },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
             if (response.data.summary) {
                 setSummaryData(response.data.summary);
-                if (response.data.summary.length > 0) {
-                    setShowMap(true);
-                }
             } else {
                 setError("Received a valid response, but no summary data was found.");
             }
@@ -363,6 +338,7 @@ const Rebalancer = () => {
                 transition={{ duration: 0.5 }}
                 className="max-w-7xl mx-auto"
             >
+                {/* Header */}
                 <div className="flex items-center mb-8">
                     <button
                         onClick={() => navigate('/dashboard')}
@@ -374,9 +350,10 @@ const Rebalancer = () => {
                     <h1 className="text-3xl font-bold">Inventory Rebalancer</h1>
                 </div>
 
+                {/* Main Content Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Left Column: Explanation and Controls */}
                     <div className="lg:col-span-1 space-y-6">
-                        {/* Control Panel and Info */}
                         <motion.div
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -422,40 +399,25 @@ const Rebalancer = () => {
                                     className="w-full flex items-center justify-center bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-md transition-all duration-300"
                                 >
                                     {loading ? (
-                                        <>
-                                            <FiLoader className="animate-spin mr-2" />
-                                            Calculating...
-                                        </>
+                                        <><FiLoader className="animate-spin mr-2" />Calculating...</>
                                     ) : (
-                                        <>
-                                            <FiPlayCircle className="mr-2" />
-                                            Run Rebalancer
-                                        </>
+                                        <><FiPlayCircle className="mr-2" />Run Rebalancer</>
                                     )}
                                 </button>
                             </div>
                         </motion.div>
                     </div>
 
-                    {/* Results and Map Area */}
+                    {/* Right Column: Results Summary */}
                     <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.4, duration: 0.5 }}
-                        className="lg:col-span-2 bg-slate-800 p-6 rounded-lg border border-slate-700"
+                        className="lg:col-span-2 space-y-6"
                     >
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-semibold text-blue-400">Rebalancing Summary</h2>
-                            <div className="flex items-center space-x-4">
-                               {summaryData.length > 0 && (
-                                    <button
-                                        onClick={() => setShowMap(!showMap)}
-                                        className="flex items-center bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2 px-4 rounded-md transition-colors"
-                                    >
-                                        <FiMap className="mr-2" />
-                                        {showMap ? 'Hide Map' : 'Show Map'}
-                                    </button>
-                                )}
+                        <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-xl font-semibold text-blue-400">Rebalancing Summary</h2>
                                 {summaryData.length > 0 && (
                                     <button
                                         onClick={handleDownloadCsv}
@@ -466,75 +428,79 @@ const Rebalancer = () => {
                                     </button>
                                 )}
                             </div>
+
+                            {error && (
+                                <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-md flex items-center">
+                                    <FiAlertTriangle className="mr-3" /><p>{error}</p>
+                                </div>
+                            )}
+
+                            {!hasRun && !loading && (
+                                 <div className="text-center py-16 text-slate-500">
+                                    <FiFileText size={48} className="mx-auto mb-4" />
+                                    <h3 className="text-lg font-semibold text-slate-400">Run the Rebalancer</h3>
+                                    <p>Set your DDOS and click "Run Rebalancer" to generate transfer recommendations.</p>
+                                </div>
+                            )}
+
+                            {loading && (
+                                <div className="text-center py-16 text-slate-400">
+                                    <FiLoader size={40} className="animate-spin mx-auto mb-4" />
+                                    <p>Optimizing inventory transfers...</p>
+                                </div>
+                            )}
+
+                            {!loading && hasRun && summaryData.length === 0 && !error && (
+                                <div className="text-center py-16 text-slate-500">
+                                    <h3 className="text-lg font-semibold text-slate-400">No Transfers Recommended</h3>
+                                    <p>The optimizer determined that no inventory transfers are necessary at this time.</p>
+                                </div>
+                            )}
+                            
+                            {summaryData.length > 0 && !loading && (
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-slate-700">
+                                        <thead className="bg-slate-900/50">
+                                            <tr>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Source</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Destination</th>
+                                                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider">Distinct SKUs</th>
+                                                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-300 uppercase tracking-wider">Total Units to Transfer</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-slate-800 divide-y divide-slate-700">
+                                            {summaryData.map((row, index) => (
+                                                <motion.tr 
+                                                    key={`${row.src}-${row.dest}`}
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    transition={{ delay: index * 0.05 }}
+                                                >
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{row.src}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{row.dest}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300 text-center">{row.distinct_skus}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-400 text-right">{row.total_units.toLocaleString()}</td>
+                                                </motion.tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
 
-                        {showMap && summaryData.length > 0 && (
-                            <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                className="mb-6"
-                            >
-                                <RebalanceMap stores={stores} summaryData={summaryData} />
-                            </motion.div>
-                        )}
-
-                        {error && (
-                            <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-md flex items-center">
-                                <FiAlertTriangle className="mr-3" />
-                                <p>{error}</p>
-                            </div>
-                        )}
-
-                        {!hasRun && !loading && (
-                             <div className="text-center py-16 text-slate-500">
-                                <FiFileText size={48} className="mx-auto mb-4" />
-                                <h3 className="text-lg font-semibold text-slate-400">Run the Rebalancer</h3>
-                                <p>Set your DDOS and click "Run Rebalancer" to generate transfer recommendations.</p>
-                            </div>
-                        )}
-
-                        {loading && (
-                            <div className="text-center py-16 text-slate-400">
-                                <FiLoader size={40} className="animate-spin mx-auto mb-4" />
-                                <p>Optimizing inventory transfers...</p>
-                            </div>
-                        )}
-
-                        {!loading && hasRun && summaryData.length === 0 && !error && (
-                            <div className="text-center py-16 text-slate-500">
-                                <h3 className="text-lg font-semibold text-slate-400">No Transfers Recommended</h3>
-                                <p>The optimizer determined that no inventory transfers are necessary at this time.</p>
-                            </div>
-                        )}
-                        
+                        {/* RENDER THE MAP (conditionally) */}
                         {summaryData.length > 0 && !loading && (
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-slate-700">
-                                    <thead className="bg-slate-900/50">
-                                        <tr>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Source</th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Destination</th>
-                                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider">Distinct SKUs</th>
-                                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-300 uppercase tracking-wider">Total Units to Transfer</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-slate-800 divide-y divide-slate-700">
-                                        {summaryData.map((row, index) => (
-                                            <motion.tr 
-                                                key={index}
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                transition={{ delay: index * 0.05 }}
-                                            >
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{row.src}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{row.dest}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300 text-center">{row.distinct_skus}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-400 text-right">{row.total_units.toLocaleString()}</td>
-                                            </motion.tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2, duration: 0.5 }}
+                            >
+                                <h2 className="text-xl font-semibold text-blue-400 mb-4 flex items-center">
+                                    <FiMap className="mr-3" />
+                                    Transfer Visualization
+                                </h2>
+                                <TransferMap summaryData={summaryData} />
+                            </motion.div>
                         )}
                     </motion.div>
                 </div>

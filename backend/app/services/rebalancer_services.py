@@ -262,7 +262,10 @@ def get_transfer_group_supply_details(store: str, skus: set, shortages_excesses:
     
     return overall_dos, total_inventory, daily_demand
 
-def get_transfer_details(allocations: list, shortages_excesses: list, transfer_info_map: dict, ddos_days: int, unfulfilled_shortages: dict):
+# --- START: FIX ---
+# Swapped the last two parameters to match the argument order from the calling code in rebalancer.py
+def get_transfer_details(allocations: list, shortages_excesses: list, transfer_info_map: dict, unfulfilled_shortages: dict, ddos_days: int):
+# --- END: FIX ---
     """
     Enriches the allocation data with detailed information for the download view.
     """

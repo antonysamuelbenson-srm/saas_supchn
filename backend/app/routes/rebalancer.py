@@ -47,7 +47,7 @@
 #         logger.error(f"An unhandled error occurred in the route: {e}", exc_info=True)
 #         return jsonify({"error": "An unexpected error occurred."}), 500
 
-# from app.models.store import Store
+
 # from flask import Blueprint, request, jsonify, Response
 # from app.services.rebalancer_services import (
 #     run_rebalancer,
@@ -186,14 +186,12 @@
 #         return jsonify({"error": "Could not generate the file for download."}), 500
 
 
-
-from app.models.store import Store
 from flask import Blueprint, request, jsonify, Response
 from app.services.rebalancer_services import (
     run_rebalancer,
     convert_to_csv,
     get_transfer_summary,
-    get_transfer_details # Make sure this function is updated as shown above
+    get_transfer_details
 )
 from app.utils.decorators import role_required
 import logging
@@ -201,6 +199,7 @@ from datetime import date
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("rebalance", __name__)
+
 
 def _enrich_allocations(allocations_list, shortages_excesses_list):
     """Enriches allocation details with inventory, demand, and DOS info."""
@@ -215,7 +214,6 @@ def _enrich_allocations(allocations_list, shortages_excesses_list):
             shortages_map[store][sku] = item
 
     for alloc in allocations_list:
-        # Use the standardized keys 'from' and 'to' for lookup
         source_loc = alloc.get("from")
         dest_loc = alloc.get("to")
         sku = alloc.get("sku")
@@ -242,20 +240,19 @@ def get_rebalancing_recommendations():
         if not isinstance(ddos_days, int) or ddos_days <= 0:
             return jsonify({"error": "ddos_days must be a positive integer."}), 400
 
-        # Run the rebalancing model once to get all necessary data
-        allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages = run_rebalancer(ddos_days)
+        # Capture all expected return values from the service function
+        allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages, *_ = run_rebalancer(ddos_days)
 
         if "error" in allocations:
             return jsonify(allocations), 500
         
-        # This function MUST return standardized keys now
-        detailed_allocations = get_transfer_details(allocations, shortages_excesses, transfer_info_map, ddos_days)
+        # Pass the newly captured 'unfulfilled_shortages' variable to this function
+        detailed_allocations = get_transfer_details(allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages, ddos_days)
+        
         enriched_allocations = _enrich_allocations(detailed_allocations, shortages_excesses)
         
-        # The summary function should already be correct, returning 'src' and 'dest'
         summary_data = get_transfer_summary(allocations, shortages_excesses, transfer_info_map, ddos_days)
         
-        # The client will now receive all data in a single payload
         return jsonify({
             "allocations": enriched_allocations,
             "summary": summary_data,
@@ -266,6 +263,7 @@ def get_rebalancing_recommendations():
         logger.error(f"An unhandled error occurred in the route: {e}", exc_info=True)
         return jsonify({"error": "An unexpected error occurred."}), 500
 
+
 @bp.route("/rebalance/download", methods=["POST"])
 @role_required
 def download_rebalancing_report():
@@ -273,22 +271,25 @@ def download_rebalancing_report():
     try:
         data = request.json or {}
         ddos_days = data.get("ddos_days", 28)
-        
-        # FIX 1: run_rebalancer now returns 4 values, so we must unpack all 4.
-        allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages = run_rebalancer(ddos_days)
+
+        if not isinstance(ddos_days, int) or ddos_days <= 0:
+            return jsonify({"error": "ddos_days must be a positive integer."}), 400
+
+        # Capture all expected return values from the service function
+        allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages, *_ = run_rebalancer(ddos_days)
 
         if "error" in allocations:
             return jsonify(allocations), 500
         
-        # FIX 2: get_transfer_details requires the new 'unfulfilled_shortages' argument.
-        # FIX 3: Removed the redundant call to _enrich_allocations.
-        detailed_allocations = get_transfer_details(allocations, shortages_excesses, transfer_info_map, ddos_days, unfulfilled_shortages)
+        # Pass the newly captured 'unfulfilled_shortages' variable to this function
+        detailed_allocations = get_transfer_details(allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages, ddos_days)
+
+        enriched_allocations = _enrich_allocations(detailed_allocations, shortages_excesses)
         
-        if not detailed_allocations: # Check against the detailed allocations list
+        if not enriched_allocations:
             return jsonify({"message": "No data to download."}), 200
 
-        # Convert the enriched data to CSV
-        csv_data = convert_to_csv(detailed_allocations)
+        csv_data = convert_to_csv(enriched_allocations)
         
         today = date.today().isoformat()
         filename = f"rebalancing_recommendations_{today}.csv"
@@ -302,26 +303,3 @@ def download_rebalancing_report():
     except Exception as e:
         logger.error(f"Failed to generate download file: {e}", exc_info=True)
         return jsonify({"error": "Could not generate the file for download."}), 500
-
-# --- START: DEBUGGING STEP ---
-# Temporarily disable authentication on this endpoint to isolate the problem.
-@bp.route("/rebalance/stores", methods=["GET"])
-@role_required 
-def get_store_locations():
-# --- END: DEBUGGING STEP ---
-    """API endpoint to get all store locations."""
-    try:
-        stores = Store.query.all()
-        store_locations = [
-            {
-                "store_code": store.store_code,
-                "name": store.name,
-                "lat": float(store.lat),
-                "long": float(store.long)
-            }
-            for store in stores
-        ]
-        return jsonify(store_locations), 200
-    except Exception as e:
-        logger.error(f"Failed to fetch store locations: {e}", exc_info=True)
-        return jsonify({"error": "Could not retrieve store locations."}), 500
