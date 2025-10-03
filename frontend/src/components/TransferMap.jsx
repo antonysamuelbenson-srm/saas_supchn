@@ -173,12 +173,659 @@
 
 // export default TransferMap;
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+// import React, { useEffect, useState, useRef, useCallback } from 'react';
+// import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
+// import 'leaflet/dist/leaflet.css';
+// import L from 'leaflet';
+
+// // --- Icon Fix (Standard Leaflet Markers) ---
+// import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+// import iconUrl from 'leaflet/dist/images/marker-icon.png';
+// import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+
+// delete L.Icon.Default.prototype._getIconUrl;
+// L.Icon.Default.mergeOptions({
+//     iconRetinaUrl: iconRetinaUrl,
+//     iconUrl: iconUrl,
+//     shadowUrl: shadowUrl,
+// });
+
+// // --- Truck Icon ---
+// import truckIconSvg from '../assets/truck.svg';
+
+// const customTruckIcon = L.icon({
+//   iconUrl: truckIconSvg,
+//   iconSize: [25, 25],
+//   iconAnchor: [12, 12],
+//   popupAnchor: [0, -10]
+// });
+
+// // --- CSS Styles for Line Animation and Tooltips ---
+// const DynamicStyles = () => {
+//   const styles = `
+//     .animated-ant-path {
+//       stroke-dasharray: 10, 20;
+//       stroke-linecap: round;
+//       animation: ant-path-animation 1.5s linear infinite;
+//     }
+
+//     @keyframes ant-path-animation {
+//       from {
+//         stroke-dashoffset: 0;
+//       }
+//       to {
+//         stroke-dashoffset: -30;
+//       }
+//     }
+
+//     .leaflet-popup-content-wrapper {
+//       background-color: #2D3748;
+//       color: #E2E8F0;
+//       border-radius: 0.5rem;
+//       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+//     }
+//     .leaflet-popup-content {
+//       padding: 1rem;
+//       font-family: 'Inter', sans-serif;
+//       font-size: 0.875rem;
+//     }
+//     .leaflet-popup-tip {
+//       background: #2D3748;
+//     }
+//     .leaflet-popup-close-button {
+//       color: #CBD5E0;
+//     }
+//     .leaflet-popup-close-button:hover {
+//       color: #F8FAFC;
+//     }
+//     .transfer-tooltip p {
+//       margin-bottom: 0.25rem;
+//     }
+//     .transfer-tooltip strong {
+//       color: #63B3ED;
+//     }
+//     .transfer-tooltip span {
+//       color: #A0AEC0;
+//     }
+//   `;
+//   return <style>{styles}</style>;
+// };
+
+// // --- Helper component to fit map bounds ---
+// const MapBoundsAdjuster = ({ bounds }) => {
+//     const map = useMap();
+//     useEffect(() => {
+//         // The isValid check is good practice.
+//         if (bounds && bounds.isValid()) {
+//             map.fitBounds(bounds, { padding: [70, 70] });
+//         }
+//     }, [map, bounds]);
+//     return null;
+// };
+
+// // --- Main TransferMap Component ---
+// const TransferMap = ({ summaryData }) => {
+//   const [hoveredTransfer, setHoveredTransfer] = useState(null);
+//   const truckPositionsRef = useRef([]); // Initialize as empty array
+
+//   const interpolatePoint = useCallback((start, end, fraction) => {
+//     const lat = start[0] + (end[0] - start[0]) * fraction;
+//     const lng = start[1] + (end[1] - start[1]) * fraction;
+//     return [lat, lng];
+//   }, []);
+
+//   // --- START: FIX ---
+//   // Guard Clause 1: Handle null, undefined, or empty summaryData array.
+//   if (!summaryData || summaryData.length === 0) {
+//     return (
+//         <div className="rounded-lg border border-slate-700 h-96 w-full flex items-center justify-center bg-slate-800 text-slate-400">
+//             <p>No transfer data available to display.</p>
+//         </div>
+//     );
+//   }
+
+//   // Guard Clause 2: Filter coordinates to ensure they are valid before creating bounds.
+//   const allCoords = summaryData
+//     .flatMap(d => [d.source_coords, d.destination_coords])
+//     .filter(coords => Array.isArray(coords) && coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1]));
+
+//   // Guard Clause 3: If, after filtering, there are no valid coordinates, do not render the map.
+//   if (allCoords.length === 0) {
+//       return (
+//           <div className="rounded-lg border border-slate-700 h-96 w-full flex items-center justify-center bg-slate-800 text-slate-400">
+//               <p>Transfer data is present but contains no valid geographic coordinates.</p>
+//           </div>
+//       );
+//   }
+//   // --- END: FIX ---
+
+//   const bounds = L.latLngBounds(allCoords);
+
+//   const locations = new Map();
+//   summaryData.forEach(item => {
+//     // Only add locations with valid coordinates
+//     if (item.source_coords) locations.set(item.src, item.source_coords);
+//     if (item.destination_coords) locations.set(item.dest, item.destination_coords);
+//   });
+  
+//   const uniqueLocations = Array.from(locations.entries());
+
+//   // Effect for animating the trucks (put after all early returns)
+//   useEffect(() => {
+//     // We already know summaryData has length > 0 here
+//     truckPositionsRef.current = summaryData.map(() => [0, 0]); // Initialize positions
+//     let animationFrameId;
+//     const startTime = performance.now();
+//     const duration = 5000;
+
+//     const animateTrucks = (currentTime) => {
+//       const elapsedTime = currentTime - startTime;
+//       const progress = (elapsedTime % duration) / duration;
+
+//       const newPositions = summaryData.map(transfer => {
+//         // Ensure coordinates are valid before interpolating
+//         if (transfer.source_coords && transfer.destination_coords) {
+//             return interpolatePoint(transfer.source_coords, transfer.destination_coords, progress);
+//         }
+//         return null; // Return null for invalid data
+//       });
+//       truckPositionsRef.current = newPositions.filter(Boolean); // Filter out nulls
+      
+//       // A simple way to trigger re-render for the animation frame
+//       setHoveredTransfer(prev => prev);
+      
+//       animationFrameId = requestAnimationFrame(animateTrucks);
+//     };
+
+//     animationFrameId = requestAnimationFrame(animateTrucks);
+
+//     return () => {
+//       cancelAnimationFrame(animationFrameId);
+//     };
+//   }, [summaryData, interpolatePoint]);
+
+//   return (
+//     <div className="rounded-lg overflow-hidden border border-slate-700 h-96 w-full relative">
+//       <DynamicStyles />
+
+//       <MapContainer bounds={bounds} style={{ height: '100%', width: '100%' }}>
+//         <TileLayer
+//           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+//           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+//         />
+
+//         <MapBoundsAdjuster bounds={bounds} />
+        
+//         {summaryData.map((transfer, index) => (
+//           // Only render the polyline if coordinates are valid
+//           (transfer.source_coords && transfer.destination_coords) && (
+//             <React.Fragment key={`transfer-${index}`}>
+//               <Polyline
+//                 positions={[transfer.source_coords, transfer.destination_coords]}
+//                 className="animated-ant-path" 
+//                 pathOptions={{ 
+//                   color: hoveredTransfer === index ? '#F59E0B' : '#2563EB',
+//                   weight: hoveredTransfer === index ? 5 : 3,
+//                   opacity: 0.8
+//                 }}
+//                 eventHandlers={{
+//                   mouseover: (e) => {
+//                     setHoveredTransfer(index);
+//                     e.target.openPopup();
+//                   },
+//                   mouseout: (e) => {
+//                     setHoveredTransfer(null);
+//                     e.target.closePopup();
+//                   },
+//                 }}
+//               >
+//                 <Popup>
+//                   <div className="transfer-tooltip">
+//                     <p><strong>Transfer:</strong> <span>{transfer.src}</span> to <span>{transfer.dest}</span></p>
+//                     <p><strong>Total Units:</strong> <span>{transfer.total_units.toLocaleString()}</span></p>
+//                     <p><strong>Distinct SKUs:</strong> <span>{transfer.distinct_skus}</span></p>
+//                   </div>
+//                 </Popup>
+//               </Polyline>
+
+//               {truckPositionsRef.current[index] && (
+//                 <Marker 
+//                   position={truckPositionsRef.current[index]} 
+//                   icon={customTruckIcon} 
+//                   zIndexOffset={1000}
+//                 />
+//               )}
+//             </React.Fragment>
+//           )
+//         ))}
+
+//         {uniqueLocations.map(([name, coords]) => (
+//           // Final check for valid coords before rendering marker
+//           coords && <Marker key={`location-${name}`} position={coords}>
+//             <Popup>{name}</Popup>
+//           </Marker>
+//         ))}
+//       </MapContainer>
+//     </div>
+//   );
+// };
+
+// export default TransferMap;
+
+// import React, { useState, useEffect } from 'react';
+// import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
+// import 'leaflet/dist/leaflet.css';
+// import L from 'leaflet';
+// import { FiMaximize, FiMinimize, FiRefreshCw } from 'react-icons/fi';
+
+// // --- Leaflet Icon Fix ---
+// import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+// import iconUrl from 'leaflet/dist/images/marker-icon.png';
+// import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+
+// delete L.Icon.Default.prototype._getIconUrl;
+// L.Icon.Default.mergeOptions({
+//     iconRetinaUrl: iconRetinaUrl,
+//     iconUrl: iconUrl,
+//     shadowUrl: shadowUrl,
+// });
+// // --- End Icon Fix ---
+
+
+// // --- HELPER COMPONENTS ---
+
+// const MapControls = ({ bounds, isExpanded, setIsExpanded }) => {
+//   const map = useMap();
+//   const handleResetView = () => {
+//     if (bounds && bounds.isValid()) {
+//       map.fitBounds(bounds);
+//     }
+//   };
+
+//   return (
+//     <div className="absolute top-2 right-2 z-[1000] flex flex-col space-y-2">
+//       <button
+//         onClick={handleResetView}
+//         className="p-2 bg-white text-slate-800 rounded-md shadow-md hover:bg-slate-100 transition-colors"
+//         aria-label="Reset map view"
+//       >
+//         <FiRefreshCw size={18} />
+//       </button>
+//       <button
+//         onClick={() => setIsExpanded(!isExpanded)}
+//         className="p-2 bg-white text-slate-800 rounded-md shadow-md hover:bg-slate-100 transition-colors"
+//         aria-label={isExpanded ? 'Minimize map' : 'Expand map'}
+//       >
+//         {isExpanded ? <FiMinimize size={18} /> : <FiMaximize size={18} />}
+//       </button>
+//     </div>
+//   );
+// };
+
+// const MapResizer = ({ isExpanded }) => {
+//   const map = useMap();
+//   useEffect(() => {
+//     const timer = setTimeout(() => {
+//       map.invalidateSize();
+//     }, 400);
+//     return () => clearTimeout(timer);
+//   }, [isExpanded, map]);
+//   return null;
+// };
+
+// /**
+//  * --- START: THIS IS THE FIX ---
+//  * Helper to calculate points for a curved line (Bézier curve).
+//  * This version ensures the curve's bend direction is consistent,
+//  * regardless of the start/end point order, fixing the overlap bug.
+//  */
+// const getCurvedPath = (start, end, curvature) => {
+//     // 1. Determine a consistent order for points to calculate a predictable offset direction.
+//     // We sort by longitude to ensure the "lesser" point is always first.
+//     const consistentStart = start[1] < end[1] ? start : end;
+//     const consistentEnd = start[1] < end[1] ? end : start;
+
+//     const latlng1 = L.latLng(consistentStart);
+//     const latlng2 = L.latLng(consistentEnd);
+
+//     const offsetX = latlng2.lng - latlng1.lng;
+//     const offsetY = latlng2.lat - latlng1.lat;
+//     const mid = L.latLng(latlng1.lat + offsetY / 2, latlng1.lng + offsetX / 2);
+
+//     // 2. The control point is calculated from these consistent points.
+//     // A positive curvature will now always offset in the same geographic direction.
+//     const controlPoint = L.latLng(
+//         mid.lat - offsetX * curvature,
+//         mid.lng + offsetY * curvature
+//     );
+
+//     // 3. The actual curve is drawn using the original start and end points.
+//     const actualStart = L.latLng(start);
+//     const actualEnd = L.latLng(end);
+
+//     const points = [];
+//     for (let i = 0; i <= 50; i++) {
+//         const t = i / 50.0;
+//         const lat = (1 - t) * (1 - t) * actualStart.lat + 2 * (1 - t) * t * controlPoint.lat + t * t * actualEnd.lat;
+//         const lng = (1 - t) * (1 - t) * actualStart.lng + 2 * (1 - t) * t * controlPoint.lng + t * t * actualEnd.lng;
+//         points.push([lat, lng]);
+//     }
+//     return points;
+// };
+// // --- END: THIS IS THE FIX ---
+
+
+// // --- MAIN TRANSFER MAP COMPONENT ---
+// const TransferMap = ({ summaryData }) => {
+//     const [hoveredTransfer, setHoveredTransfer] = useState(null);
+//     const [isExpanded, setIsExpanded] = useState(false);
+
+//     // Guard Clauses for Data Integrity
+//     if (!summaryData || summaryData.length === 0) return null;
+//     const allCoords = summaryData
+//         .flatMap(d => [d.source_coords, d.destination_coords])
+//         .filter(coords => Array.isArray(coords) && coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1]));
+//     if (allCoords.length === 0) return null;
+
+//     const bounds = L.latLngBounds(allCoords);
+
+//     // Logic for Overlapping Lines (No changes needed here)
+//     const pathCurvatures = {};
+//     const pathCounts = {};
+//     summaryData.forEach((transfer, index) => {
+//         const { src, dest } = transfer;
+//         const pathKey = [src, dest].sort().join('-');
+//         pathCounts[pathKey] = (pathCounts[pathKey] || 0) + 1;
+//         const count = pathCounts[pathKey];
+//         const curvature = -0.125 * count;
+//         pathCurvatures[index] = curvature;
+//     });
+    
+//     const locations = new Map();
+//     summaryData.forEach(item => {
+//         if (item.source_coords) locations.set(item.src, item.source_coords);
+//         if (item.destination_coords) locations.set(item.dest, item.destination_coords);
+//     });
+//     const uniqueLocations = Array.from(locations.entries());
+
+//     return (
+//         <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'fixed inset-0 z-50 p-4 bg-black bg-opacity-70' : 'relative h-96 w-full'}`}>
+//             <div className="rounded-lg overflow-hidden border border-slate-300 h-full w-full bg-slate-100">
+//                 <MapContainer
+//                     bounds={bounds}
+//                     style={{ height: '100%', width: '100%', backgroundColor: '#F8FAFC' }}
+//                     worldCopyJump={false}
+//                 >
+//                     <TileLayer
+//                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+//                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+//                     />
+//                     <MapResizer isExpanded={isExpanded} />
+//                     <MapControls bounds={bounds} isExpanded={isExpanded} setIsExpanded={setIsExpanded} />
+
+//                     {summaryData.map((transfer, index) => {
+//                         if (!transfer.source_coords || !transfer.destination_coords) return null;
+
+//                         const curvedPath = getCurvedPath(
+//                             transfer.source_coords,
+//                             transfer.destination_coords,
+//                             pathCurvatures[index]
+//                         );
+                        
+//                         return (
+//                             <Polyline
+//                                 key={`transfer-${index}`}
+//                                 positions={curvedPath}
+//                                 pathOptions={{
+//                                     color: hoveredTransfer === index ? '#F59E0B' : '#2563EB',
+//                                     weight: hoveredTransfer === index ? 4 : 2.5,
+//                                     opacity: 0.95
+//                                 }}
+//                                 eventHandlers={{
+//                                     mouseover: (e) => { setHoveredTransfer(index); e.target.openPopup(); },
+//                                     mouseout: (e) => { setHoveredTransfer(null); e.target.closePopup(); },
+//                                 }}
+//                             >
+//                                 <Popup>
+//                                     <div className="font-sans text-sm bg-white text-slate-700 p-1 rounded-md shadow-none border-none">
+//                                         <p className="mb-1"><strong>Transfer:</strong> {transfer.src} to {transfer.dest}</p>
+//                                         <p className="mb-1"><strong>Units:</strong> {transfer.total_units.toLocaleString()}</p>
+//                                         <p><strong>SKUs:</strong> {transfer.distinct_skus}</p>
+//                                     </div>
+//                                 </Popup>
+//                             </Polyline>
+//                         );
+//                     })}
+                    
+//                     {uniqueLocations.map(([name, coords]) => (
+//                         coords && <Marker key={`location-${name}`} position={coords}><Popup>{name}</Popup></Marker>
+//                     ))}
+//                 </MapContainer>
+//             </div>
+//         </div>
+//     );
+// };
+
+// export default TransferMap;
+
+// import React, { useState, useEffect, Fragment } from 'react';
+// import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
+// import 'leaflet/dist/leaflet.css';
+// import L from 'leaflet';
+// import { FiMaximize, FiMinimize, FiRefreshCw } from 'react-icons/fi';
+
+// // --- Leaflet Icon Fix ---
+// import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+// import iconUrl from 'leaflet/dist/images/marker-icon.png';
+// import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+
+// delete L.Icon.Default.prototype._getIconUrl;
+// L.Icon.Default.mergeOptions({
+//     iconRetinaUrl: iconRetinaUrl,
+//     iconUrl: iconUrl,
+//     shadowUrl: shadowUrl,
+// });
+// // --- End Icon Fix ---
+
+
+// // --- HELPER COMPONENTS ---
+
+// const AnimationStyles = () => {
+//   const styles = `
+//     .ant-path {
+//       stroke-dasharray: 8, 12;
+//       animation: ant-path-flow 1s linear infinite;
+//     }
+
+//     @keyframes ant-path-flow {
+//       from {
+//         stroke-dashoffset: 20;
+//       }
+//       to {
+//         stroke-dashoffset: 0;
+//       }
+//     }
+//   `;
+//   return <style>{styles}</style>;
+// };
+
+// const MapControls = ({ bounds, isExpanded, setIsExpanded }) => {
+//   const map = useMap();
+//   const handleResetView = () => {
+//     if (bounds && bounds.isValid()) {
+//       map.fitBounds(bounds);
+//     }
+//   };
+
+//   return (
+//     <div className="absolute top-2 right-2 z-[1000] flex flex-col space-y-2">
+//       <button
+//         onClick={handleResetView}
+//         className="p-2 bg-white text-slate-800 rounded-md shadow-md hover:bg-slate-100 transition-colors"
+//         aria-label="Reset map view"
+//       >
+//         <FiRefreshCw size={18} />
+//       </button>
+//       <button
+//         onClick={() => setIsExpanded(!isExpanded)}
+//         className="p-2 bg-white text-slate-800 rounded-md shadow-md hover:bg-slate-100 transition-colors"
+//         aria-label={isExpanded ? 'Minimize map' : 'Expand map'}
+//       >
+//         {isExpanded ? <FiMinimize size={18} /> : <FiMaximize size={18} />}
+//       </button>
+//     </div>
+//   );
+// };
+
+// const MapResizer = ({ isExpanded }) => {
+//   const map = useMap();
+//   useEffect(() => {
+//     const timer = setTimeout(() => {
+//       map.invalidateSize();
+//     }, 400);
+//     return () => clearTimeout(timer);
+//   }, [isExpanded, map]);
+//   return null;
+// };
+
+// const getCurvedPath = (start, end, curvature) => {
+//     const consistentStart = start[1] < end[1] ? start : end;
+//     const consistentEnd = start[1] < end[1] ? end : start;
+//     const latlng1 = L.latLng(consistentStart);
+//     const latlng2 = L.latLng(consistentEnd);
+//     const offsetX = latlng2.lng - latlng1.lng;
+//     const offsetY = latlng2.lat - latlng1.lat;
+//     const mid = L.latLng(latlng1.lat + offsetY / 2, latlng1.lng + offsetX / 2);
+//     const controlPoint = L.latLng(
+//         mid.lat - offsetX * curvature,
+//         mid.lng + offsetY * curvature
+//     );
+//     const actualStart = L.latLng(start);
+//     const actualEnd = L.latLng(end);
+//     const points = [];
+//     for (let i = 0; i <= 50; i++) {
+//         const t = i / 50.0;
+//         const lat = (1 - t) * (1 - t) * actualStart.lat + 2 * (1 - t) * t * controlPoint.lat + t * t * actualEnd.lat;
+//         const lng = (1 - t) * (1 - t) * actualStart.lng + 2 * (1 - t) * t * controlPoint.lng + t * t * actualEnd.lng;
+//         points.push([lat, lng]);
+//     }
+//     return points;
+// };
+
+
+// // --- MAIN TRANSFER MAP COMPONENT ---
+// const TransferMap = ({ summaryData }) => {
+//     const [hoveredTransfer, setHoveredTransfer] = useState(null);
+//     const [isExpanded, setIsExpanded] = useState(false);
+
+//     if (!summaryData || summaryData.length === 0) return null;
+//     const allCoords = summaryData
+//         .flatMap(d => [d.source_coords, d.destination_coords])
+//         .filter(coords => Array.isArray(coords) && coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1]));
+//     if (allCoords.length === 0) return null;
+
+//     const bounds = L.latLngBounds(allCoords);
+
+//     const pathCurvatures = {};
+//     const pathCounts = {};
+//     summaryData.forEach((transfer, index) => {
+//         const { src, dest } = transfer;
+//         const pathKey = [src, dest].sort().join('-');
+//         pathCounts[pathKey] = (pathCounts[pathKey] || 0) + 1;
+//         const count = pathCounts[pathKey];
+//         const curvature = -0.125 * count;
+//         pathCurvatures[index] = curvature;
+//     });
+    
+//     const locations = new Map();
+//     summaryData.forEach(item => {
+//         if (item.source_coords) locations.set(item.src, item.source_coords);
+//         if (item.destination_coords) locations.set(item.dest, item.destination_coords);
+//     });
+//     const uniqueLocations = Array.from(locations.entries());
+
+//     return (
+//         <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'fixed inset-0 z-50 p-4 bg-black bg-opacity-70' : 'relative h-96 w-full'}`}>
+//             <AnimationStyles />
+//             <div className="rounded-lg overflow-hidden border border-slate-300 h-full w-full bg-slate-100">
+//                 <MapContainer
+//                     bounds={bounds}
+//                     style={{ height: '100%', width: '100%', backgroundColor: '#F8FAFC' }}
+//                     worldCopyJump={false}
+//                 >
+//                     <TileLayer
+//                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+//                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+//                     />
+//                     <MapResizer isExpanded={isExpanded} />
+//                     <MapControls bounds={bounds} isExpanded={isExpanded} setIsExpanded={setIsExpanded} />
+
+//                     {summaryData.map((transfer, index) => {
+//                         if (!transfer.source_coords || !transfer.destination_coords) return null;
+
+//                         const curvedPath = getCurvedPath(
+//                             transfer.source_coords,
+//                             transfer.destination_coords,
+//                             pathCurvatures[index]
+//                         );
+                        
+//                         return (
+//                             <Fragment key={`transfer-${index}`}>
+//                                 {/* 1. The Invisible "Ghost Line" for easy hovering */}
+//                                 <Polyline
+//                                     positions={curvedPath}
+//                                     pathOptions={{
+//                                         color: 'transparent',
+//                                         weight: 20, // Thick and invisible for a large hover target
+//                                     }}
+//                                     eventHandlers={{
+//                                         mouseover: (e) => { setHoveredTransfer(index); e.target.openPopup(); },
+//                                         mouseout: (e) => { setHoveredTransfer(null); e.target.closePopup(); },
+//                                     }}
+//                                 >
+//                                     <Popup>
+//                                         <div className="font-sans text-sm bg-white text-slate-700 p-1 rounded-md shadow-none border-none">
+//                                             <p className="mb-1"><strong>Transfer:</strong> {transfer.src} to {transfer.dest}</p>
+//                                             <p className="mb-1"><strong>Units:</strong> {transfer.total_units.toLocaleString()}</p>
+//                                             <p><strong>SKUs:</strong> {transfer.distinct_skus}</p>
+//                                         </div>
+//                                     </Popup>
+//                                 </Polyline>
+
+//                                 {/* 2. The Visible, Animated Line */}
+//                                 <Polyline
+//                                     positions={curvedPath}
+//                                     className="ant-path"
+//                                     pathOptions={{
+//                                         color: hoveredTransfer === index ? '#F59E0B' : '#2563EB',
+//                                         weight: hoveredTransfer === index ? 4 : 3,
+//                                         opacity: 0.95,
+//                                         interactive: false, // This line ignores mouse events
+//                                     }}
+//                                 />
+//                             </Fragment>
+//                         );
+//                     })}
+                    
+//                     {uniqueLocations.map(([name, coords]) => (
+//                         coords && <Marker key={`location-${name}`} position={coords}><Popup>{name}</Popup></Marker>
+//                     ))}
+//                 </MapContainer>
+//             </div>
+//         </div>
+//     );
+// };
+
+// export default TransferMap;
+
+
+import React, { useState, useEffect, Fragment } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { FiMaximize, FiMinimize, FiRefreshCw } from 'react-icons/fi';
 
-// --- Icon Fix (Standard Leaflet Markers) ---
+// --- Leaflet Icon Fix ---
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
@@ -189,232 +836,200 @@ L.Icon.Default.mergeOptions({
     iconUrl: iconUrl,
     shadowUrl: shadowUrl,
 });
+// --- End Icon Fix ---
 
-// --- Truck Icon ---
-import truckIconSvg from '../assets/truck.svg';
 
-const customTruckIcon = L.icon({
-  iconUrl: truckIconSvg,
-  iconSize: [25, 25],
-  iconAnchor: [12, 12],
-  popupAnchor: [0, -10]
-});
+// --- HELPER COMPONENTS ---
 
-// --- CSS Styles for Line Animation and Tooltips ---
-const DynamicStyles = () => {
+const AnimationStyles = () => {
   const styles = `
-    .animated-ant-path {
-      stroke-dasharray: 10, 20;
-      stroke-linecap: round;
-      animation: ant-path-animation 1.5s linear infinite;
+    .ant-path {
+      stroke-dasharray: 8, 12;
+      animation: ant-path-flow 1s linear infinite;
     }
 
-    @keyframes ant-path-animation {
+    @keyframes ant-path-flow {
       from {
-        stroke-dashoffset: 0;
+        stroke-dashoffset: 20;
       }
       to {
-        stroke-dashoffset: -30;
+        stroke-dashoffset: 0;
       }
-    }
-
-    .leaflet-popup-content-wrapper {
-      background-color: #2D3748;
-      color: #E2E8F0;
-      border-radius: 0.5rem;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    }
-    .leaflet-popup-content {
-      padding: 1rem;
-      font-family: 'Inter', sans-serif;
-      font-size: 0.875rem;
-    }
-    .leaflet-popup-tip {
-      background: #2D3748;
-    }
-    .leaflet-popup-close-button {
-      color: #CBD5E0;
-    }
-    .leaflet-popup-close-button:hover {
-      color: #F8FAFC;
-    }
-    .transfer-tooltip p {
-      margin-bottom: 0.25rem;
-    }
-    .transfer-tooltip strong {
-      color: #63B3ED;
-    }
-    .transfer-tooltip span {
-      color: #A0AEC0;
     }
   `;
   return <style>{styles}</style>;
 };
 
-// --- Helper component to fit map bounds ---
-const MapBoundsAdjuster = ({ bounds }) => {
-    const map = useMap();
-    useEffect(() => {
-        // The isValid check is good practice.
-        if (bounds && bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [70, 70] });
-        }
-    }, [map, bounds]);
-    return null;
-};
-
-// --- Main TransferMap Component ---
-const TransferMap = ({ summaryData }) => {
-  const [hoveredTransfer, setHoveredTransfer] = useState(null);
-  const truckPositionsRef = useRef([]); // Initialize as empty array
-
-  const interpolatePoint = useCallback((start, end, fraction) => {
-    const lat = start[0] + (end[0] - start[0]) * fraction;
-    const lng = start[1] + (end[1] - start[1]) * fraction;
-    return [lat, lng];
-  }, []);
-
-  // --- START: FIX ---
-  // Guard Clause 1: Handle null, undefined, or empty summaryData array.
-  if (!summaryData || summaryData.length === 0) {
-    return (
-        <div className="rounded-lg border border-slate-700 h-96 w-full flex items-center justify-center bg-slate-800 text-slate-400">
-            <p>No transfer data available to display.</p>
-        </div>
-    );
-  }
-
-  // Guard Clause 2: Filter coordinates to ensure they are valid before creating bounds.
-  const allCoords = summaryData
-    .flatMap(d => [d.source_coords, d.destination_coords])
-    .filter(coords => Array.isArray(coords) && coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1]));
-
-  // Guard Clause 3: If, after filtering, there are no valid coordinates, do not render the map.
-  if (allCoords.length === 0) {
-      return (
-          <div className="rounded-lg border border-slate-700 h-96 w-full flex items-center justify-center bg-slate-800 text-slate-400">
-              <p>Transfer data is present but contains no valid geographic coordinates.</p>
-          </div>
-      );
-  }
-  // --- END: FIX ---
-
-  const bounds = L.latLngBounds(allCoords);
-
-  const locations = new Map();
-  summaryData.forEach(item => {
-    // Only add locations with valid coordinates
-    if (item.source_coords) locations.set(item.src, item.source_coords);
-    if (item.destination_coords) locations.set(item.dest, item.destination_coords);
-  });
-  
-  const uniqueLocations = Array.from(locations.entries());
-
-  // Effect for animating the trucks (put after all early returns)
-  useEffect(() => {
-    // We already know summaryData has length > 0 here
-    truckPositionsRef.current = summaryData.map(() => [0, 0]); // Initialize positions
-    let animationFrameId;
-    const startTime = performance.now();
-    const duration = 5000;
-
-    const animateTrucks = (currentTime) => {
-      const elapsedTime = currentTime - startTime;
-      const progress = (elapsedTime % duration) / duration;
-
-      const newPositions = summaryData.map(transfer => {
-        // Ensure coordinates are valid before interpolating
-        if (transfer.source_coords && transfer.destination_coords) {
-            return interpolatePoint(transfer.source_coords, transfer.destination_coords, progress);
-        }
-        return null; // Return null for invalid data
-      });
-      truckPositionsRef.current = newPositions.filter(Boolean); // Filter out nulls
-      
-      // A simple way to trigger re-render for the animation frame
-      setHoveredTransfer(prev => prev);
-      
-      animationFrameId = requestAnimationFrame(animateTrucks);
-    };
-
-    animationFrameId = requestAnimationFrame(animateTrucks);
-
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, [summaryData, interpolatePoint]);
+const MapControls = ({ bounds, isExpanded, setIsExpanded }) => {
+  const map = useMap();
+  const handleResetView = () => {
+    if (bounds && bounds.isValid()) {
+      map.fitBounds(bounds);
+    }
+  };
 
   return (
-    <div className="rounded-lg overflow-hidden border border-slate-700 h-96 w-full relative">
-      <DynamicStyles />
-
-      <MapContainer bounds={bounds} style={{ height: '100%', width: '100%' }}>
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        />
-
-        <MapBoundsAdjuster bounds={bounds} />
-        
-        {summaryData.map((transfer, index) => (
-          // Only render the polyline if coordinates are valid
-          (transfer.source_coords && transfer.destination_coords) && (
-            <React.Fragment key={`transfer-${index}`}>
-              <Polyline
-                positions={[transfer.source_coords, transfer.destination_coords]}
-                className="animated-ant-path" 
-                pathOptions={{ 
-                  color: hoveredTransfer === index ? '#F59E0B' : '#2563EB',
-                  weight: hoveredTransfer === index ? 5 : 3,
-                  opacity: 0.8
-                }}
-                eventHandlers={{
-                  mouseover: (e) => {
-                    setHoveredTransfer(index);
-                    e.target.openPopup();
-                  },
-                  mouseout: (e) => {
-                    setHoveredTransfer(null);
-                    e.target.closePopup();
-                  },
-                }}
-              >
-                <Popup>
-                  <div className="transfer-tooltip">
-                    <p><strong>Transfer:</strong> <span>{transfer.src}</span> to <span>{transfer.dest}</span></p>
-                    <p><strong>Total Units:</strong> <span>{transfer.total_units.toLocaleString()}</span></p>
-                    <p><strong>Distinct SKUs:</strong> <span>{transfer.distinct_skus}</span></p>
-                  </div>
-                </Popup>
-              </Polyline>
-
-              {truckPositionsRef.current[index] && (
-                <Marker 
-                  position={truckPositionsRef.current[index]} 
-                  icon={customTruckIcon} 
-                  zIndexOffset={1000}
-                />
-              )}
-            </React.Fragment>
-          )
-        ))}
-
-        {uniqueLocations.map(([name, coords]) => (
-          // Final check for valid coords before rendering marker
-          coords && <Marker key={`location-${name}`} position={coords}>
-            <Popup>{name}</Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+    <div className="absolute top-2 right-2 z-[1000] flex flex-col space-y-2">
+      <button
+        onClick={handleResetView}
+        className="p-2 bg-white text-slate-800 rounded-md shadow-md hover:bg-slate-100 transition-colors"
+        aria-label="Reset map view"
+      >
+        <FiRefreshCw size={18} />
+      </button>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="p-2 bg-white text-slate-800 rounded-md shadow-md hover:bg-slate-100 transition-colors"
+        aria-label={isExpanded ? 'Minimize map' : 'Expand map'}
+      >
+        {isExpanded ? <FiMinimize size={18} /> : <FiMaximize size={18} />}
+      </button>
     </div>
   );
 };
 
-export default TransferMap;
+const MapResizer = ({ isExpanded }) => {
+  const map = useMap();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [isExpanded, map]);
+  return null;
+};
+
+const getCurvedPath = (start, end, curvature) => {
+    const consistentStart = start[1] < end[1] ? start : end;
+    const consistentEnd = start[1] < end[1] ? end : start;
+    const latlng1 = L.latLng(consistentStart);
+    const latlng2 = L.latLng(consistentEnd);
+    const offsetX = latlng2.lng - latlng1.lng;
+    const offsetY = latlng2.lat - latlng1.lat;
+    const mid = L.latLng(latlng1.lat + offsetY / 2, latlng1.lng + offsetX / 2);
+    const controlPoint = L.latLng(
+        mid.lat - offsetX * curvature,
+        mid.lng + offsetY * curvature
+    );
+    const actualStart = L.latLng(start);
+    const actualEnd = L.latLng(end);
+    const points = [];
+    for (let i = 0; i <= 50; i++) {
+        const t = i / 50.0;
+        const lat = (1 - t) * (1 - t) * actualStart.lat + 2 * (1 - t) * t * controlPoint.lat + t * t * actualEnd.lat;
+        const lng = (1 - t) * (1 - t) * actualStart.lng + 2 * (1 - t) * t * controlPoint.lng + t * t * actualEnd.lng;
+        points.push([lat, lng]);
+    }
+    return points;
+};
 
 
+// --- MAIN TRANSFER MAP COMPONENT ---
+const TransferMap = ({ summaryData }) => {
+    const [hoveredTransfer, setHoveredTransfer] = useState(null);
+    const [isExpanded, setIsExpanded] = useState(false);
 
+    if (!summaryData || summaryData.length === 0) return null;
+    const allCoords = summaryData
+        .flatMap(d => [d.source_coords, d.destination_coords])
+        .filter(coords => Array.isArray(coords) && coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1]));
+    if (allCoords.length === 0) return null;
 
+    const bounds = L.latLngBounds(allCoords);
+
+    const pathCurvatures = {};
+    const pathCounts = {};
+    summaryData.forEach((transfer, index) => {
+        const { src, dest } = transfer;
+        const pathKey = [src, dest].sort().join('-');
+        pathCounts[pathKey] = (pathCounts[pathKey] || 0) + 1;
+        const count = pathCounts[pathKey];
+        const curvature = -0.125 * count;
+        pathCurvatures[index] = curvature;
+    });
+    
+    const locations = new Map();
+    summaryData.forEach(item => {
+        if (item.source_coords) locations.set(item.src, item.source_coords);
+        if (item.destination_coords) locations.set(item.dest, item.destination_coords);
+    });
+    const uniqueLocations = Array.from(locations.entries());
+
+    return (
+        <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'fixed inset-0 z-50 p-4 bg-black bg-opacity-70' : 'relative h-96 w-full'}`}>
+            <AnimationStyles />
+            <div className="rounded-lg overflow-hidden border border-slate-300 h-full w-full bg-slate-100">
+                <MapContainer
+                    bounds={bounds}
+                    style={{ height: '100%', width: '100%', backgroundColor: '#F8FAFC' }}
+                    worldCopyJump={false}
+                >
+                    <TileLayer
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    />
+                    <MapResizer isExpanded={isExpanded} />
+                    <MapControls bounds={bounds} isExpanded={isExpanded} setIsExpanded={setIsExpanded} />
+
+                    {summaryData.map((transfer, index) => {
+                        if (!transfer.source_coords || !transfer.destination_coords) return null;
+
+                        const curvedPath = getCurvedPath(
+                            transfer.source_coords,
+                            transfer.destination_coords,
+                            pathCurvatures[index]
+                        );
+                        
+                        return (
+                            <Fragment key={`transfer-${index}`}>
+                                {/* 1. The Invisible "Ghost Line" for easy hovering */}
+                                <Polyline
+                                    positions={curvedPath}
+                                    pathOptions={{
+                                        color: 'transparent',
+                                        weight: 20, // Thick and invisible for a large hover target
+                                    }}
+                                    eventHandlers={{
+                                        mouseover: (e) => { setHoveredTransfer(index); e.target.openPopup(); },
+                                        mouseout: (e) => { setHoveredTransfer(null); e.target.closePopup(); },
+                                    }}
+                                >
+                                    <Popup>
+                                        <div className="font-sans text-sm bg-white text-slate-700 p-1 rounded-md shadow-none border-none">
+                                            <p className="mb-1"><strong>Transfer:</strong> {transfer.src} to {transfer.dest}</p>
+                                            <p className="mb-1"><strong>Units:</strong> {transfer.total_units.toLocaleString()}</p>
+                                            <p><strong>SKUs:</strong> {transfer.distinct_skus}</p>
+                                        </div>
+                                    </Popup>
+                                </Polyline>
+
+                                {/* 2. The Visible, Animated Line */}
+                                <Polyline
+                                    positions={curvedPath}
+                                    className="ant-path"
+                                    pathOptions={{
+                                        // --- THIS IS THE ONLY CHANGE ---
+                                        color: hoveredTransfer === index ? '#EC4899' : '#10B981',
+                                        // --------------------------------
+                                        weight: hoveredTransfer === index ? 4 : 3,
+                                        opacity: 0.95,
+                                        interactive: false, // This line ignores mouse events
+                                    }}
+                                />
+                            </Fragment>
+                        );
+                    })}
+                    
+                    {uniqueLocations.map(([name, coords]) => (
+                        coords && <Marker key={`location-${name}`} position={coords}><Popup>{name}</Popup></Marker>
+                    ))}
+                </MapContainer>
+            </div>
+        </div>
+    );
+};
+
+export default TransferMap;   
 
 // import React, { useEffect, useState, useRef, useCallback } from 'react';
 // import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';

@@ -314,11 +314,35 @@ def get_transfer_details(allocations: list, shortages_excesses: list, transfer_i
         })
     return detailed_allocations
 
+# In rebalancer_services.py
+
+# Make sure you have the Store model imported at the top of the file
+from app.models.store import Store
+# ... other imports
+
+# In rebalancer_services.py
+
 def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_info_map: dict, ddos_days: int):
     """Aggregates rebalancing allocations to provide a summary by src-dest pair."""
     summary = defaultdict(lambda: {"distinct_skus": set(), "total_units": 0, "arrival_date": None})
     today = date.today()
-    
+
+    # --- START: REVISED BLOCK ---
+    # Fetch all store locations and create a lookup dictionary for efficiency.
+    try:
+        stores_query = db.session.query(Store.store_code, Store.lat, Store.long).all()
+        # FIX: Normalize store_code to lowercase to match the lookup keys used later.
+        # FIX: Also convert lat/long to float to ensure correct data types.
+        store_locations = {
+            code.lower().strip(): [float(lat), float(lon)]
+            for code, lat, lon in stores_query if code and lat is not None and lon is not None
+        }
+    except Exception as e:
+        logger.error(f"Could not fetch or process store locations: {e}")
+        store_locations = {} # Default to an empty dict on error
+    # --- END: REVISED BLOCK ---
+
+    # (The rest of the function remains the same)
     for allocation in allocations:
         src, dst = allocation['src'], allocation['dst']
         key = (src, dst)
@@ -331,7 +355,6 @@ def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_i
         
     formatted_summary = []
     for (src, dst), data in summary.items():
-        # Use the new helper function to get DOS and daily forecast for the transferred group of SKUs
         skus_in_transfer = data["distinct_skus"]
         src_dos, _, src_daily_forecast = get_transfer_group_supply_details(src, skus_in_transfer, shortages_excesses, ddos_days)
         dst_dos, _, dst_daily_forecast = get_transfer_group_supply_details(dst, skus_in_transfer, shortages_excesses, ddos_days)
@@ -343,6 +366,8 @@ def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_i
             "dst_days_of_supply": round(dst_dos, 2),
             "src_daily_forecast": round(src_daily_forecast, 2),
             "dst_daily_forecast": round(dst_daily_forecast, 2),
-            "arrival_date": data["arrival_date"]
+            "arrival_date": data["arrival_date"],
+            "source_coords": store_locations.get(src),
+            "destination_coords": store_locations.get(dst)
         })
     return formatted_summary
