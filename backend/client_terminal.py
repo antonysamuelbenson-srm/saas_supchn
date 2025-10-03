@@ -921,6 +921,15 @@ MENU_OPTIONS = {
             "2": {"desc": "Refresh Weeks of Supply Data", "route": "POST:/api/weeks-of-supply/refresh"},
             "3": {"desc": "Back to Main Menu", "route": None}
         }
+    },
+    "19": {
+    "desc": "Demand Trend Analysis",
+    "route": None,
+    "submenu": {
+        "1": {"desc": "View Store Summary", "route": "GET:/api/demand-trend/store-summary"},
+        "2": {"desc": "Refresh Demand Trend Data", "route": "POST:/api/demand-trend/refresh"},
+        "3": {"desc": "Back to Main Menu", "route": None}
+    }
     }
 }
 
@@ -1860,7 +1869,341 @@ def view_weeks_of_supply_by_store(token):
     
     except Exception as e:
         print(f"❌ Error fetching store summary: {str(e)}")
+
+
+def view_demand_trend_by_store(token):
+    """View demand trend analysis - store selection and SKU details"""
+    
+    # Step 1: Get store summary
+    print("\n📈 Fetching demand trend store summary...")
+    
+    try:
+        resp = requests.get(
+            f"{BASE_URL}/api/demand-trend/store-summary",
+            headers={"Authorization": f"Bearer {token}"}
+        )
         
+        # Debug information
+        print(f"\n🔍 DEBUG INFO:")
+        print(f"   Status Code: {resp.status_code}")
+        print(f"   Content-Type: {resp.headers.get('Content-Type', 'N/A')}")
+        print(f"   Response Length: {len(resp.text)} chars")
+        print(f"   First 200 chars: {resp.text[:200]}")
+        
+        if resp.status_code != 200:
+            try:
+                error_data = resp.json()
+                print(f"\n❌ Error: {error_data.get('error', 'Unknown error')}")
+            except:
+                print(f"\n❌ HTTP {resp.status_code} Error")
+                print(f"   Response: {resp.text[:500]}")
+            return
+        
+        try:
+            result = resp.json()
+        except Exception as json_err:
+            print(f"\n❌ Failed to parse JSON response")
+            print(f"   Error: {str(json_err)}")
+            print(f"   Response text: {resp.text[:500]}")
+            return
+        
+        if not result.get('success'):
+            print(f"\n❌ Error: {result.get('error', 'Unknown error')}")
+            return
+        
+        stores = result.get('data', [])
+        
+        if not stores:
+            print("\n⚠️  No data available. Please refresh demand trend data first (Option 2).")
+            print("   This will calculate demand trends based on your sales and forecast data.")
+            return
+        
+        # Display store list
+        print("\n" + "="*100)
+        print("📍 DEMAND TREND - STORE SUMMARY")
+        print("="*100)
+        print(f"{'#':<5} {'Store ID':<15} {'Total SKUs':<12} {'Accelerating':<15} {'Stable':<15} {'Decelerating':<15}")
+        print("-"*100)
+        
+        for idx, store in enumerate(stores, 1):
+            print(f"{idx:<5} {store['store_id']:<15} {store['total_skus']:<12} "
+                  f"🟢 {store.get('accelerating_count', 0):<13} "
+                  f"🔵 {store.get('stable_count', 0):<13} "
+                  f"🟠 {store.get('decelerating_count', 0):<13}")
+        
+        print("="*100)
+        
+        # Step 2: Let user select a store
+        store_choice = input("\nEnter store number to view SKU details (or 'q' to go back): ").strip()
+        
+        if store_choice.lower() == 'q':
+            return
+        
+        try:
+            store_idx = int(store_choice) - 1
+            if store_idx < 0 or store_idx >= len(stores):
+                print("❌ Invalid store number.")
+                return
+            
+            selected_store = stores[store_idx]
+            store_id = selected_store['store_id']
+            
+            # Step 3: Show store overview
+            print(f"\n{'='*100}")
+            print(f"📈 DEMAND TREND - STORE ID: {store_id}")
+            print(f"{'='*100}")
+            print(f"📊 Total SKUs: {selected_store['total_skus']}")
+            print(f"🟢 Accelerating (Stock Up): {selected_store.get('accelerating_count', 0)}")
+            print(f"🔵 Stable (Normal): {selected_store.get('stable_count', 0)}")
+            print(f"🟠 Decelerating (Slow Down): {selected_store.get('decelerating_count', 0)}")
+            print(f"{'='*100}\n")
+            
+            # Step 4: Filter options
+            print("Filter by trend category (optional):")
+            print("1. Accelerating only (Stock Up)")
+            print("2. Stable only (Normal)")
+            print("3. Decelerating only (Slow Down)")
+            print("4. All categories")
+            
+            filter_choice = input("\nEnter filter choice (default: 4 - All): ").strip() or "4"
+            
+            category_map = {
+                "1": "Accelerating",
+                "2": "Stable",
+                "3": "Decelerating",
+                "4": None
+            }
+            
+            category_filter = category_map.get(filter_choice)
+            
+            # Step 5: Fetch SKU details
+            params = {}
+            if category_filter:
+                params['trend_category'] = category_filter
+            
+            sku_resp = requests.get(
+                f"{BASE_URL}/api/demand-trend/sku-details/{store_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                params=params
+            )
+            
+            if sku_resp.status_code != 200:
+                try:
+                    print(f"❌ Error: {sku_resp.json().get('error', 'Unknown error')}")
+                except:
+                    print(f"❌ HTTP {sku_resp.status_code} Error: {sku_resp.text[:200]}")
+                return
+            
+            try:
+                sku_result = sku_resp.json()
+            except:
+                print(f"❌ Failed to parse SKU details response")
+                print(f"   Response: {sku_resp.text[:500]}")
+                return
+            
+            if not sku_result.get('success'):
+                print(f"❌ Error: {sku_result.get('error', 'Unknown error')}")
+                return
+            
+            skus = sku_result.get('data', [])
+            
+            if not skus:
+                print("\n⚠️  No SKUs found with the selected filter.")
+                return
+            
+            # Step 6: Display SKU details
+            print(f"\n{'='*120}")
+            print(f"📈 DEMAND TREND - SKU DETAILS - Store ID: {store_id} {f'(Filter: {category_filter})' if category_filter else '(All)'}")
+            print(f"{'='*120}")
+            print(f"{'SKU':<20} {'Recent Sales':<15} {'Forecast':<15} {'Trend %':<15} {'Category':<20}")
+            print("-"*120)
+            
+            for sku in skus:
+                # Color coding for terminal
+                category = sku['trend_category']
+                if category == 'Accelerating':
+                    category_display = f"🟢 {category}"
+                elif category == 'Stable':
+                    category_display = f"🔵 {category}"
+                else:
+                    category_display = f"🟠 {category}"
+                
+                recent_sales = float(sku.get('recent_avg_sales', 0))
+                forecast = float(sku.get('forecast_demand', 0))
+                trend_pct = float(sku.get('trend_percentage', 0))
+                
+                trend_display = f"{trend_pct:+.1f}%" if trend_pct != 0 else "0.0%"
+                
+                print(f"{sku['sku']:<20} "
+                      f"{recent_sales:<15.2f} "
+                      f"{forecast:<15.2f} "
+                      f"{trend_display:<15} "
+                      f"{category_display:<20}")
+            
+            print("="*120)
+            print(f"\n📊 Showing {len(skus)} SKU(s)")
+            
+            # Summary statistics
+            if skus:
+                total_accelerating = sum(1 for s in skus if s['trend_category'] == 'Accelerating')
+                total_stable = sum(1 for s in skus if s['trend_category'] == 'Stable')
+                total_decelerating = sum(1 for s in skus if s['trend_category'] == 'Decelerating')
+                
+                print(f"\n📈 Summary:")
+                print(f"   🟢 Accelerating: {total_accelerating} SKUs")
+                print(f"   🔵 Stable: {total_stable} SKUs")
+                print(f"   🟠 Decelerating: {total_decelerating} SKUs")
+            
+            input("\nPress Enter to continue...")
+            
+        except ValueError:
+            print("❌ Invalid input. Please enter a number.")
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Network error: {str(e)}")
+        print(f"   Make sure your Flask server is running at {BASE_URL}")
+    except Exception as e:
+        print(f"❌ Error fetching store summary: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+
+def refresh_demand_trend(token):
+    """Manually refresh demand trend calculations"""
+    print("\n" + "="*60)
+    print("🔄 REFRESH DEMAND TREND DATA")
+    print("="*60)
+    print("\nThis will update the last_updated timestamp for all records.")
+    print("="*60)
+    
+    lookback = input("\nLookback days (default 30): ").strip() or "30"
+    horizon = input("Forecast horizon days (default 14): ").strip() or "14"
+    
+    try:
+        lookback_int = int(lookback)
+        horizon_int = int(horizon)
+        
+        print("\n🔄 Processing...")
+        
+        resp = requests.post(
+            f"{BASE_URL}/api/demand-trend/refresh",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "lookback_days": lookback_int,
+                "forecast_horizon_days": horizon_int
+            }
+        )
+        
+        print(f"\n🔍 DEBUG: Status Code: {resp.status_code}")
+        print(f"🔍 DEBUG: Response: {resp.text[:500]}")
+        
+        if resp.status_code == 200:
+            try:
+                result = resp.json()
+                if result.get('success'):
+                    rows_affected = result.get('rows_affected', 0)
+                    print(f"\n✅ Success! Demand trend data refreshed.")
+                    print(f"📊 {rows_affected} records updated.")
+                    print(f"\nYou can now view demand trends by store (Option 1).")
+                else:
+                    print(f"\n❌ Error: {result.get('error', 'Unknown error')}")
+            except:
+                print(f"\n❌ Failed to parse response JSON")
+                print(f"   Response: {resp.text[:500]}")
+        else:
+            try:
+                error_msg = resp.json().get('error', 'Unknown error')
+                print(f"\n❌ Error: {error_msg}")
+            except:
+                print(f"\n❌ HTTP {resp.status_code} Error")
+                print(f"   Response: {resp.text[:500]}")
+    
+    except ValueError:
+        print("❌ Invalid input. Please enter numeric values.")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Network error: {str(e)}")
+        print(f"   Make sure your Flask server is running at {BASE_URL}")
+    except Exception as e:
+        print(f"❌ Error refreshing data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+
+def demand_trend_menu(token):
+    """Handle demand trend analysis menu"""
+    while True:
+        print("\n" + "="*60)
+        print("📈 DEMAND TREND ANALYSIS")
+        print("="*60)
+        print("1. View Store Summary & SKU Details")
+        print("2. Refresh Demand Trend Data")
+        print("3. View Available Categories")
+        print("4. Back to Main Menu")
+        print("="*60)
+        
+        choice = input("\nEnter your choice: ").strip()
+        
+        if choice == "1":
+            view_demand_trend_by_store(token)
+        elif choice == "2":
+            refresh_demand_trend(token)
+        elif choice == "3":
+            view_trend_categories(token)
+        elif choice == "4":
+            break
+        else:
+            print("❌ Invalid choice. Please enter 1-4.")
+
+
+def view_trend_categories(token):
+    """View available trend categories and their descriptions"""
+    try:
+        resp = requests.get(
+            f"{BASE_URL}/api/demand-trend/categories",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        print(f"\n🔍 DEBUG: Status Code: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            try:
+                result = resp.json()
+                if result.get('success'):
+                    categories = result.get('data', [])
+                    
+                    print("\n" + "="*80)
+                    print("📊 DEMAND TREND CATEGORIES")
+                    print("="*80)
+                    
+                    for cat in categories:
+                        icon = "🟢" if cat['value'] == "Accelerating" else "🔵" if cat['value'] == "Stable" else "🟠"
+                        print(f"\n{icon} {cat['label']}")
+                        print(f"   Description: {cat['description']}")
+                    
+                    print("\n" + "="*80)
+                    print("\n💡 Use these categories to filter SKUs when viewing store details.")
+                else:
+                    print(f"❌ Error: {result.get('error', 'Unknown error')}")
+            except:
+                print(f"❌ Failed to parse JSON")
+                print(f"   Response: {resp.text[:500]}")
+        else:
+            try:
+                print(f"❌ Error: {resp.json().get('error', 'Unknown error')}")
+            except:
+                print(f"❌ HTTP {resp.status_code} Error: {resp.text[:200]}")
+        
+        input("\nPress Enter to continue...")
+    
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
 def main():
     while True:
         print("\n==== Inventory Maintainer ====")
@@ -1934,6 +2277,8 @@ def main():
                         inventory_levels_filter(token)
                     elif action == "18":  # NEW: Weeks of Supply
                         weeks_of_supply_menu(token)
+                    elif action == "19":
+                        demand_trend_menu(token)
                     else:
                         print("❌ Invalid choice.")
 

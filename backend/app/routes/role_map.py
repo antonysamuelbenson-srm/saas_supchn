@@ -42,7 +42,6 @@ ROUTE_ROLE_MAP = {
     "GET:/forecast/logs": ["admin", "editor", "viewer"],
     "GET:/forecast/accuracy/overall": ["admin", "editor", "viewer"],
     "GET:/forecast/accuracy/detail": ["admin", "editor", "viewer"],
-
     "GET:/forecast/accuracy":              ["admin", "editor", "viewer"],
 
     # --- Store ---
@@ -53,21 +52,19 @@ ROUTE_ROLE_MAP = {
     "GET:/stores/with-alert-status":               ["admin", "editor", "viewer"],
     "GET:/store/<int:store_id>/with-alert-status": ["admin", "editor", "viewer"],
 
-       # -----display all skus  -----
+    # -----display all skus  -----
     "GET:/skus":                       ["admin", "editor", "viewer"],
-
 
     # --- Node Location Update ---
     "POST:/update_store":               ["admin", "editor"],
 
     # --- Reorder ---
-    "GET:/reorder/generate": ["admin", "editor", "viewer"],   # View reorder suggestions (centralized for all)
+    "GET:/reorder/generate": ["admin", "editor", "viewer"],
     "POST:/reorder/place":      ["admin", "editor"],
 
     # ----Availability rate----
     "GET:/availability": ["admin", "editor","viewer"],
     "POST:/availability/recompute" : ["admin", "editor"],
-
 
     # --- Uploads ---
     "POST:/api/upload/store":                ["admin", "editor", "viewer"],
@@ -79,14 +76,21 @@ ROUTE_ROLE_MAP = {
 
     "GET:/user/permissions": ["admin", "editor", "viewer"],
 
-
-        # --- Rebalancer ---
+    # --- Rebalancer ---
     "POST:/api/rebalance": ["admin"],
 
-    # ---filters ---
-    "GET:/store_inventory_summary": ["admin", "viewer"],  # Adjust roles as needed
-    "GET /api/weeks-of-supply/store-summary" : ["admin", "viewer"],
-    "POST /api/weeks-of-supply/refresh" : ["admin", "viewer"]
+    # --- Weeks of Supply Filter ---
+    "GET:/api/weeks-of-supply/store-summary": ["admin", "editor", "viewer"],
+    "GET:/api/weeks-of-supply/sku-details/<int:store_id>": ["admin", "editor", "viewer"],
+    "POST:/api/weeks-of-supply/refresh": ["admin", "editor"],
+    "GET:/api/weeks-of-supply/categories": ["admin", "editor", "viewer"],
 
+    # --- Demand Trend Analysis ---
+    "GET:/api/demand-trend/store-summary": ["admin", "editor", "viewer"],
+    "GET:/api/demand-trend/sku-details/<int:store_id>": ["admin", "editor", "viewer"],
+    "POST:/api/demand-trend/refresh": ["admin", "editor"],
+    "GET:/api/demand-trend/categories": ["admin", "editor", "viewer"],
 
+    # ---Store Inventory Summary Filter ---
+    "GET:/store_inventory_summary": ["admin", "editor", "viewer"],
 }
