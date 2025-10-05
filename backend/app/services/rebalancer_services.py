@@ -20,13 +20,16 @@ def _normalize_key(key_part):
 
 def compute_shortages_excesses(ddos_days: int):
     """
-    Computes inventory shortages and excesses using a robust query
-    that includes items with forecasts but no inventory.
+    Computes inventory shortages and excesses by retrieving the QTY from the 
+    LATEST INVENTORY SNAPSHOT ONLY, and comparing against the forecast demand.
     """
     today = date.today()
     future = today + timedelta(days=ddos_days)
 
-    # Step 1: Create a subquery for all unique store/SKU combinations
+    # Step 0: Find the maximum snapshot_date (CRITICAL FIX)
+    MaxDate = select(func.max(InventorySnapshot.snapshot_date)).scalar_subquery().cte("max_date")
+    
+    # Step 1: Create a subquery for all unique store/SKU combinations (UNCHANGED)
     inv_keys = select(InventorySnapshot.store_id, InventorySnapshot.sku).distinct()
     fc_keys = select(Store.store_id, Forecast.product_id.label("sku")).join(Store, Store.store_code == Forecast.store_id).distinct()
     all_keys_stmt = union_all(inv_keys, fc_keys).alias("all_keys")
@@ -37,9 +40,9 @@ def compute_shortages_excesses(ddos_days: int):
         select(
             InventorySnapshot.store_id,
             InventorySnapshot.sku,
-            func.sum(InventorySnapshot.qty).label("total_inventory"),
+            InventorySnapshot.qty.label("total_inventory"), # Use QTY directly, not SUM
         )
-        .group_by(InventorySnapshot.store_id, InventorySnapshot.sku)
+        .where(InventorySnapshot.snapshot_date == MaxDate.c.max) # FILTER by MAX DATE
         .cte("inv_totals")
     )
 
@@ -54,7 +57,7 @@ def compute_shortages_excesses(ddos_days: int):
         .cte("fc_totals")
     )
     
-    # Step 3: Join everything together starting from the complete set of keys.
+    # Step 3: Join everything together starting from the complete set of keys. (UNCHANGED)
     query = (
         select(
             Store.store_code,
@@ -169,7 +172,7 @@ def run_rebalancer(ddos_days: int):
         excess = {(_normalize_key(r["store"]), _normalize_key(r["sku"])): r["excess"] for r in shortages_excesses if r["excess"] > 0}
         shortage = {(_normalize_key(r["store"]), _normalize_key(r["sku"])): r["shortage"] for r in shortages_excesses if r["shortage"] > 0}
 
-        SHORTAGE_COST, LEAD_TIME_PENALTY_FACTOR = 1000, 5
+        SHORTAGE_COST, LEAD_TIME_PENALTY_FACTOR = 100000, 0.1
         model = pulp.LpProblem("Rebalance", pulp.LpMinimize)
         x, y = {}, pulp.LpVariable.dicts("Shortage", shortage.keys(), 0, None, "Integer")
 
@@ -262,10 +265,7 @@ def get_transfer_group_supply_details(store: str, skus: set, shortages_excesses:
     
     return overall_dos, total_inventory, daily_demand
 
-# --- START: FIX ---
-# Swapped the last two parameters to match the argument order from the calling code in rebalancer.py
-def get_transfer_details(allocations: list, shortages_excesses: list, transfer_info_map: dict, unfulfilled_shortages: dict, ddos_days: int):
-# --- END: FIX ---
+def get_transfer_details(allocations: list, shortages_excesses: list, transfer_info_map: dict, ddos_days: int, unfulfilled_shortages: dict):
     """
     Enriches the allocation data with detailed information for the download view.
     """
@@ -314,35 +314,11 @@ def get_transfer_details(allocations: list, shortages_excesses: list, transfer_i
         })
     return detailed_allocations
 
-# In rebalancer_services.py
-
-# Make sure you have the Store model imported at the top of the file
-from app.models.store import Store
-# ... other imports
-
-# In rebalancer_services.py
-
 def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_info_map: dict, ddos_days: int):
     """Aggregates rebalancing allocations to provide a summary by src-dest pair."""
     summary = defaultdict(lambda: {"distinct_skus": set(), "total_units": 0, "arrival_date": None})
     today = date.today()
-
-    # --- START: REVISED BLOCK ---
-    # Fetch all store locations and create a lookup dictionary for efficiency.
-    try:
-        stores_query = db.session.query(Store.store_code, Store.lat, Store.long).all()
-        # FIX: Normalize store_code to lowercase to match the lookup keys used later.
-        # FIX: Also convert lat/long to float to ensure correct data types.
-        store_locations = {
-            code.lower().strip(): [float(lat), float(lon)]
-            for code, lat, lon in stores_query if code and lat is not None and lon is not None
-        }
-    except Exception as e:
-        logger.error(f"Could not fetch or process store locations: {e}")
-        store_locations = {} # Default to an empty dict on error
-    # --- END: REVISED BLOCK ---
-
-    # (The rest of the function remains the same)
+    
     for allocation in allocations:
         src, dst = allocation['src'], allocation['dst']
         key = (src, dst)
@@ -355,6 +331,7 @@ def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_i
         
     formatted_summary = []
     for (src, dst), data in summary.items():
+        # Use the new helper function to get DOS and daily forecast for the transferred group of SKUs
         skus_in_transfer = data["distinct_skus"]
         src_dos, _, src_daily_forecast = get_transfer_group_supply_details(src, skus_in_transfer, shortages_excesses, ddos_days)
         dst_dos, _, dst_daily_forecast = get_transfer_group_supply_details(dst, skus_in_transfer, shortages_excesses, ddos_days)
@@ -366,8 +343,6 @@ def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_i
             "dst_days_of_supply": round(dst_dos, 2),
             "src_daily_forecast": round(src_daily_forecast, 2),
             "dst_daily_forecast": round(dst_daily_forecast, 2),
-            "arrival_date": data["arrival_date"],
-            "source_coords": store_locations.get(src),
-            "destination_coords": store_locations.get(dst)
+            "arrival_date": data["arrival_date"]
         })
     return formatted_summary
