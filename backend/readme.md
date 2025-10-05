@@ -1,6 +1,105 @@
 
 <img width="261" alt="Screenshot 2025-06-18 at 2 26 46 PM" src="https://github.com/user-attachments/assets/4d572935-01ff-4058-9dce-b8303c2c3825" />
 
+current tree for backend :
+```bash
+.
+├── app
+│   ├── forecast_scheduler.py
+│   ├── __init__.py
+│   ├── models
+│   │   ├── alert.py
+│   │   ├── availability.py
+│   │   ├── dashboard.py
+│   │   ├── forecast_log.py
+│   │   ├── forecast.py
+│   │   ├── forecast_schedule.py
+│   │   ├── __init__.py
+│   │   ├── inventory.py
+│   │   ├── predict.py
+│   │   ├── products.py
+│   │   ├── reorder_config.py
+│   │   ├── reorder.py
+│   │   ├── roles.py
+│   │   ├── sales.py
+│   │   ├── store.py
+│   │   ├── store_total_data.py
+│   │   ├── transfer_cost_data.py
+│   │   ├── upload_batch.py
+│   │   ├── user.py
+│   │   └── warehouse_max_data.py
+│   ├── routes
+│   │   ├── admin.py
+│   │   ├── admin_seeder.py
+│   │   ├── alerts.py
+│   │   ├── auth.py
+│   │   ├── availability.py
+│   │   ├── chatbot.py
+│   │   ├── config.py
+│   │   ├── dashboard.py
+│   │   ├── forecast.ipynb
+│   │   ├── forecast.py
+│   │   ├── __init__.py
+│   │   ├── node_location_update.py
+│   │   ├── rebalancer.py
+│   │   ├── reorder.py
+│   │   ├── role_map.py
+│   │   ├── store_upload.py
+│   │   └── upload.py
+│   ├── services
+│   │   ├── ai_service.py
+│   │   ├── forecast_model.py
+│   │   ├── forecast_service.py
+│   │   ├── ingest_csvs.py
+│   │   ├── rebalancer_services.py
+│   │   └── ts.pkl
+│   └── utils
+│       ├── db.py
+│       ├── decorators.py
+│       ├── feature_engineering.py
+│       ├── forecast_model.pkl
+│       ├── forecast_utils.py
+│       ├── jwt_utils.py
+│       ├── kpi_calc.py
+│       ├── model.pkl
+│       ├── store_sync.py
+│       ├── sync_products.py
+│       └── threshold_calc.py
+├── client_terminal.py
+├── csvs
+│   ├── capacity.csv
+│   ├── forecast_july_sep_2025.csv
+│   ├── forecast_outputs
+│   │   ├── forecast_next_weeks_sku.csv
+│   │   ├── forecast_next_weeks_store.csv
+│   │   ├── metrics_sku.csv
+│   │   └── metrics_store.csv
+│   ├── inventory_aug_sep_2025.csv
+│   ├── inventory_july_sep_2025.csv
+│   ├── inventory_modified_2025.csv
+│   ├── inventory_snapshot_2024-09-01_sample.csv
+│   ├── inv_jul_sep.csv
+│   ├── sale_data.csv
+│   ├── sales_data.csv
+│   ├── stores_master_sample.csv
+│   ├── total_store_data.CSV
+│   └── transfercost.csv
+├── debug_model.lp
+├── Dockerfile
+├── init_db.py
+├── inventory_db.py
+├── logic.md
+├── readme.md
+├── rebalancing_recommendations_2025-09-18.csv
+├── rebalancing_recommendations_2025-09-23.csv
+├── rebalancing_recommendations_2025-09-28.csv
+├── requirements.txt
+├── run.py
+├── test.csv
+└── test.py
+
+8 directories, 86 files
+```
 
 📁 app/ — Main Flask application package
 This folder contains all the logic of your backend: models, API routes, and utility functions.
@@ -164,3 +263,20 @@ project/
 Because both app/ and routes/ have __init__.py, Python lets you do:
 
 
+
+
+
+==================For AI module===========================================
+
+For now the LLM used is Mistral via Ollama as there we some server side and storage issues for using models via hugginface. 
+* In order to run and test through client terminal, open a new terminal and run the following command :
+
+```bash
+ollama serve
+```
+then in another terminal run :
+```bash
+ollama run mistral
+```
+- make sure to install the dependencies :
+    - 

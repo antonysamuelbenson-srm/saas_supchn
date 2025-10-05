@@ -48,7 +48,7 @@ def create_app():
 
 
     # ✅ Register Blueprints INSIDE this function
-    from app.routes import auth, dashboard, alerts, upload, config, store_upload, node_location_update, reorder, availability, admin, forecast, rebalancer
+    from app.routes import auth, dashboard, alerts, upload, config, store_upload, node_location_update, reorder, availability, admin, forecast, rebalancer, chatbot
     app.register_blueprint(auth.bp)
     app.register_blueprint(admin.bp, url_prefix="/admin")
     app.register_blueprint(dashboard.bp)
@@ -62,5 +62,6 @@ def create_app():
     app.register_blueprint(forecast.bp)
     # Ensure this blueprint has the correct prefix for the CORS rule to apply
     app.register_blueprint(rebalancer.bp, url_prefix='/api')
+    app.register_blueprint(chatbot.bp)
 
     return app

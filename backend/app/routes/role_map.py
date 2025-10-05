@@ -85,5 +85,7 @@ ROUTE_ROLE_MAP = {
     "GET:/api/rebalance/stores": ["admin", "editor"],
     "POST:/api/rebalance/download": ["admin"],
 
+        # --- Chatbot ---
+    "POST:/chat": ["admin", "editor", "viewer"],
 
 }
