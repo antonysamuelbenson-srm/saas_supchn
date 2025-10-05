@@ -914,7 +914,7 @@ MENU_OPTIONS = {
         
         }
     },
-    "16" : {"desc": "Rebalancer", "route": "POST:/api/rebalance"}
+    "16" : {"desc": "Rebalancer", "route": "POST:/api/rebalance"},
     "17" : {"desc" : "Chat", "route": "POST:/chat"},
 }
 
