@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import Chatbot from "../components/Chatbot";
 
 const AdminUserManager = () => {
   const [users, setUsers] = useState([]);
@@ -178,6 +179,7 @@ const AdminUserManager = () => {
           </div>
         </div>
       )}
+    <Chatbot/>
     </div>
   );
 };

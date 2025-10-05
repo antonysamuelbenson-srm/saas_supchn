@@ -9,7 +9,7 @@ load_dotenv()
 
 # --- CONFIGURATION ---
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "mistral"
+MODEL_NAME = "llama3:latest"
 DB_URL = os.getenv("DATABASE_URL")
 
 if not DB_URL:

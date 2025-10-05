@@ -262,6 +262,7 @@ import { useNavigate } from 'react-router-dom';
 import { FiSliders, FiDownload, FiPlayCircle, FiArrowLeft, FiLoader, FiAlertTriangle, FiFileText, FiMap } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import TransferMap from '../components/TransferMap'; // Import the map component
+import Chatbot from '../components/Chatbot';
 
 // Set the base URL for your API
 const BASE_URL = "http://localhost:5500";
@@ -505,6 +506,7 @@ const Rebalancer = () => {
                     </motion.div>
                 </div>
             </motion.div>
+        <Chatbot/>
         </div>
     );
 };

@@ -2207,6 +2207,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from "react-router-dom";
 import AccuracyDashboard from './AccuracyDashboard';
+import Chatbot from '../components/Chatbot';
 
 // --- API Configuration ---
 const API_BASE_URL = 'http://127.0.0.1:5500';
@@ -2529,6 +2530,7 @@ const ForecastPage = () => {
                     </AnimatePresence>
                 </main>
             </div>
+        <Chatbot/>
         </div>
     );
 };
