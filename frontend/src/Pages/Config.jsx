@@ -594,6 +594,7 @@ import axios from "axios";
 import { AnimatePresence, motion } from "framer-motion";
 import { FilePlus, Edit, Calculator, BarChart, Settings, Plus, RefreshCw } from 'lucide-react';
 import ForecastLookahead from "./ForecastLookahead";
+import Chatbot from "../components/Chatbot";
 
 // --- Constants ---
 const BASE_URL = "http://127.0.0.1:5500";
@@ -1124,6 +1125,7 @@ export default function ConfigPage() {
                     </main>
                 </div>
             </div>
+        <Chatbot/>
         </div>
     );
 }

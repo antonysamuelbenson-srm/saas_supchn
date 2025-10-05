@@ -1136,6 +1136,7 @@ import React, { useState, useEffect } from 'react';
 import { FiTrendingUp, FiCpu, FiTarget, FiAlertCircle, FiRefreshCw } from 'react-icons/fi';
 import Select from 'react-select';
 import HierarchicalTable from './HierarchicalTable'; // Make sure this component exists
+import Chatbot from '../components/Chatbot'
 
 const API_BASE_URL = 'http://127.0.0.1:5500';
 
@@ -1314,6 +1315,7 @@ const AccuracyDashboard = () => {
             <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
                 {loading ? <LoadingSpinner /> : (<HierarchicalTable data={granularData} />)}
             </div>
+            <Chatbot/>
         </div>
     );
 };

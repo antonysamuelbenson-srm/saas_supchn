@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import Chatbot from "../components/Chatbot";
 
 const UPLOAD_TYPES = [
   { type: "store", label: "Store Master" },
@@ -123,6 +124,7 @@ const FileUploadPage = () => {
           ))}
         </div>
       </div>
+    <Chatbot/>
     </div>
   );
 };

@@ -258,6 +258,7 @@ import { useNavigate } from 'react-router-dom';
 import { FiSliders, FiDownload, FiPlayCircle, FiArrowLeft, FiLoader, FiAlertTriangle, FiFileText, FiMap } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import RebalanceMap from './RebalanceMap'; // Assuming RebalanceMap.jsx is in the same directory
+import Chatbot from '../components/Chatbot';
 
 const BASE_URL = "http://localhost:5500";
 
@@ -539,6 +540,7 @@ const Rebalancer = () => {
                     </motion.div>
                 </div>
             </motion.div>
+        <Chatbot/>
         </div>
     );
 };
