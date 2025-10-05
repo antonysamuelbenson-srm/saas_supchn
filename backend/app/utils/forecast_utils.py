@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Define the path where the model will be saved. 
 # It's best practice to use an environment variable or a configuration file.
-MODEL_SAVE_PATH = os.environ.get("MODEL_PATH", "/home/zeal/Desktop/inventory-saas/duxz/backend/app/utils/model.pkl")
+MODEL_SAVE_PATH = os.environ.get("MODEL_PATH", "/tmp/model.pkl")
 
 def load_sales_from_db(split_date=None):
     sql = "SELECT store_id, sku, date, units_sold FROM sales"
