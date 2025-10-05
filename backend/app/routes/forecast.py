@@ -8,7 +8,7 @@ from app import db
 from supabase import create_client
 from app.utils.jwt_utils import decode_jwt
 from app.utils.decorators import role_required
-from app.services.forecast_service import run_manual_forecast, run_full_training_and_save # <-- MODIFIED IMPORT
+from app.services.forecast_service import run_manual_forecast, run_full_training_and_save
 from app.models.forecast_schedule import ForecastSchedule
 from app.models.forecast_log import ForecastLog 
 from app.models.predict import Forecast
