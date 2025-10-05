@@ -80,12 +80,7 @@ def fetch_permissions(token):
     
 def upload_csv(token: str) -> None:
     """
-    Flexible uploader.
-    The user picks which CSV(s) to upload each time:
-      1 = Store master
-      2 = Inventory snapshot
-      3 = Forecast
-    They can choose one, several comma‑separated, or 'd' to quit.
+    Flexible uploader with improved feedback
     """
     file_types = {
         "1": ("store master"      , "store"),
@@ -124,23 +119,39 @@ def upload_csv(token: str) -> None:
                 print("❌ File does not exist. Skipped.")
                 continue
 
-            print(f"📤 Uploading {path} …")
-            with open(path, "rb") as fh:
-                res = requests.post(
-                    f"{BASE_URL}/api/upload/{route}",
-                    files={"file": fh},
-                    headers=headers,
-                    timeout=60,
-                )
-            if res.ok:
-                print("   ✅ Success")
-            else:
-                print(f"   ❌ Failed ({res.status_code})")
-                try:
-                    print("   ", res.json())
-                except Exception:
-                    print("   ", res.text)
-
+            # Check file size
+            file_size = os.path.getsize(path) / (1024 * 1024)  # Size in MB
+            print(f"📤 Uploading {path} ({file_size:.1f}MB) …")
+            
+            if route == "inventory" and file_size > 1:
+                print("   🚀 Using fast bulk upload method...")
+            
+            try:
+                with open(path, "rb") as fh:
+                    res = requests.post(
+                        f"{BASE_URL}/api/upload/{route}",
+                        files={"file": fh},
+                        headers=headers,
+                        timeout=300,  # 5 minutes timeout
+                    )
+                if res.ok:
+                    print("   ✅ Success")
+                    # Show additional info for large files
+                    if file_size > 5:
+                        print("   ⚡ Bulk upload completed in seconds instead of minutes!")
+                else:
+                    print(f"   ❌ Failed ({res.status_code})")
+                    try:
+                        error_msg = res.json()
+                        print(f"   Error: {error_msg}")
+                    except Exception:
+                        print(f"   Response: {res.text}")
+                        
+            except requests.exceptions.Timeout:
+                print("   ❌ Upload timed out (took longer than 5 minutes)")
+            except Exception as e:
+                print(f"   ❌ Upload failed: {str(e)}")
+                
 def update_store_info(hdr):
     import requests
 
@@ -998,6 +1009,22 @@ def forecast_menu(token):
         r = requests.post(url, json=payload, headers=headers)
         print(r.json())
 
+        #  NEW FUNCTION FOR MODEL TRAINING 
+    def run_training():
+        url = f"{BASE_URL}/train" # Hits the new /train endpoint
+        headers = {"Authorization": f"Bearer {token}"}
+
+        print("\n⚠️ Initiating full model training and saving. This may take several minutes.")
+        payload = {} # No input needed for full retraining
+
+        try:
+            r = requests.post(url, headers=headers, json=payload)
+            r.raise_for_status()
+            print("✅ Training successfully initiated (check logs for completion):")
+            print(r.json())
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Request failed: {e}")
+
     def run_forecast():
         url = f"{BASE_URL}/run"
         headers = {"Authorization": f"Bearer {token}"}
@@ -1321,20 +1348,20 @@ def forecast_menu(token):
         "1": ("Set Forecast Schedule", set_forecast_schedule),
         "2": ("View Forecast Schedule", view_forecast_schedule),
         "3": ("Update Forecast Horizon (N weeks)", update_forecast_horizon),
-        "4": ("Run Forecast Manually", run_forecast),
-        "5": ("Store-Level Forecast (Next N Weeks)", store_level_forecast),
-        "6": ("SKU-Level Forecast (Next N Weeks)", sku_level_forecast),
-        "7": ("Past Accuracy - Store", lambda: past_accuracy_store(token)),
-        "8": ("Past Accuracy - SKU", lambda: past_accuracy_sku(token)),
-        "9": ("Chart Data with Trendline", chart_data),
-        "10": ("View Weekly Forecast", lambda: view_weekly_forecast(token)),
-        "11": ("Forecast Run Logs", forecast_logs),
-        "12": ("Overall Forecast Accuracy", lambda: overall_forecast_accuracy(token)),
-        "13": ("Drilldown Forecast Accuracy (Week/SKU/Store)", lambda: drilldown_forecast_accuracy(token)),
+        "4": ("Trigger Full Model Training & Save (Long-Running)", run_training), 
+        "5": ("Run Forecast Inference Manually (from Saved Model)", run_forecast), 
+        "6": ("Store-Level Forecast (Next N Weeks)", store_level_forecast),
+        "7": ("SKU-Level Forecast (Next N Weeks)", sku_level_forecast),
+        "8": ("Past Accuracy - Store", lambda: past_accuracy_store(token)),
+        "9": ("Past Accuracy - SKU", lambda: past_accuracy_sku(token)),
+        "10": ("Chart Data with Trendline", chart_data),
+        "11": ("View Weekly Forecast", lambda: view_weekly_forecast(token)),
+        "12": ("Forecast Run Logs", forecast_logs),
+        "13": ("Overall Forecast Accuracy", lambda: overall_forecast_accuracy(token)),
+        "14": ("Drilldown Forecast Accuracy (Week/SKU/Store)", lambda: drilldown_forecast_accuracy(token)),
         
         "0": ("Exit Forecast Menu", None)
     }
-
     while True:
         print("\n📊 Forecast Module Menu")
         for key, (desc, _) in options.items():
