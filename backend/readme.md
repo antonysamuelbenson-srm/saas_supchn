@@ -268,15 +268,12 @@ Because both app/ and routes/ have __init__.py, Python lets you do:
 
 ==================For AI module===========================================
 
-For now the LLM used is Mistral via Ollama as there we some server side and storage issues for using models via hugginface. 
-* In order to run and test through client terminal, open a new terminal and run the following command :
+* Text to SQL using llama-3.1-8b-instant via Groq.
+* Get an API key from - https://console.groq.com/keys and add it to .env file
+
+* In order to run and test through client terminal, open a new terminal and run the following command to first import the documents into rag component :
 
 ```bash
-ollama serve
+pytho-m app.knowledge.chroma_ingest
 ```
-then in another terminal run :
-```bash
-ollama run mistral
-```
-- make sure to install the dependencies :
-    - 
+
