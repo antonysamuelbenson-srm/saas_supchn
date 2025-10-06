@@ -316,6 +316,16 @@ def get_transfer_details(allocations: list, shortages_excesses: list, transfer_i
 
 def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_info_map: dict, ddos_days: int):
     """Aggregates rebalancing allocations to provide a summary by src-dest pair."""
+
+
+    stores = db.session.query(Store.store_code, Store.lat, Store.long).all()
+    coord_map = {
+        store.store_code.lower().strip(): [store.lat, store.long] 
+        for store in stores 
+        if store.lat is not None and store.long is not None
+    }
+
+
     summary = defaultdict(lambda: {"distinct_skus": set(), "total_units": 0, "arrival_date": None})
     today = date.today()
     
@@ -337,12 +347,14 @@ def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_i
         dst_dos, _, dst_daily_forecast = get_transfer_group_supply_details(dst, skus_in_transfer, shortages_excesses, ddos_days)
         
         formatted_summary.append({
-            "src": src, "dest": dst, "distinct_skus": len(data["distinct_skus"]),
-            "total_units": data["total_units"],
-            "src_days_of_supply": round(src_dos, 2),
-            "dst_days_of_supply": round(dst_dos, 2),
-            "src_daily_forecast": round(src_daily_forecast, 2),
-            "dst_daily_forecast": round(dst_daily_forecast, 2),
-            "arrival_date": data["arrival_date"]
-        })
+          "src": src, "dest": dst, "distinct_skus": len(data["distinct_skus"]),
+          "total_units": data["total_units"],
+          "src_days_of_supply": round(src_dos, 2),
+          "dst_days_of_supply": round(dst_dos, 2),
+          "src_daily_forecast": round(src_daily_forecast, 2),
+          "dst_daily_forecast": round(dst_daily_forecast, 2),
+          "arrival_date": data["arrival_date"],
+          "source_coords": coord_map.get(src), # Add source coordinates
+          "destination_coords": coord_map.get(dst) # Add destination coordinates
+      })
     return formatted_summary
