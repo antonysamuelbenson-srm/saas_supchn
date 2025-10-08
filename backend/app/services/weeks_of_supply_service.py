@@ -1,32 +1,37 @@
 from datetime import datetime, timedelta
 import logging
 
-
 logger = logging.getLogger(__name__)
-
 
 class WeeksOfSupplyService:
     
     @staticmethod
-    def calculate_and_refresh():
-        """Calculate and update weeks of supply for all SKUs"""
-        # Import db inside the method to avoid circular import
+    def calculate_and_refresh(forecast_days=30):
+        """
+        Calculate and update weeks of supply for all SKUs using FORECASTED demand
+        
+        Args:
+            forecast_days: Number of days ahead to look for forecast data (default: 30)
+        """
         from app import db
         
         try:
-            # Fixed query to handle VARCHAR store_id in sales table
+            # Updated query to use predict table instead of sales
             query = """
-            WITH sales_data AS (
+            WITH forecast_data AS (
                 SELECT 
                     sd.store_id as store_id,
-                    s.sku,
-                    AVG(s.units_sold) * 7 as avg_weekly_demand
-                FROM sales s
+                    p.product_id as sku,
+                    AVG(p.predicted) * 7 as avg_weekly_demand,
+                    COUNT(DISTINCT p.date) as forecast_days_available
+                FROM predict p
                 INNER JOIN store_data sd 
-                    ON (s.store_id = sd.store_code OR s.store_id::TEXT = sd.store_id::TEXT)
-                WHERE s.date >= CURRENT_DATE - INTERVAL '30 days'
-                    AND s.units_sold > 0
-                GROUP BY sd.store_id, s.sku
+                    ON (p.store_id = sd.store_code OR p.store_id::TEXT = sd.store_id::TEXT)
+                WHERE p.date >= CURRENT_DATE 
+                    AND p.date < CURRENT_DATE + INTERVAL ':forecast_days days'
+                    AND p.predicted IS NOT NULL
+                    AND p.predicted > 0
+                GROUP BY sd.store_id, p.product_id
             )
             INSERT INTO weeks_of_supply 
                 (store_id, sku, current_inventory, avg_weekly_demand, 
@@ -35,22 +40,22 @@ class WeeksOfSupplyService:
                 i.store_id,
                 i.sku,
                 i.qty,
-                COALESCE(sd.avg_weekly_demand, 0),
+                COALESCE(fd.avg_weekly_demand, 0),
                 CASE 
-                    WHEN COALESCE(sd.avg_weekly_demand, 0) = 0 THEN 999
-                    ELSE i.qty / NULLIF(sd.avg_weekly_demand, 0)
+                    WHEN COALESCE(fd.avg_weekly_demand, 0) = 0 THEN 999
+                    ELSE ROUND((i.qty / NULLIF(fd.avg_weekly_demand, 0))::NUMERIC, 2)
                 END as weeks_of_supply,
                 CASE 
-                    WHEN COALESCE(sd.avg_weekly_demand, 0) = 0 THEN 'High'
-                    WHEN i.qty / NULLIF(sd.avg_weekly_demand, 0) < 2 THEN 'Critical'
-                    WHEN i.qty / NULLIF(sd.avg_weekly_demand, 0) < 4 THEN 'Low'
-                    WHEN i.qty / NULLIF(sd.avg_weekly_demand, 0) <= 8 THEN 'Adequate'
+                    WHEN COALESCE(fd.avg_weekly_demand, 0) = 0 THEN 'High'
+                    WHEN i.qty / NULLIF(fd.avg_weekly_demand, 0) < 2 THEN 'Critical'
+                    WHEN i.qty / NULLIF(fd.avg_weekly_demand, 0) < 4 THEN 'Low'
+                    WHEN i.qty / NULLIF(fd.avg_weekly_demand, 0) <= 8 THEN 'Adequate'
                     ELSE 'High'
                 END as category,
                 i.role_user_id
             FROM inventory i
-            LEFT JOIN sales_data sd 
-                ON sd.store_id = i.store_id AND sd.sku = i.sku
+            LEFT JOIN forecast_data fd 
+                ON fd.store_id = i.store_id AND fd.sku = i.sku
             WHERE i.snapshot_date = (
                 SELECT MAX(i2.snapshot_date)
                 FROM inventory i2
@@ -65,13 +70,19 @@ class WeeksOfSupplyService:
                 last_updated = NOW();
             """
             
-            # Use SQLAlchemy's session
-            result = db.session.execute(db.text(query))
+            params = {'forecast_days': forecast_days}
+            
+            result = db.session.execute(db.text(query), params)
             db.session.commit()
             rows_affected = result.rowcount
             
-            logger.info(f"Weeks of supply refreshed: {rows_affected} records updated")
-            return {"success": True, "rows_affected": rows_affected}
+            logger.info(f"Weeks of supply refreshed using forecast data: {rows_affected} records updated")
+            return {
+                "success": True, 
+                "rows_affected": rows_affected,
+                "data_source": "predict (forecasted demand)",
+                "forecast_horizon_days": forecast_days
+            }
             
         except Exception as e:
             logger.error(f"Error refreshing weeks of supply: {str(e)}")
@@ -81,11 +92,9 @@ class WeeksOfSupplyService:
     @staticmethod
     def get_store_summary(role_user_id, filters=None):
         """Get store-wise summary of weeks of supply"""
-        # Import db inside the method to avoid circular import
         from app import db
         
         try:
-            # Build filter conditions
             where_conditions = ["wos.role_user_id = :role_user_id"]
             params = {"role_user_id": role_user_id}
             
@@ -133,11 +142,9 @@ class WeeksOfSupplyService:
     @staticmethod
     def get_sku_details(store_id, role_user_id, filters=None):
         """Get SKU-wise details for a specific store"""
-        # Import db inside the method to avoid circular import
         from app import db
         
         try:
-            # Build filter conditions
             where_conditions = [
                 "wos.store_id = :store_id",
                 "wos.role_user_id = :role_user_id"

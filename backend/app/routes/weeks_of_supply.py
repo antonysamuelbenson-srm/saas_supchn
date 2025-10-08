@@ -12,7 +12,7 @@ weeks_of_supply_bp = Blueprint('weeks_of_supply', __name__)
 @weeks_of_supply_bp.route('/weeks-of-supply/store-summary', methods=['GET'])
 def get_store_summary():
     """
-    Get aggregated weeks of supply summary by store
+    Get aggregated weeks of supply summary by store (based on forecasted demand)
     Returns: store_id, counts by category, avg weeks of supply
     """
     try:
@@ -50,7 +50,8 @@ def get_store_summary():
         return jsonify({
             'success': True,
             'count': len(data),
-            'data': data
+            'data': data,
+            'data_source': 'forecast (predict table)'
         })
         
     except Exception as e:
@@ -65,7 +66,7 @@ def get_store_summary():
 @weeks_of_supply_bp.route('/weeks-of-supply/sku-details/<int:store_id>', methods=['GET'])
 def get_sku_details(store_id):
     """
-    Get detailed SKU-level weeks of supply data for a specific store
+    Get detailed SKU-level weeks of supply data for a specific store (based on forecasted demand)
     Query Parameters:
     - category: 'Critical', 'Low', 'Adequate', 'High' (optional filter)
     
@@ -126,7 +127,8 @@ def get_sku_details(store_id):
             'store_id': store_id,
             'category_filter': category,
             'count': len(data),
-            'data': data
+            'data': data,
+            'data_source': 'forecast (predict table)'
         })
         
     except Exception as e:
@@ -141,7 +143,7 @@ def get_sku_details(store_id):
 @weeks_of_supply_bp.route('/weeks-of-supply/by-category', methods=['GET'])
 def get_by_category():
     """
-    Get all weeks of supply records filtered by category
+    Get all weeks of supply records filtered by category (based on forecasted demand)
     Query Parameters:
     - category: 'Critical', 'Low', 'Adequate', 'High' (required)
     
@@ -197,7 +199,8 @@ def get_by_category():
             'success': True,
             'category': category,
             'count': len(data),
-            'data': data
+            'data': data,
+            'data_source': 'forecast (predict table)'
         })
         
     except Exception as e:
@@ -279,7 +282,8 @@ def recalculate_categories():
                 'low': f'{critical_threshold} - {low_threshold} weeks',
                 'adequate': f'{low_threshold} - {adequate_threshold} weeks',
                 'high': f'>= {adequate_threshold} weeks'
-            }
+            },
+            'data_source': 'forecast (predict table)'
         })
         
     except Exception as e:
@@ -295,17 +299,102 @@ def recalculate_categories():
 @weeks_of_supply_bp.route('/weeks-of-supply/refresh', methods=['POST'])
 def refresh_weeks_of_supply():
     """
-    Manually trigger refresh of weeks of supply calculations
-    This updates the last_updated timestamp for all records
+    Recalculate weeks of supply using FORECASTED demand from predict table
+    Request Body (JSON - optional):
+    {
+        "forecast_days": 30  # Number of days ahead to look for forecast data (default: 30)
+    }
     """
     try:
-        logger.info("Refreshing weeks of supply data")
+        data = request.get_json() or {}
+        forecast_days = data.get('forecast_days', 30)
         
-        # Update last_updated for all records
-        query = text("""
-        UPDATE public.weeks_of_supply
-        SET last_updated = CURRENT_TIMESTAMP
-        WHERE id IS NOT NULL
+        # Validate forecast_days
+        if not isinstance(forecast_days, int) or forecast_days < 1 or forecast_days > 365:
+            return jsonify({
+                'success': False,
+                'error': 'forecast_days must be an integer between 1 and 365'
+            }), 400
+        
+        logger.info(f"Refreshing weeks of supply data using forecast (next {forecast_days} days)")
+        
+        # Delete existing records and recalculate from scratch
+        query = text(f"""
+        WITH 
+        -- Calculate average weekly FORECASTED demand from predict table
+        forecast_summary AS (
+            SELECT 
+                sd.store_id as store_id,
+                p.product_id as sku,
+                COALESCE(AVG(p.predicted) * 7, 0) as avg_weekly_demand
+            FROM public.predict p
+            INNER JOIN public.store_data sd 
+                ON (p.store_id = sd.store_code OR p.store_id::TEXT = sd.store_id::TEXT)
+            WHERE p.date >= CURRENT_DATE 
+                AND p.date < CURRENT_DATE + INTERVAL '{forecast_days} days'
+                AND p.predicted IS NOT NULL
+                AND p.predicted > 0
+            GROUP BY sd.store_id, p.product_id
+        ),
+        -- Get current inventory levels
+        current_inventory AS (
+            SELECT 
+                i.store_id,
+                i.sku,
+                i.qty as current_qty,
+                i.role_user_id
+            FROM public.inventory i
+            WHERE i.qty >= 0
+                AND i.snapshot_date = (
+                    SELECT MAX(i2.snapshot_date)
+                    FROM public.inventory i2
+                    WHERE i2.store_id = i.store_id 
+                        AND i2.sku = i.sku
+                )
+        ),
+        -- Combine inventory with forecast data
+        combined_data AS (
+            SELECT 
+                ci.store_id,
+                ci.sku,
+                ci.current_qty,
+                COALESCE(fs.avg_weekly_demand, 0) as avg_weekly_demand,
+                ci.role_user_id,
+                CASE 
+                    WHEN COALESCE(fs.avg_weekly_demand, 0) = 0 THEN 999.99
+                    WHEN fs.avg_weekly_demand IS NULL THEN 999.99
+                    ELSE ROUND((ci.current_qty / NULLIF(fs.avg_weekly_demand, 0))::NUMERIC, 2)
+                END as weeks_of_supply_calc
+            FROM current_inventory ci
+            LEFT JOIN forecast_summary fs 
+                ON fs.store_id = ci.store_id 
+                AND fs.sku = ci.sku
+        )
+        INSERT INTO public.weeks_of_supply 
+            (store_id, sku, current_inventory, avg_weekly_demand, weeks_of_supply, category, role_user_id, last_updated)
+        SELECT 
+            cd.store_id,
+            cd.sku,
+            cd.current_qty,
+            cd.avg_weekly_demand,
+            cd.weeks_of_supply_calc,
+            CASE 
+                WHEN cd.avg_weekly_demand = 0 THEN 'High'
+                WHEN cd.weeks_of_supply_calc < 2 THEN 'Critical'
+                WHEN cd.weeks_of_supply_calc >= 2 AND cd.weeks_of_supply_calc < 4 THEN 'Low'
+                WHEN cd.weeks_of_supply_calc >= 4 AND cd.weeks_of_supply_calc <= 8 THEN 'Adequate'
+                ELSE 'High'
+            END,
+            cd.role_user_id,
+            NOW()
+        FROM combined_data cd
+        ON CONFLICT (store_id, sku) 
+        DO UPDATE SET
+            current_inventory = EXCLUDED.current_inventory,
+            avg_weekly_demand = EXCLUDED.avg_weekly_demand,
+            weeks_of_supply = EXCLUDED.weeks_of_supply,
+            category = EXCLUDED.category,
+            last_updated = NOW()
         """)
         
         result = db.session.execute(query)
@@ -313,12 +402,14 @@ def refresh_weeks_of_supply():
         
         rows_affected = result.rowcount
         
-        logger.info(f"Refreshed {rows_affected} weeks of supply records")
+        logger.info(f"Refreshed {rows_affected} weeks of supply records using forecast data")
         
         return jsonify({
             'success': True,
-            'message': 'Weeks of supply data refreshed successfully',
-            'rows_affected': rows_affected
+            'message': 'Weeks of supply data refreshed successfully using forecasted demand',
+            'rows_affected': rows_affected,
+            'data_source': 'forecast (predict table)',
+            'forecast_horizon_days': forecast_days
         })
         
     except Exception as e:
@@ -337,11 +428,13 @@ def test_route():
     return jsonify({
         "message": "Weeks of Supply API is working!",
         "status": "ok",
+        "data_source": "forecast (predict table)",
+        "description": "Calculations based on forecasted demand from predict table",
         "endpoints": {
             "store_summary": "/api/weeks-of-supply/store-summary",
             "sku_details": "/api/weeks-of-supply/sku-details/<store_id>?category=Critical",
             "by_category": "/api/weeks-of-supply/by-category?category=Low",
             "recalculate_categories": "/api/weeks-of-supply/recalculate-categories (POST)",
-            "refresh": "/api/weeks-of-supply/refresh (POST)"
+            "refresh": "/api/weeks-of-supply/refresh (POST with optional forecast_days)"
         }
     })
