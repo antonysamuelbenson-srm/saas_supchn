@@ -15,6 +15,7 @@ from app.models.upload_batch import UploadBatch
 from app.models.transfer_cost_data import transferCostDta
 from app.models.store_total_data import totalStoreData
 from app.models.warehouse_max_data import warehouse_Max_Data
+from app.models.sales import Sales 
 import logging
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ INV_RE   = re.compile(r"inventory_snapshot", re.I)
 FORE_RE  = re.compile(r"forecast_\d{4}-\d{2}", re.I)
 TRANS_RE = re.compile(r"transfer_cost", re.I)
 CAPA_RE  = re.compile(r"capacity", re.I)
+SALES_RE = re.compile(r"sales_data", re.I)
 
 # def classify(filename: str) -> str | None:
 #     if STORE_RE.search(filename):
@@ -57,6 +59,8 @@ def classify(filename: str) -> str | None:
         return "total_store_data"
     if CAPA_RE.search(filename):
         return "capacity"
+    if SALES_RE.search(filename):
+        return "sales"
     return None
 
 # ───────────────────────────────────────────────────────────── #
@@ -239,7 +243,73 @@ def insert_warehouse_max_data(rows, role_user_id, session):
             session.add(record)
 
 
+def insert_sales_data(rows: List[Dict[str, Any]], role_user_id: UUID, store_cache: dict[str, int], session: Session):
+    """
+    Optimized function to perform bulk UPSERT (Update or Insert) for Sales data.
+    
+    It replaces the slow row-by-row existence check with a single bulk query
+    followed by bulk update/insert mappings.
+    """
+    for row in rows:
+        store_code = row["store_id"] 
+        if store_code not in store_cache:
+            raise ValueError(f"Unknown store_id (store_code) in sales CSV: {store_code}")
 
+    unique_keys = set()
+    for row in rows:
+        key = (row["date"], row["store_id"], row["sku"])
+        unique_keys.add(key)
+    
+    if not unique_keys:
+        return 
+    
+    dates = {k[0] for k in unique_keys}
+    store_ids = {k[1] for k in unique_keys}
+    skus = {k[2] for k in unique_keys}
+
+    existing_sales = session.query(Sales).filter(
+        Sales.date.in_(dates),
+        Sales.store_id.in_(store_ids),
+        Sales.sku.in_(skus)
+    ).all()
+    
+    existing_map = {}
+    for sale in existing_sales:
+        key = (sale.date, sale.store_id, sale.sku)
+        existing_map[key] = sale
+    
+    records_to_update = []
+    records_to_insert = []
+    
+    for row in rows:
+        key = (row["date"], row["store_id"], row["sku"])
+        units_sold = int(row["units_sold"])
+        
+        existing_sale = existing_map.get(key)
+        
+        if existing_sale:
+            if existing_sale.units_sold != units_sold:
+                records_to_update.append({
+                    "id": existing_sale.id, 
+                    "units_sold": units_sold
+                })
+        else:
+            records_to_insert.append({
+                "date": row["date"],
+                "sku": row["sku"],
+                "store_id": row["store_id"], 
+                "units_sold": units_sold,
+            })
+    
+ 
+    if records_to_update:
+        session.bulk_update_mappings(Sales, records_to_update)
+        logger.info(f"Updated {len(records_to_update)} Sales records.")
+    
+    if records_to_insert:
+        session.bulk_insert_mappings(Sales, records_to_insert)
+        logger.info(f"Inserted {len(records_to_insert)} new Sales records.")
+        
 
 # ───────────────────────────────────────────────────────────── #
 def register_batch(
@@ -321,6 +391,7 @@ def bulk_upload_inventory_csv(file_path: Path, role_user_id: uuid.UUID) -> None:
         logger.error(f"⚠️  Inventory recalculation failed (might be OK): {e}")
         db.session.rollback()  # Don't fail the whole upload for this
 
+
 def _get_store_mapping():
     """Get mapping from store_code to store_id"""
     result = db.session.execute(text("SELECT store_id, store_code FROM store_data"))
@@ -377,6 +448,8 @@ def ingest_csv_files(paths: List[Path], role_user_id: UUID, btype: str = None):
 
             elif batch_type == "capacity":
                 insert_warehouse_max_data(rows, role_user_id, session)
+            elif batch_type == "sales":
+                insert_sales_data(rows, role_user_id, store_cache, session)
 
             else:
                 raise ValueError(f"Unsupported batch type: {batch_type}")
