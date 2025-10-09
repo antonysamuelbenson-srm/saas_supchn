@@ -26,7 +26,8 @@ REQUIRED_COLS = {
     "forecast":  ["forecast_date", "store_code", "sku", "forecast_qty"],
     "total_store_data": ["store_code", "sku", "safety_stock_level", "reorder_level"],
     "transfer_cost_data": ["start_location", "end_location", "transfer_cost","lead_time"],
-    "capacity": ["store_id", "warehouse_name", "max_capacity"]
+    "capacity": ["store_id", "warehouse_name", "max_capacity"],
+    "sales": ["date", "store_id", "units_sold", "sku"]
 }
 
 # ─────────────────────── helpers ───────────────────────────────────────
@@ -45,6 +46,10 @@ def _validate_csv(df: pd.DataFrame, btype: str, role_user_id: uuid.UUID) -> List
         unknown = set(df["store_code"].unique()) - _fetch_store_codes()
         if unknown:
             errors.append(f"unknown store_code(s): {', '.join(unknown)}")
+    if not errors and btype == "sales":
+        unknown = set(df["store_id"].unique()) - _fetch_store_codes()
+        if unknown:
+            errors.append(f"unknown store_id (Store Code) in sales CSV: {', '.join(unknown)}")
     return errors
 
 def _handle_upload(btype: str):
@@ -142,3 +147,8 @@ def upload_transferCost_Data():
 @role_required
 def upload_warehouse_max_data():
     return _handle_upload("capacity")
+
+@bp.post("/sales")
+@role_required
+def upload_sales_data():
+    return _handle_upload("sales")
