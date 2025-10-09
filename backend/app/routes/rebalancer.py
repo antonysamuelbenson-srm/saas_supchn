@@ -25,7 +25,7 @@ def get_rebalancing_recommendations():
         if not isinstance(ddos_days, int) or ddos_days <= 0:
             return jsonify({"error": "ddos_days must be a positive integer."}), 400
 
-        allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages, code_to_name_map, sku_to_name_map = run_rebalancer(ddos_days)
+        allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages, code_to_name_map, sku_to_name_map, code_to_coords_map = run_rebalancer(ddos_days)
 
         if "error" in allocations:
             return jsonify(allocations), 500
@@ -37,7 +37,7 @@ def get_rebalancing_recommendations():
         
         summary_data = get_transfer_summary(
             allocations, shortages_excesses, transfer_info_map, ddos_days,
-            code_to_name_map, sku_to_name_map 
+            code_to_name_map, sku_to_name_map, code_to_coords_map
         )
         
         return jsonify({

@@ -181,6 +181,16 @@ def convert_to_csv(data):
     writer.writerows(rows)
     return output.getvalue()
 
+def get_store_coords_map():
+    """Loads a mapping from store_code to its coordinates."""
+    try:
+        rows = db.session.query(Store.store_code, Store.latitude, Store.longitude).all()
+        # Return coordinates as a [lat, lon] list for Leaflet
+        return {row.store_code: [row.latitude, row.longitude] for row in rows}
+    except Exception as e:
+        logger.error(f"Failed to load store coordinates map: {e}")
+        return {}
+
 # MODIFIED: Now returns 6 values
 def run_rebalancer(ddos_days: int):
     """
@@ -190,17 +200,18 @@ def run_rebalancer(ddos_days: int):
     """
     # Adjusted to return 6 None values for consistency if error
     if ddos_days <= 0:
-        return {"error": "DDOS days must be a positive integer."}, None, None, None, None, None
+        return {"error": "DDOS days must be a positive integer."}, None, None, None, None, None, None
     
     try:
         shortages_excesses = compute_shortages_excesses(ddos_days)
         transfer_info_map = get_transfer_costs()
         code_to_name_map = get_store_name_map() # Store Code -> Store Name
         sku_to_name_map = get_sku_name_map()     # SKU -> Product Name (NEW)
+        code_to_coords_map = get_store_coords_map()
 
         if not transfer_info_map:
             # Adjusted to return 6 values for consistency
-            return [], shortages_excesses, transfer_info_map, {}, code_to_name_map, sku_to_name_map
+            return [], shortages_excesses, transfer_info_map, {}, code_to_name_map, sku_to_name_map, code_to_coords_map
 
         # Map 1: Normalized Code (solver key) -> Original Code (cost lookup key)
         store_code_map = {_normalize_key(r["store"]): r["store"] for r in shortages_excesses}
@@ -248,11 +259,12 @@ def run_rebalancer(ddos_days: int):
                     unfulfilled_shortages[key] = int(var.varValue)
         
         # RETURN 6 VALUES INCLUDING BOTH MAPS
-        return allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages, code_to_name_map, sku_to_name_map
+        return allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages, code_to_name_map, sku_to_name_map, code_to_coords_map
+
 
     except Exception as e:
         logger.error(f"An error occurred during rebalancing: {e}", exc_info=True)
-        return {"error": "Internal server error."}, None, None, None, None, None
+        return {"error": "Internal server error."}, None, None, None, None, None, None
     
 # get_supply_details and get_transfer_group_supply_details remain UNCHANGED, 
 # as they rely on the stable normalized store code and SKU for internal logic.
@@ -373,7 +385,7 @@ def get_transfer_details(allocations: list, shortages_excesses: list, transfer_i
     return detailed_allocations
 
 # MODIFIED: Now accepts sku_to_name_map and replaces SKU with Product Name
-def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_info_map: dict, ddos_days: int, code_to_name_map: dict, sku_to_name_map: dict):
+def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_info_map: dict, ddos_days: int, code_to_name_map: dict, sku_to_name_map: dict, code_to_coords_map: dict):
     """Aggregates rebalancing allocations to provide a summary by src-dest pair, using store names and product names."""
     
     # Map 2: Normalized Code -> Original Code (needed for lead time lookup)
@@ -383,7 +395,7 @@ def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_i
     sku_map = {_normalize_key(r["sku"]): r["sku"] for r in shortages_excesses}
 
     # Use normalized keys for the internal summary dict
-    summary = defaultdict(lambda: {"distinct_skus": set(), "total_units": 0, "arrival_date": None, "src_name": None, "dst_name": None})
+    summary = defaultdict(lambda: {"distinct_skus": set(), "total_units": 0, "arrival_date": None, "src_name": None, "dst_name": None, "src_code": None, "dst_code": None}) # Added src/dst codes
     today = date.today()
     
     for allocation in allocations:
@@ -402,12 +414,15 @@ def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_i
         key = (src_norm, dst_norm)
         
         # Store the original SKU for later lookup (though summary only shows count)
-        summary[key]["distinct_skus"].add(sku_map.get(sku_norm, sku_norm)) 
+        summary[key]["distinct_skus"].add(sku_map.get(allocation['sku'], allocation['sku']))
         summary[key]["total_units"] += allocation['units']
         # Store original names in the summary data
-        summary[key]["src_name"] = src_name
-        summary[key]["dst_name"] = dst_name
-        
+        summary[key]["src_code"] = src_code # <-- ADD THIS
+        summary[key]["dst_code"] = dst_code # <-- ADD THIS
+        summary[key]["src_name"] = code_to_name_map.get(src_code, src_code)
+        summary[key]["dst_name"] = code_to_name_map.get(dst_code, dst_code)
+
+
         # Use original Store Codes for transfer info lookup
         lead_time = transfer_info_map.get(src_code, {}).get(dst_code, {}).get('lead_time', 0)
         arrival_date = today + timedelta(days=lead_time)
@@ -419,12 +434,16 @@ def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_i
 
         src_dos, _, src_daily_forecast = get_transfer_group_supply_details(src_norm, normalized_skus, shortages_excesses, ddos_days)
         dst_dos, _, dst_daily_forecast = get_transfer_group_supply_details(dst_norm, normalized_skus, shortages_excesses, ddos_days)
+        src_coords = code_to_coords_map.get(data["src_code"], [0, 0]) # Default to [0,0] if not found
+        dest_coords = code_to_coords_map.get(data["dst_code"], [0, 0]) # Default to [0,0] if not found
         
         formatted_summary.append({
             "src": data["src_name"], # Use store name
             "dest": data["dst_name"], # Use store name
             "distinct_skus": len(data["distinct_skus"]),
             "total_units": data["total_units"],
+            "source_coords": src_coords,      # <-- ADDED
+            "destination_coords": dest_coords, # <-- ADDED
             "src_days_of_supply": round(src_dos, 2),
             "dst_days_of_supply": round(dst_dos, 2),
             "src_daily_forecast": round(src_daily_forecast, 2),
