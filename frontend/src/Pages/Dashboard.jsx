@@ -1803,7 +1803,7 @@ import {
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -1815,7 +1815,6 @@ const BASE_URL = "http://localhost:5500";
 
 // --- Leaflet & Map Helper Components ---
 
-// Setup for Leaflet's default icon
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
@@ -1823,7 +1822,6 @@ L.Icon.Default.mergeOptions({
     shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-// Injects CSS for custom map markers and tooltips
 const MapStyles = () => (
     <style>{`
      .custom-marker-container { position: relative; width: 32px; height: 42px; display: flex; align-items: center; justify-content: center; }
@@ -1861,7 +1859,7 @@ const createAlertIcon = (location) => {
     });
 };
 
-// A component that automatically fits the map view to contain all markers
+// Fit bounds component
 const FitBounds = ({ locations }) => {
     const map = useMap();
     useEffect(() => {
@@ -1874,7 +1872,7 @@ const FitBounds = ({ locations }) => {
     return null;
 };
 
-// A button on the map to reset the view to fit all markers
+// Reset view button
 const ResetMapViewButton = ({ locations }) => {
     const map = useMap();
     const fitMapToBounds = () => {
@@ -1895,7 +1893,390 @@ const ResetMapViewButton = ({ locations }) => {
     );
 };
 
-// A custom Marker component that pans the map if its tooltip goes off-screen
+// Map Filter Control Component
+const MapFilterControl = ({ selectedCategory, onCategoryChange, storeCounts }) => {
+  const categories = [
+    { key: 'all', label: 'All Stores', color: 'gray', bgColor: '#6b7280', icon: '🏪' },
+    { key: 'Critical', label: 'Critical', color: 'red', bgColor: '#ef4444', icon: '🔴' },
+    { key: 'Low', label: 'Low', color: 'orange', bgColor: '#f59e0b', icon: '🟠' },
+    { key: 'Adequate', label: 'Adequate', color: 'green', bgColor: '#10b981', icon: '🟢' },
+    { key: 'High', label: 'High', color: 'blue', bgColor: '#3b82f6', icon: '🔵' }
+  ];
+
+  return (
+    <div className="absolute top-3 left-3 z-[1000] map-filter-control">
+      <div className="flex items-center space-x-2 mb-2">
+        <FiFilter size={16} className="text-slate-600" />
+        <span className="text-sm font-semibold text-slate-800">Weeks of Supply</span>
+      </div>
+      <div className="space-y-1">
+        {categories.map(category => (
+          <button
+            key={category.key}
+            onClick={() => onCategoryChange(category.key)}
+            className={`filter-btn ${selectedCategory === category.key ? 'active' : ''}`}
+            style={{
+              backgroundColor: selectedCategory === category.key ? category.bgColor : 'transparent',
+              color: selectedCategory === category.key ? 'white' : category.bgColor,
+              border: `1px solid ${category.bgColor}`
+            }}
+          >
+            <div className="flex items-center">
+              <span className="mr-2">{category.icon}</span>
+              <span>{category.label}</span>
+            </div>
+            <span className="text-xs opacity-80">
+              {storeCounts[category.key]}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Store Summary Tooltip Component with Interactive Tags
+const StoreSummaryTooltip = ({ store, onCategoryClick, onViewAllSKUs }) => {
+  const [expandedSection, setExpandedSection] = useState(null);
+
+  const toggleSection = (section) => {
+    setExpandedSection(expandedSection === section ? null : section);
+  };
+
+  const handleCategoryClick = (category) => {
+    if (onCategoryClick) {
+      onCategoryClick(category);
+    }
+  };
+
+  const handleViewAllSKUs = () => {
+    if (onViewAllSKUs) {
+      onViewAllSKUs();
+    }
+  };
+
+  return (
+    <div className="text-sm space-y-3 p-2 min-w-[320px]">
+      {/* Store Header */}
+      <div className="border-b border-slate-200 pb-2">
+        <div className="flex items-center justify-between">
+          <strong className="text-lg">📍 Store {store.store_id}</strong>
+          <button 
+            onClick={handleViewAllSKUs}
+            className="flex items-center text-xs text-blue-600 hover:text-blue-800 font-medium"
+          >
+            View All SKUs <FiArrowRight className="ml-1" size={12} />
+          </button>
+        </div>
+        <span className="text-slate-500 text-sm">{store.store_name || `Store ${store.store_id}`}</span>
+      </div>
+      
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="bg-slate-100 p-2 rounded">
+          <div className="font-semibold">📊 Total SKUs</div>
+          <div className="text-lg font-bold">{store.total_skus}</div>
+        </div>
+        <div className="bg-slate-100 p-2 rounded">
+          <div className="font-semibold">📈 Avg Weeks</div>
+          <div className="text-lg font-bold">{store.avg_weeks_of_supply?.toFixed(2) || '0.00'}</div>
+        </div>
+      </div>
+
+      {/* Categories Summary - Clickable Tags */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-slate-700">Categories:</span>
+          <span className="text-xs text-slate-500">Click to filter</span>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {store.critical_count > 0 && (
+            <div 
+              className="category-tag bg-red-100 text-red-800 border border-red-300"
+              onClick={() => handleCategoryClick('Critical')}
+            >
+              🔴 Critical: {store.critical_count}
+            </div>
+          )}
+          {store.low_count > 0 && (
+            <div 
+              className="category-tag bg-orange-100 text-orange-800 border border-orange-300"
+              onClick={() => handleCategoryClick('Low')}
+            >
+              🟠 Low: {store.low_count}
+            </div>
+          )}
+          {store.adequate_count > 0 && (
+            <div 
+              className="category-tag bg-green-100 text-green-800 border border-green-300"
+              onClick={() => handleCategoryClick('Adequate')}
+            >
+              🟢 Adequate: {store.adequate_count}
+            </div>
+          )}
+          {store.high_count > 0 && (
+            <div 
+              className="category-tag bg-blue-100 text-blue-800 border border-blue-300"
+              onClick={() => handleCategoryClick('High')}
+            >
+              🔵 High: {store.high_count}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Expandable SKU Details Section */}
+      <div className="sku-details-section">
+        <div 
+          className="sku-details-header"
+          onClick={() => toggleSection('summary')}
+        >
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center">
+              <FiList className="mr-2 text-slate-600" size={16} />
+              <span className="font-semibold text-slate-800">Quick SKU Summary</span>
+            </div>
+            <FiChevronDown 
+              className={`expand-icon text-slate-500 ${expandedSection === 'summary' ? 'expanded' : ''}`}
+              size={16}
+            />
+          </div>
+        </div>
+        
+        <AnimatePresence>
+          {expandedSection === 'summary' && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="sku-details-content">
+                <div className="space-y-2 text-xs">
+                  {store.critical_count > 0 && (
+                    <div className="flex justify-between items-center p-1 hover:bg-red-50 rounded">
+                      <span className="text-red-700 font-medium">Critical SKUs</span>
+                      <button 
+                        onClick={() => handleCategoryClick('Critical')}
+                        className="flex items-center text-red-600 hover:text-red-800"
+                      >
+                        {store.critical_count} items <FiChevronRight className="ml-1" size={12} />
+                      </button>
+                    </div>
+                  )}
+                  {store.low_count > 0 && (
+                    <div className="flex justify-between items-center p-1 hover:bg-orange-50 rounded">
+                      <span className="text-orange-700 font-medium">Low SKUs</span>
+                      <button 
+                        onClick={() => handleCategoryClick('Low')}
+                        className="flex items-center text-orange-600 hover:text-orange-800"
+                      >
+                        {store.low_count} items <FiChevronRight className="ml-1" size={12} />
+                      </button>
+                    </div>
+                  )}
+                  {store.adequate_count > 0 && (
+                    <div className="flex justify-between items-center p-1 hover:bg-green-50 rounded">
+                      <span className="text-green-700 font-medium">Adequate SKUs</span>
+                      <button 
+                        onClick={() => handleCategoryClick('Adequate')}
+                        className="flex items-center text-green-600 hover:text-green-800"
+                      >
+                        {store.adequate_count} items <FiChevronRight className="ml-1" size={12} />
+                      </button>
+                    </div>
+                  )}
+                  {store.high_count > 0 && (
+                    <div className="flex justify-between items-center p-1 hover:bg-blue-50 rounded">
+                      <span className="text-blue-700 font-medium">High SKUs</span>
+                      <button 
+                        onClick={() => handleCategoryClick('High')}
+                        className="flex items-center text-blue-600 hover:text-blue-800"
+                      >
+                        {store.high_count} items <FiChevronRight className="ml-1" size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+};
+
+// SKU Details Popup Component
+const SKUDetailsPopup = ({ storeId, category, onClose, storeName }) => {
+  const [skuDetails, setSkuDetails] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sortField, setSortField] = useState('weeks_of_supply');
+  const [sortDirection, setSortDirection] = useState('asc');
+
+  useEffect(() => {
+    const fetchSKUDetails = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const headers = { Authorization: `Bearer ${token}` };
+        
+        const params = category && category !== 'all' ? { category } : {};
+        const response = await axios.get(
+          `${BASE_URL}/weeks-of-supply/sku-details/${storeId}`,
+          { headers, params }
+        );
+
+        if (response.data.success) {
+          setSkuDetails(response.data.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching SKU details:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSKUDetails();
+  }, [storeId, category]);
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedSKUs = useMemo(() => {
+    return [...skuDetails].sort((a, b) => {
+      let aValue = a[sortField];
+      let bValue = b[sortField];
+      
+      if (sortField === 'sku') {
+        aValue = aValue || '';
+        bValue = bValue || '';
+      } else {
+        aValue = Number(aValue) || 0;
+        bValue = Number(bValue) || 0;
+      }
+      
+      if (sortDirection === 'asc') {
+        return aValue < bValue ? -1 : 1;
+      } else {
+        return aValue > bValue ? -1 : 1;
+      }
+    });
+  }, [skuDetails, sortField, sortDirection]);
+
+  const getCategoryColor = (category) => {
+    switch (category) {
+      case 'Critical': return 'bg-red-100 text-red-800 border-red-300';
+      case 'Low': return 'bg-orange-100 text-orange-800 border-orange-300';
+      case 'Adequate': return 'bg-green-100 text-green-800 border-green-300';
+      case 'High': return 'bg-blue-100 text-blue-800 border-blue-300';
+      default: return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
+  };
+
+  const getCategoryIcon = (category) => {
+    switch (category) {
+      case 'Critical': return '🔴';
+      case 'Low': return '🟠';
+      case 'Adequate': return '🟢';
+      case 'High': return '🔵';
+      default: return '⚪';
+    }
+  };
+
+  const SortableHeader = ({ field, children }) => (
+    <button
+      onClick={() => handleSort(field)}
+      className="flex items-center space-x-1 font-semibold hover:text-blue-600 transition-colors"
+    >
+      <span>{children}</span>
+      {sortField === field && (
+        <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+      )}
+    </button>
+  );
+
+  if (loading) {
+    return (
+      <div className="p-4 max-h-80 overflow-y-auto">
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 max-h-80 overflow-y-auto min-w-[500px] bg-white">
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800">
+            SKU Details - {storeName}
+          </h3>
+          {category && category !== 'all' && (
+            <span className="text-sm text-slate-600">Filter: {category}</span>
+          )}
+        </div>
+        <button onClick={onClose} className="text-slate-500 hover:text-slate-700">
+          <FiX size={20} />
+        </button>
+      </div>
+
+      {skuDetails.length === 0 ? (
+        <div className="text-center py-8 text-slate-500">
+          <FiBox className="mx-auto mb-2 text-slate-400" size={32} />
+          <p>No SKUs found for the selected filter.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-12 gap-2 text-xs font-semibold border-b pb-2 text-slate-600 bg-slate-50 p-2 rounded-t">
+            <div className="col-span-3">
+              <SortableHeader field="sku">SKU</SortableHeader>
+            </div>
+            <div className="col-span-2">
+              <SortableHeader field="current_inventory">Current Inv</SortableHeader>
+            </div>
+            <div className="col-span-2">
+              <SortableHeader field="avg_weekly_demand">Weekly Demand</SortableHeader>
+            </div>
+            <div className="col-span-2">
+              <SortableHeader field="weeks_of_supply">Weeks Left</SortableHeader>
+            </div>
+            <div className="col-span-3">
+              <SortableHeader field="category">Category</SortableHeader>
+            </div>
+          </div>
+          {sortedSKUs.map((sku, index) => (
+            <div key={index} className="grid grid-cols-12 gap-2 text-xs border-b pb-2 last:border-b-0 hover:bg-slate-50 rounded p-1">
+              <div className="col-span-3 font-medium text-slate-800">{sku.sku}</div>
+              <div className="col-span-2 text-slate-700">{sku.current_inventory?.toLocaleString()}</div>
+              <div className="col-span-2 text-slate-700">{sku.avg_weekly_demand?.toFixed(2)}</div>
+              <div className="col-span-2 font-bold text-slate-800">
+                {sku.weeks_of_supply?.toFixed(1)}
+              </div>
+              <div className="col-span-3">
+                <span className={`category-tag ${getCategoryColor(sku.category)}`}>
+                  {getCategoryIcon(sku.category)} {sku.category}
+                </span>
+              </div>
+            </div>
+          ))}
+          <div className="text-xs text-slate-500 mt-2 flex justify-between items-center">
+            <span>📊 Showing {skuDetails.length} SKU(s)</span>
+            <span>Sorted by: {sortField} ({sortDirection})</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Auto pan marker
 const AutoPanMarker = ({ children, ...props }) => {
     const map = useMap();
     const handleTooltipOpen = useCallback((e) => {
@@ -1989,7 +2370,6 @@ const Sidebar = React.memo(({ isOpen, onClose, permissions }) => {
 });
 
 // --- Main Dashboard Component ---
-
 function Dashboard() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [isChatbotOpen, setIsChatbotOpen] = useState(false); // State to control integrated chatbot

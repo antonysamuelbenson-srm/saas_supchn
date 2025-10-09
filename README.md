@@ -46,3 +46,23 @@ The Reorder Point is the inventory level at which you should place a new order t
 📐 Reorder Point Formula
 
 reorder_point = (average_daily_usage × lead_time_days) + safety_stock
+
+
+inventory table → current_inventory (sum of qty by store)
+warehouse_max_data → max_capacity, target_level, safety_stock
+↓
+store_inventory_levels → auto-calculated percentages & categories
+
+inventory_percentage = (current_inventory / max_capacity) * 100
+
+target_level = GREATEST((max_capacity * 0.8)::integer, 100)
+
+📊 Examples:
+Max CapacityCalculationTarget LevelReason20002000 × 0.8 = 16001600Normal case15001500 × 0.8 = 12001200Normal case100100 × 0.8 = 80100Minimum applied5050 × 0.8 = 40100Minimum applied
+🧠 Logic Behind 80%:
+Why 80% of max capacity?
+
+Buffer for demand spikes: 20% cushion for unexpected orders
+Reorder timing: Gives time to restock before hitting capacity
+Operational efficiency: Sweet spot between stock availability and storage costs
+Safety margin: Prevents stockouts during supply delays
