@@ -894,7 +894,7 @@ const Chatbot = ({ mode = 'floating', isOpen: propIsOpen, onClose: propOnClose }
                     >
                         <div className="p-3 bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-lg shadow-2xl shadow-black/30 flex items-center justify-between gap-3">
                             <FiCpu className="text-violet-400 flex-shrink-0" size={20} />
-                            <span className="text-slate-300 text-sm font-medium w-full text-left">Ask Akashvani...</span>
+                            <span className="text-slate-300 text-sm font-medium w-full text-left opacity-50">Ask Akashvani...</span>
                             <div className="p-1.5 bg-gradient-to-br from-violet-600 to-blue-600 rounded-md text-white">
                                 <FiSend size={14} />
                             </div>
@@ -987,3 +987,7 @@ const Chatbot = ({ mode = 'floating', isOpen: propIsOpen, onClose: propOnClose }
 };
 
 export default Chatbot;
+
+
+
+

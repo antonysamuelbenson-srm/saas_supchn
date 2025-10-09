@@ -1140,6 +1140,16 @@ import Chatbot from '../components/Chatbot'
 
 const API_BASE_URL = 'http://127.0.0.1:5500';
 
+
+const accuracyQuestions = [
+    "What's the overall forecast accuracy?",
+    "Which SKU has the lowest accuracy?",
+    "Show me the top 5 most accurate stores.",
+    "What does WMAPE mean?",
+    "Compare accuracy for the last two weeks.",
+    "Find the performance for SKU 'ABC-123'.",
+];
+
 // --- Helper Components ---
 const LoadingSpinner = () => (
     <div className="flex items-center justify-center h-full min-h-[300px]">
@@ -1315,7 +1325,10 @@ const AccuracyDashboard = () => {
             <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
                 {loading ? <LoadingSpinner /> : (<HierarchicalTable data={granularData} />)}
             </div>
-            <Chatbot/>
+            <Chatbot 
+                mode="floating"
+                questions={accuracyQuestions} 
+            />
         </div>
     );
 };

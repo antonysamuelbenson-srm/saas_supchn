@@ -11,6 +11,12 @@ const UPLOAD_TYPES = [
   { type: "transferCostData", label: "Transfer Cost" },
   { type: "capacity", label: "Warehouse Capacity" },
 ];
+  const dashboardQuestions = [
+        "What file formats are supported?",
+        "Is there a maximum file size?",
+        "How do I upload multiple files?",
+        "What happens to my data after upload?"
+    ];
 
 const FileUploadPage = () => {
   const [fileMap, setFileMap] = useState({});
@@ -40,6 +46,8 @@ const FileUploadPage = () => {
       return;
     }
 
+
+
     const formData = new FormData();
     formData.append("file", file);
 
@@ -67,6 +75,8 @@ const FileUploadPage = () => {
       setUploadStatus((prev) => ({ ...prev, [type]: errorMessage }));
     }
   };
+
+
 
   return (
     <div className="min-h-screen bg-base-200 py-10 px-6">
@@ -124,7 +134,10 @@ const FileUploadPage = () => {
           ))}
         </div>
       </div>
-    <Chatbot/>
+    <Chatbot 
+  mode="floating"
+  questions={accuracyQuestions} // Must be spelled 'questions'
+/>
     </div>
   );
 };
