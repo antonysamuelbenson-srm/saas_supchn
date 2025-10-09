@@ -2859,9 +2859,9 @@ const Sidebar = React.memo(({ isOpen, onClose, permissions }) => {
                         {hasPermission("GET:/admin/users") && (
                             <button onClick={() => navigate("/adminprivileges")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiSettings className="mr-3" /> Manage Users</button>
                         )}
-                        {hasPermission("GET:/dashboard") && (
+                        {/* {hasPermission("GET:/dashboard") && (
                             <button className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiBarChart2 className="mr-3" /> Reports</button>
-                        )}
+                        )} */}
                         <button onClick={() => navigate("/forecast")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiTrendingUp className="mr-3" /> Forecast</button>
                         <button onClick={() => navigate("/rebalancer")} className="flex items-center text-slate-300 hover:bg-slate-700 p-2 rounded-md transition w-full"><FiRefreshCw className="mr-3" /> Rebalancer</button>
                         {hasPermission("POST:/config/apply-formula") && (
