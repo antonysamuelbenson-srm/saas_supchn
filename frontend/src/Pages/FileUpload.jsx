@@ -11,7 +11,7 @@ const UPLOAD_TYPES = [
   { type: "transferCostData", label: "Transfer Cost" },
   { type: "capacity", label: "Warehouse Capacity" },
 ];
-  const dashboardQuestions = [
+  const accuracyQuestions = [
         "What file formats are supported?",
         "Is there a maximum file size?",
         "How do I upload multiple files?",
@@ -135,9 +135,9 @@ const FileUploadPage = () => {
         </div>
       </div>
     <Chatbot 
-  mode="floating"
-  questions={accuracyQuestions} // Must be spelled 'questions'
-/>
+      mode="floating"
+      questions={accuracyQuestions} // Must be spelled 'questions'
+    />
     </div>
   );
 };
