@@ -77,7 +77,7 @@ def fetch_permissions(token):
     except Exception as e:
         print("Error fetching permissions:", str(e))
         return None, set()
-    
+        
 def upload_csv(token: str) -> None:
     """
     Flexible uploader with improved feedback
@@ -86,9 +86,10 @@ def upload_csv(token: str) -> None:
         "1": ("store master"      , "store"),
         "2": ("inventory snapshot", "inventory"),
         "3": ("forecast"          , "forecast"),
-        "4": ("uploadStoreData"        , "totalStoreData"),
-        "5": ("TransferCostData     " , "transferCostData"),
-        "6": ("WarehouseMaxCapacityDataUpload", "warehouseMaxData")
+        "4": ("total store data"  , "totalStoreData"),
+        "5": ("transfer cost data", "transferCostData"),
+        "6": ("warehouse max capacity data", "capacity"),
+        "7": ("sales data"        , "sales") # NEW: Added sales data upload option
     }
 
     headers = {"Authorization": f"Bearer {token}"}
@@ -123,7 +124,8 @@ def upload_csv(token: str) -> None:
             file_size = os.path.getsize(path) / (1024 * 1024)  # Size in MB
             print(f"📤 Uploading {path} ({file_size:.1f}MB) …")
             
-            if route == "inventory" and file_size > 1:
+            # Use fast bulk upload for inventory or other large datasets if needed
+            if route in ("inventory", "sales") and file_size > 1: # Added 'sales' to fast upload check
                 print("   🚀 Using fast bulk upload method...")
             
             try:
@@ -143,7 +145,11 @@ def upload_csv(token: str) -> None:
                     print(f"   ❌ Failed ({res.status_code})")
                     try:
                         error_msg = res.json()
-                        print(f"   Error: {error_msg}")
+                        # Check for specific validation errors
+                        if 'valid' in error_msg and error_msg['valid'] is False:
+                             print(f"   Validation Errors: {'; '.join(error_msg['errors'])}")
+                        else:
+                            print(f"   Error: {error_msg}")
                     except Exception:
                         print(f"   Response: {res.text}")
                         
