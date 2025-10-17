@@ -1,5 +1,5 @@
-
-
+from sqlalchemy import text
+from app.utils.sql_utils import engine
 from app.services.llm_providers import call_llm
 from app.utils.sql_utils import execute_read_only_query, parse_postgres_error, looks_like_sql
 from chromadb import PersistentClient
@@ -203,6 +203,59 @@ def log_to_csv(
         ])
         print("✅ DEBUG: Log entry written")
 
+def log_to_db(
+    user_query: str,
+    context: str,
+    sql: str,
+    input_tokens: int,
+    output_tokens: int,
+    answer: str = "",
+    error: str = "",
+    feedback: str = None
+):
+    """Store chat interactions and feedback in a DB table (portable across Supabase/AWS)."""
+    # Normalize feedback for consistency
+    if feedback:
+        feedback = feedback.lower().strip()
+        if feedback not in ["up", "down"]:
+            feedback = None  # ignore invalid values
+
+    insert_sql = text("""
+        INSERT INTO query_logs
+        (timestamp, user_query, retrieved_context, generated_sql, input_tokens, output_tokens, final_answer, error, feedback)
+        VALUES (:ts, :user_query, :context, :sql, :input_tokens, :output_tokens, :answer, :error, :feedback)
+    """)
+    with engine.begin() as conn:
+        conn.execute(insert_sql, {
+            "ts": datetime.utcnow(),
+            "user_query": user_query,
+            "context": context,
+            "sql": sql,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "answer": answer,
+            "error": error,
+            "feedback": feedback
+        })
+
+    print("✅ DEBUG: Log entry stored in database.")
+
+def update_feedback_in_db(user_query, feedback):
+    """Update feedback for the most recent chat with the same query (PostgreSQL-safe)."""
+    update_sql = text("""
+        WITH latest AS (
+            SELECT id
+            FROM query_logs
+            WHERE user_query = :user_query
+            ORDER BY timestamp DESC
+            LIMIT 1
+        )
+        UPDATE query_logs
+        SET feedback = :feedback
+        WHERE id IN (SELECT id FROM latest)
+    """)
+    with engine.begin() as conn:
+        conn.execute(update_sql, {"feedback": feedback, "user_query": user_query})
 
 def handle_sql_error(user_query: str, context: str, sql: str, error: str, input_tokens: int, output_tokens: int, max_retries: int) -> str:
     """Handle SQL errors with retry logic"""
@@ -262,26 +315,43 @@ Output ONLY the corrected SQL:
     
     return "Unable to process query."
 
-def generate_and_execute_sql(user_query: str, max_retries=3) -> str:
-    # Let the LLM decide if this needs SQL or is conversational
+
+def generate_and_execute_sql(user_query: str, max_retries=3) -> dict:
+    """
+    Returns a dict with all metadata for logging:
+    {
+        "response": str,             # AI natural language answer
+        "retrieved_context": str,    # Chroma context
+        "generated_sql": str,        # SQL generated or 'N/A' if conversational
+        "input_tokens": int,
+        "output_tokens": int
+    }
+    """
     context = retrieve_context_from_chroma(user_query)
-    
     smart_prompt = build_smart_prompt(user_query)
-    response, input_tokens, output_tokens = call_llm(smart_prompt)
-    
-    # Check if the response looks like SQL
-    if looks_like_sql(response):
+    response_text, input_tokens, output_tokens = call_llm(smart_prompt)
+
+    if looks_like_sql(response_text):
         try:
-            current_app.logger.debug(f"Generated SQL: {response}")
-            result = execute_read_only_query(response)
+            current_app.logger.debug(f"Generated SQL: {response_text}")
+            result = execute_read_only_query(response_text)
             answer = interpret_result(result, user_query)
-            log_to_csv(user_query, context, response, input_tokens, output_tokens, answer=answer)
-            return answer
+            generated_sql = response_text
+            log_to_csv(user_query, context, generated_sql, input_tokens, output_tokens, answer=answer)
         except Exception as e:
             error_msg = parse_postgres_error(e) if "psycopg2" in str(type(e)) else str(e)
-            # Handle SQL errors with retries
-            return handle_sql_error(user_query, context, response, error_msg, input_tokens, output_tokens, max_retries)
+            answer = handle_sql_error(user_query, context, response_text, error_msg, input_tokens, output_tokens, max_retries)
+            generated_sql = response_text
     else:
-        # It's a conversational response, log and return as-is
-        log_to_csv(user_query, context, "N/A (conversational)", input_tokens, output_tokens, answer=response)
-        return response
+        # Conversational response
+        answer = response_text
+        generated_sql = "N/A"
+        log_to_csv(user_query, context, generated_sql, input_tokens, output_tokens, answer=answer)
+
+    return {
+        "response": answer,
+        "retrieved_context": context,
+        "generated_sql": generated_sql,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens
+    }
