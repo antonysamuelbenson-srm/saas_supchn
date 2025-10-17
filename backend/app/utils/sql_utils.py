@@ -1,3 +1,4 @@
+
 import psycopg2
 import re
 from sqlalchemy import create_engine
@@ -22,11 +23,21 @@ def execute_read_only_query(sql: str) -> dict:
             rows = cur.fetchall()
             return {"columns": cols, "rows": rows}
 
-def parse_postgres_error(err: str) -> str:
-    err = str(err)
-    if "does not exist" in err:
-        match = re.search(r'"([^"]+)"', err)
-        return f"Column/table '{match.group(1)}' not found" if match else "Object not found"
-    if "operator does not exist" in err:
-        return "Type mismatch (e.g., text vs number)"
-    return err.split('\n')[0][:150]
+def parse_postgres_error(e) -> str:
+    error_str = str(e)
+    if "forecast_unified" in error_str:
+        return "The forecast_unified view doesn't exist. Use predict and forecast_daily tables directly."
+    elif "permission denied" in error_str.lower():
+        return "Database permission error. Check if the view/table exists."
+    elif "does not exist" in error_str:
+        # Extract the missing object name
+        match = re.search(r"relation \"([^\"]+)\"", error_str)
+        if match:
+            return f"Table/view '{match.group(1)}' doesn't exist. Check schema documentation."
+    return error_str
+
+def looks_like_sql(text: str) -> bool:
+    """Heuristic to check if LLM output is SQL"""
+    text_upper = text.strip().upper()
+    sql_indicators = ['SELECT ', 'FROM ', 'WHERE ', 'JOIN ', 'GROUP BY ', 'ORDER BY ']
+    return any(indicator in text_upper for indicator in sql_indicators) and ';' in text
