@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from app.services.ai_service import generate_and_execute_sql
+from app.services.ai_service import generate_and_execute_sql,log_to_csv
 
 bp = Blueprint('chatbot', __name__)
 
@@ -29,3 +29,35 @@ def handle_chat_query():
         return jsonify(response_data), 500
 
     return jsonify(response_data), 200
+
+@bp.route('/feedback', methods=['POST'])
+def handle_feedback():
+    """
+    Endpoint to receive thumbs up/down feedback for a previous query.
+    """
+    if not request.is_json:
+        return jsonify({"error": "Missing JSON in request"}), 400
+
+    data = request.get_json()
+    user_query = data.get('query')
+    feedback = data.get('feedback')  # should be "up" or "down"
+
+    if not user_query or feedback not in ['up', 'down']:
+        return jsonify({"error": "Missing or invalid 'query' or 'feedback' field"}), 400
+
+    try:
+        # Append feedback to existing log row (simplest: log as new entry)
+        log_to_csv(
+            user_query=user_query,
+            context="N/A",
+            sql="N/A",
+            input_tokens=0,
+            output_tokens=0,
+            answer="N/A",
+            error="",
+            feedback=feedback
+        )
+        return jsonify({"message": "Feedback received"}), 200
+    except Exception as e:
+        current_app.logger.error(f"Failed to save feedback: {e}")
+        return jsonify({"error": "Failed to record feedback"}), 500
