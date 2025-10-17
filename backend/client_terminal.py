@@ -1905,51 +1905,82 @@ def view_weeks_of_supply_by_store(token):
         print(f"❌ Error fetching store summary: {str(e)}")
         
 
-
 def chat(token: str):
     url = f"{BASE_URL}/chat"
-    
+    feedback_url = f"{BASE_URL}/feedback"  # 👈 New feedback endpoint
+
     print("\n--- Starting Chat Session ---")
     print("Enter 'exit' or 'quit' to return to the main menu.")
-    
+
     while True:
         user_query = input("You: ")
-        
+
         if user_query.lower() in ['exit', 'quit']:
             print("--- Chat Session Ended. Returning to Main Menu. ---\n")
             break
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        payload = {
-            "query": user_query
-        }
+        payload = {"query": user_query}
 
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=60)
-            response.raise_for_status() 
+            response.raise_for_status()
 
             response_data = response.json()
-            print(f"AI: {response_data.get('response', 'Error: Could not retrieve response.')}")
-            
+            ai_response = response_data.get('response', 'Error: Could not retrieve response.')
+            print(f"\nAI: {ai_response}\n")
+
+            # 👇 Ask user for optional feedback
+            while True:
+                feedback = input("Was this helpful? (👍 / 👎 or press Enter to skip): ").strip().lower()
+                
+                if feedback in ['', 'skip']:
+                    print("Feedback skipped.\n")
+                    break
+                elif feedback in ['👍', 'up', 'yes', 'y', 'u', '+', '1']:
+                    feedback_value = "up"
+                elif feedback in ['👎', 'down', 'no', 'n', '-', '0']:
+                    feedback_value = "down"
+                else:
+                    print("Invalid input. Please enter 👍 / 👎 or press Enter to skip.")
+                    continue
+
+                # Send feedback to the backend
+                feedback_payload = {"query": user_query, "feedback": feedback_value}
+                try:
+                    fb_response = requests.post(
+                        feedback_url, headers=headers, json=feedback_payload, timeout=10
+                    )
+                    if fb_response.status_code == 200:
+                        print("✅ Feedback recorded.\n")
+                    else:
+                        print(f"⚠️ Feedback failed: {fb_response.text}\n")
+                except Exception as fb_err:
+                    print(f"⚠️ Error sending feedback: {fb_err}\n")
+
+                break  # Exit feedback loop after valid feedback
+
         except requests.exceptions.HTTPError as http_err:
             try:
                 error_detail = response.json().get('error', 'No specific error message provided.')
             except json.JSONDecodeError:
                 error_detail = "Server returned non-JSON error."
-                
+
             print(f"\n--- [API HTTP Error] ---")
             print(f"HTTP Status: {response.status_code}")
             print(f"Detail: {error_detail}")
             print("------------------------\n")
             break
-            
+
         except requests.exceptions.RequestException as e:
             print(f"\n--- [API Connection Error] ---")
             print(f"Error communicating with server: {e}")
             print("------------------------------\n")
             break
+
 
 def main():
     while True:
