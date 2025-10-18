@@ -1,8 +1,10 @@
-
 import psycopg2
 import re
 from sqlalchemy import create_engine
 from app.config import DATABASE_URL
+
+# Create SQLAlchemy engine - this is what ai_service.py needs
+engine = create_engine(DATABASE_URL)
 
 def get_db_connection():
     # Reuse your existing DB setup if you have one

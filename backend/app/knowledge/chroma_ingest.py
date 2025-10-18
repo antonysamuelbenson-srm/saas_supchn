@@ -2,6 +2,7 @@ import os
 from chromadb import PersistentClient
 from .metrics import METRICS_FORMULAS
 from .schema_narrative import DATABASE_SCHEMA, FULL_SCHEMA_NARRATIVE
+from .question_categories import FLATTENED_QUESTIONS, TERM_EXPLANATIONS
 import re
 
 def parse_schema_narrative(narrative: str) -> list:
@@ -60,6 +61,31 @@ def build_knowledge_documents():
         "text": "Use the 'forecast_unified' view for all forecast queries. It combines ML predictions ('ml' source) and user uploads ('user' source) and exposes canonical store_id (BIGINT).",
         "metadata": {"type": "view", "name": "forecast_unified"}
     })
+    
+    # Add categorized questions
+    for i, question_data in enumerate(FLATTENED_QUESTIONS):
+        question = question_data["question"]
+        category = question_data["category"]
+        subcategory = question_data["subcategory"] or "General"
+        
+        docs.append({
+            "id": f"question_{i}",
+            "text": f"Question: {question} (Category: {category}, Subcategory: {subcategory})",
+            "metadata": {
+                "type": "question", 
+                "category": question_data["category_id"],
+                "subcategory": question_data["subcategory_id"],
+                "question": question
+            }
+        })
+    
+    # Add term explanations
+    for term, explanation in TERM_EXPLANATIONS.items():
+        docs.append({
+            "id": f"term_{term.lower()}",
+            "text": f"Term '{term}': {explanation}",
+            "metadata": {"type": "term", "name": term}
+        })
 
     return docs
 
