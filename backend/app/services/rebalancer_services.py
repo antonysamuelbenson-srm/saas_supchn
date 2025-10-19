@@ -6,6 +6,7 @@ from app.models.inventory import InventorySnapshot
 from app.models.predict import Forecast
 from app.models.store import Store
 from app.models.transfer_cost_data import transferCostDta
+from app.models.rebalancer import RebalancerDetail
 import pulp
 import logging
 import csv
@@ -451,3 +452,42 @@ def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_i
             "arrival_date": data["arrival_date"]
         })
     return formatted_summary
+
+def save_rebalancer_details_to_db(detailed_allocations: list):
+    """
+    Saves the detailed allocations to the database.
+    """
+    try:
+        records = []
+        for item in detailed_allocations:
+            record = RebalancerDetail(
+                src_store_code=item.get("src"),
+                src_store_name=item.get("src"),
+                dst_store_code=item.get("dst"),
+                dst_store_name=item.get("dst"),
+                sku=item.get("sku"),
+                product_name=item.get("sku"),
+                units=item.get("units", 0),
+                src_current_inventory=item.get("src_current_inventory", 0),
+                dst_current_inventory=item.get("dst_current_inventory", 0),
+                src_days_of_supply=item.get("src_days_of_supply", 0),
+                dst_days_of_supply=item.get("dst_days_of_supply", 0),
+                src_daily_forecast=item.get("src_daily_forecast", 0),
+                dst_daily_forecast=item.get("dst_daily_forecast", 0),
+                src_excess=item.get("src_excess", 0),
+                dst_shortage=item.get("dst_shortage", 0),
+                network_deficit=item.get("network_deficit", 0),
+                ddos_shortage=item.get("ddos_shortage", 0),
+                total_unfulfilled_shortage=item.get("total_unfulfilled_shortage", 0),
+                arrival_date=item.get("arrival_date")
+            )
+            records.append(record)
+
+        db.session.bulk_save_objects(records)
+        db.session.commit()
+        return True
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Failed to save rebalancer details: {e}", exc_info=True)
+        return False
+
