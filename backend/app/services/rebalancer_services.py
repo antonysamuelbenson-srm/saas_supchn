@@ -453,20 +453,57 @@ def get_transfer_summary(allocations: list, shortages_excesses: list, transfer_i
         })
     return formatted_summary
 
+def get_name_to_code_map():
+    """Loads a mapping from store_name to store_code for internal lookups."""
+    try:
+        # Assuming 'Store' model is correctly aliased to 'store_data' columns
+        rows = db.session.query(Store.name, Store.store_code).all()
+        # Use name as the key
+        return {row.name: row.store_code for row in rows if row.name and row.store_code}
+    except Exception as e:
+        logger.error(f"Failed to load store name-to-code map: {e}")
+        return {}
+    
+# MODIFIED: save_rebalancer_details_to_db
 def save_rebalancer_details_to_db(detailed_allocations: list):
     """
-    Saves the detailed allocations to the database.
+    Saves the detailed allocations to the database. It performs a lookup to map
+    the Store Names (which are in item['src'] and item['dst']) back to the
+    technical Store Codes for the *_code columns.
     """
+    if not detailed_allocations:
+        return True
+
     try:
+        # CRITICAL: Retrieve the name-to-code map here
+        name_to_code_map = get_name_to_code_map()
+        
         records = []
         for item in detailed_allocations:
+            src_name = item.get("src")
+            dst_name = item.get("dst")
+
+            # Perform the lookup: Use the name from the input item to find the code
+            src_code = name_to_code_map.get(src_name, src_name)
+            dst_code = name_to_code_map.get(dst_name, dst_name)
+            
+            # The lookup uses a fallback to the name itself (src_name) if the code isn't found, 
+            # preserving the data that was passed (the store name).
+
             record = RebalancerDetail(
-                src_store_code=item.get("src"),
-                src_store_name=item.get("src"),
-                dst_store_code=item.get("dst"),
-                dst_store_name=item.get("dst"),
+                # Use the actual Store Code retrieved from the lookup
+                src_store_code=src_code,
+                dst_store_code=dst_code,
+                
+                # Use the Store Name directly from the input item
+                src_store_name=src_name,
+                dst_store_name=dst_name,
+                
+                # SKU/Product Name fields remain based on the existing flawed implementation 
+                # (which stores name in both, but we improve it slightly below)
                 sku=item.get("sku"),
-                product_name=item.get("sku"),
+                product_name=item.get("sku"), # Assuming 'sku' contains Product Name based on transfer_details
+                
                 units=item.get("units", 0),
                 src_current_inventory=item.get("src_current_inventory", 0),
                 dst_current_inventory=item.get("dst_current_inventory", 0),
@@ -490,4 +527,3 @@ def save_rebalancer_details_to_db(detailed_allocations: list):
         db.session.rollback()
         logger.error(f"Failed to save rebalancer details: {e}", exc_info=True)
         return False
-
