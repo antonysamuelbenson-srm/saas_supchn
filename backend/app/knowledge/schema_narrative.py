@@ -1,161 +1,217 @@
 DATABASE_SCHEMA = """
 --
--- INVENTORY MANAGEMENT SYSTEM (Condensed Schema for LLM)
+-- INVENTORY MANAGEMENT SYSTEM (Chatbot-Optimized Schema)
 --
--- Tables: inventory, predict, forecast_daily, store_data, dashboard_metrics, 
--- weeks_of_supply, warehouse_max_data, forecast_log, sales, rebalancer, 
--- transfer_cost_data, roles, user, alert
+-- CORE TABLES (in scope): 
+-- inventory, predict, forecast_daily, store_data, sales, reorder_config,
+-- weeks_of_supply, dashboard_metrics, alert, rebalancer, transfer_cost_data,
+-- user, roles, upload_batch, products, demand_trend, reorder_suggestions,
+-- store_inventory_levels, total_store_data, warehouse_max_data,
+-- availability_rate, chatbot_logs, query_logs, forecast_log, forecast_schedule
 --
+-- EXCLUDED TABLES: 
+-- forecast_history, inventory_snapshot, weather, stores, leaderboard, 
+-- forecast_metrics, economic_indicators, holidays
+--
+-- KEY RULES:
+-- 1. Two store identifiers exist:
+--    - store_data.store_id (bigint): system/internal ID
+--    - store_data.store_code (varchar): business ID used in user-facing tables
+-- 2. Forecast/demand priority: predict → forecast_daily → reorder_config
+-- 3. All (store, sku, date) combinations are unique per table
+-- 4. System schemas (auth, realtime, storage, vault) are ignored
 
--- Table: inventory (Current and Historical Stock Quantities)
--- PK: snapshot_id
--- Columns: snapshot_id (bigint), snapshot_date (date), qty (numeric), sku (character varying), 
---          store_id (bigint, FK to store_data), product_name (text), role_user_id (uuid, FK to user)
-
--- Table: predict (Predicted and Actual Demand by Date/Store)
--- PK: id
--- Columns: id (bigint), date (date), store_id (character varying), product_id (character varying), 
---          predicted (real), actual (real), forecast_log_id (uuid, FK to forecast_log)
-
--- Table: forecast_daily (Daily Forecasts, uploaded by the user)
--- PK: forecast_id
--- Columns: forecast_id (bigint), forecast_date (date), forecast_qty (bigint), sku (character varying),
---          store_id (bigint), batch_id (bigint)
-
--- Table: store_data (Master Data for Store Locations/Attributes)
+-- Table: store_data (Master store registry)
 -- PK: store_id
--- Columns: store_id (bigint), name (text), store_code (character varying), address (text), 
---          city (character varying), state (character varying), country (character varying)
-
--- Table: dashboard_metrics (Aggregated, high-level performance indicators)
--- PK: id
--- Columns: id (uuid), timestamp (timestamp), inventory_position (integer), weeks_of_supply (double precision), 
---          projected_stockouts (integer), fill_rate_probability (real)
-
--- Table: weeks_of_supply (Calculated Supply Metric)
--- PK: id
--- Columns: id (uuid), store_id (bigint, FK to store_data), sku (character varying), 
---          current_inventory (numeric), avg_weekly_demand (numeric), weeks_of_supply (numeric), 
---          category (character varying)
-
--- Table: warehouse_max_data (Warehouse/Store Max Capacity)
--- PK: store_id
--- Columns: store_id (bigint), warehouse_name (character varying), max_capacity (integer)
-
--- Table: forecast_log (Metadata about Forecast Runs)
--- PK: id
--- Columns: id (uuid), run_time (timestamp), status (text, default 'running'), run_type (text, default 'manual'), 
---          n_days (smallint)
-
--- Table: sales (Daily Sales/Units Sold)
--- PK: id
--- Columns: id (bigint), date (date), sku (character varying), store_id (character varying), units_sold (integer)
-
--- Table: rebalancer (Suggested Inventory Transfers)
--- PK: id
--- Columns: id (bigint), run_date (date), src_store (character varying), dst_store (character varying), 
---          sku (character varying), units (real), objective_value (real), status (text)
-
--- Table: transfer_cost_data (Cost to move inventory between locations)
--- PK: id
--- Columns: id (integer), start_location (character varying), end_location (character varying), 
---          transfer_cost (double precision), lead_time (integer)
-
--- Table: roles (User Permissions/Role Definitions)
--- PK: id
--- Columns: id (bigint), role (character varying, default 'viewer')
-
--- Table: user (User Authentication and Preferences)
--- PK: role_user_id
--- Columns: role_user_id (uuid), email (character varying), lookahead_days (integer), 
---          role_id (bigint, FK to roles), active (boolean)
-
--- Table: alert (System Generated Alerts)
--- PK: id
--- Columns: id (uuid), created_at (timestamp), type (character varying), severity (character varying), 
---          message (character varying), sku (text), store_id (bigint, FK to store_data), 
+-- Columns: store_id (bigint), store_code (varchar, UNIQUE), name (text), address (text), 
+--          city (varchar), state (varchar), country (varchar), capacity_units (numeric), 
 --          role_user_id (uuid, FK to user)
 
+-- Table: inventory (Current/historical stock levels)
+-- PK: snapshot_id
+-- Columns: snapshot_id (bigint), snapshot_date (date), qty (numeric), 
+--          sku (varchar), store_id (bigint, FK to store_data.store_id), 
+--          product_name (text), role_user_id (uuid, FK to user)
+
+-- Table: sales (Historical daily sales)
+-- PK: id
+-- Columns: id (bigint), date (date), sku (varchar), 
+--          store_id (varchar = store_data.store_code), units_sold (integer)
+
+-- Table: predict (ML-based demand forecasts)
+-- PK: id
+-- Columns: id (bigint), date (date), store_id (varchar = store_data.store_code), 
+--          product_id (varchar = sku), predicted (real), actual (real), 
+--          forecast_log_id (uuid, FK to forecast_log)
+
+-- Table: forecast_daily (User-uploaded forecasts)
+-- PK: forecast_id
+-- Columns: forecast_id (bigint), forecast_date (date), forecast_qty (bigint), 
+--          sku (varchar), store_id (bigint, FK to store_data.store_id), 
+--          batch_id (bigint, FK to upload_batch), role_user_id (uuid)
+
+-- Table: reorder_config (Fallback demand & reorder rules)
+-- PK: id
+-- Columns: id (uuid), sku (varchar), store_id (bigint, FK to store_data.store_id), 
+--          avg_daily_usage (double precision), lead_time_days (integer), 
+--          safety_stock (double precision), reorder_point (double precision), 
+--          role_user_id (uuid)
+
+-- Table: weeks_of_supply (Precomputed supply metric)
+-- PK: id
+-- Columns: id (uuid), store_id (bigint, FK to store_data), sku (varchar), 
+--          current_inventory (numeric), avg_weekly_demand (numeric), 
+--          weeks_of_supply (numeric), category (varchar), role_user_id (uuid)
+
+-- Table: dashboard_metrics (System-wide KPIs)
+-- PK: id
+-- Columns: id (uuid), timestamp (timestamp), inventory_position (integer), 
+--          weeks_of_supply (double precision), projected_stockouts (integer), 
+--          fill_rate_probability (real)
+
+-- Table: alert (Stock/out-of-stock warnings)
+-- PK: id
+-- Columns: id (uuid), created_at (timestamp), type (varchar), severity (varchar), 
+--          message (varchar), sku (text), store_id (bigint, FK to store_data), 
+--          role_user_id (uuid, FK to user)
+
+-- Table: rebalancer (Inventory transfer recommendations)
+-- PK: id
+-- Columns: id (bigint), run_date (date), src_store (varchar = store_code), 
+--          dst_store (varchar = store_code), sku (varchar), units (real), 
+--          objective_value (real), status (text)
+
+-- Table: transfer_cost_data (Inter-store transfer costs)
+-- PK: id
+-- Columns: id (integer), start_location (varchar = store_code), 
+--          end_location (varchar = store_code), transfer_cost (double precision), 
+--          lead_time (integer)
+
+-- Table: user (User accounts)
+-- PK: role_user_id
+-- Columns: role_user_id (uuid), email (varchar), lookahead_days (integer, default 7), 
+--          role_id (bigint, FK to roles), active (boolean, default true)
+
+-- Table: roles (User permissions)
+-- PK: id
+-- Columns: id (bigint), role (varchar, default 'viewer')
+
+-- Table: upload_batch (Tracks forecast/inventory uploads)
+-- PK: batch_id
+-- Columns: batch_id (bigint), role_user_id (uuid), batch_type (enum), 
+--          original_filename (text), uploaded_at (timestamp), 
+--          effective_start_date (date), effective_end_date (date)
+
+-- Table: products (SKU-store availability)
+-- PK: id
+-- Columns: id (bigint), store_id (bigint), sku (varchar), product_name (text)
+
+-- Table: demand_trend (Precomputed demand insights)
+-- PK: id
+-- Columns: id (uuid), store_id (bigint, FK to store_data), sku (varchar), 
+--          recent_actual_demand (numeric), forecasted_demand (numeric), 
+--          demand_variance_pct (numeric), trend_category (varchar), 
+--          lookback_days (int, default 30), forecast_horizon_days (int, default 14), 
+--          last_updated (timestamptz), role_user_id (uuid)
+
+-- Table: reorder_suggestions (Auto-generated reorder advice)
+-- PK: id
+-- Columns: id (bigint), created_at (timestamptz), store_id (integer → cast to bigint), 
+--          sku (varchar), reorder_date (date), suggested_qty (integer), 
+--          current_qty (integer), forecast_demand (integer), incoming_stock (integer), 
+--          projected_inv (integer), lead_time_days (smallint), status (text)
+
+-- Table: store_inventory_levels (Store capacity & stock status)
+-- PK: id
+-- Columns: id (bigint), store_id (bigint, FK to store_data), 
+--          current_inventory (integer, default 0), max_capacity (integer), 
+--          safety_stock (integer), inventory_percentage (numeric(5,2), computed), 
+--          level_category (text, computed: 'Low'/'Medium'/'High'), 
+--          last_updated (timestamptz)
+
+-- Table: total_store_data (Per-store SKU business rules)
+-- PK: id
+-- Columns: id (integer), store_code (varchar, FK to store_data.store_code), 
+--          sku (varchar), safety_stock_level (integer), reorder_level (integer)
+
+-- Table: warehouse_max_data (Store capacity limits)
+-- PK: store_id
+-- Columns: store_id (bigint, PK), warehouse_name (varchar = store name), 
+--          max_capacity (integer)
+
+-- Table: forecast_log (ML forecast run metadata)
+-- PK: id
+-- Columns: id (uuid), run_time (timestamp), status (text, default 'running'), 
+--          run_type (text, default 'manual'), n_days (smallint)
+
+-- Table: forecast_schedule (Automated forecast jobs)
+-- PK: id
+-- Columns: id (uuid), store_id (varchar = store_code), product_id (varchar = sku), 
+--          frequency (text), time_of_day (text), n_weeks (integer), 
+--          day_of_week (varchar), created_at (timestamptz)
+
+-- Table: availability_rate, chatbot_logs, query_logs
+-- Purpose: Monitoring & telemetry (safe to query if asked)
+
 --
--- RELATIONSHIPS / FOREIGN KEYS (Simplified map):
--- inventory.store_id -> store_data.store_id
--- inventory.role_user_id -> user.role_user_id
--- weeks_of_supply.store_id -> store_data.store_id
--- user.role_id -> roles.id
--- alert.store_id -> store_data.store_id
--- alert.role_user_id -> user.role_user_id
+-- CRITICAL JOIN RULES:
+-- • inventory, weeks_of_supply, alert → JOIN store_data ON store_id (bigint)
+-- • sales, predict, rebalancer → JOIN store_data ON store_code (varchar)
+-- • forecast_daily → uses store_id (bigint); resolve via store_data first
+--
+-- FORECAST FALLBACK LOGIC (for a given store_code, sku, date):
+-- 1. predict (source = 'ml')
+-- 2. forecast_daily (source = 'user')
+-- 3. reorder_config.avg_daily_usage (source = 'config')
+--
+-- Use UNION ALL + ORDER BY source priority to implement.
 --
 """
 
 FULL_SCHEMA_NARRATIVE = """
 --
--- INVENTORY MANAGEMENT SYSTEM - DETAILED SCHEMA NARRATIVE
--- 
--- Table: alert
--- DESCRIPTION: This table contains different kinds of alerts (excess, spike, understock, out of stock) with varying severity and messages.
--- COLUMNS: id, created_at, type, severity, message, sku, store_id (FK to store_data), role_user_id (FK to user).
--- ALERTS: STOCK_OUT (qty=0, High), UNDER_STOCK (qty<ROP, Medium), EXCESS (qty>max capacity/2xROP, Low), SPIKE (Demand spike).
+-- INVENTORY MANAGEMENT SYSTEM – DETAILED NARRATIVE FOR SQL ENGINE
+--
 
--- Table: dashboard_metrics
--- DESCRIPTION: Stores **aggregated, high-level performance indicators (KPIs)**. All values are accumulated totals across the network.
--- COLUMNS: id, timestamp, **inventory_position** (total SKU count in all stores), **weeks_of_supply** (accumulated WOS), **projected_stockouts**, **fill_rate_probability**.
--- TRIGGER: Recalculated from the settings section.
+-- STORE IDENTIFIERS:
+-- The system uses two store identifiers:
+--   • store_data.store_id (bigint): internal system ID, used in inventory, alert, etc.
+--   • store_data.store_code (varchar): business-facing code, used in sales, predict, etc.
+-- Always resolve store identity via store_data before joining across tables.
 
--- Table: forecast_daily
--- DESCRIPTION: This is the **user-uploaded forecast data**. Used when the 'predict' table is empty.
--- COLUMNS: forecast_id, forecast_date, forecast_qty, sku, store_id, batch_id.
+-- FORECAST HIERARCHY:
+-- When demand is requested for (store, sku, date), use this priority:
+--   1. predict.predicted → from ML model
+--   2. forecast_daily.forecast_qty → user-uploaded
+--   3. reorder_config.avg_daily_usage → static fallback (treated as 1-day demand)
+-- Implement via UNION ALL with explicit source tagging and ORDER BY priority.
 
--- Table: forecast_log
--- DESCRIPTION: Metadata about **ML model prediction runs** (run_time, status, run_type, n_days).
+-- UNIQUENESS:
+-- All time-series tables (inventory, sales, predict, forecast_daily) enforce at most
+-- one row per (store, sku, date). Aggregations do not require deduplication.
 
--- Table: forecast_schedule
--- DESCRIPTION: Data regarding **scheduled runs** (frequency, time, day, prediction weeks).
+-- USER CONTEXT:
+-- Tables with role_user_id may be user-scoped, but unless specified, queries should
+-- return system-wide data (i.e., ignore role_user_id filters by default).
 
--- Table: inventory
--- DESCRIPTION: Data regarding the **current inventory or what is at hand** for each SKU in each store.
--- COLUMNS: snapshot_id, snapshot_date, **qty** (amount of SKU present), **sku** (e.g., SKU1001), **product_name**, store_id (FK to store_data), role_user_id.
+-- METRIC DEFINITIONS:
+-- • Weeks of Supply = current_inventory / NULLIF(avg_weekly_demand, 0)
+-- • Projected Stockout = forecasted demand over lookahead_days > current inventory
+-- • Fill Rate Probability = estimated % of demand fulfillable from on-hand stock
 
--- Table: predict
--- DESCRIPTION: **Predictions made by the ML model**. This is the primary source for forecast data.
--- COLUMNS: id, date, **store_id (maps to store_data.store_code)**, **product_id (maps to inventory.sku)**, **predicted** (demand prediction), actual (actual sales), forecast_log_id.
+-- TABLE ROLES:
+-- • Core operational tables: inventory, sales, predict, forecast_daily, reorder_config
+-- • Optimization: rebalancer, transfer_cost_data
+-- • Monitoring: alert, weeks_of_supply, dashboard_metrics, demand_trend
+-- • Master data: store_data, products, total_store_data, warehouse_max_data
+-- • User & audit: user, roles, upload_batch, query_logs
 
--- Table: products
--- DESCRIPTION: Lists **SKUs available in each store**. (Store ID against SKU).
--- COLUMNS: store_id, sku.
+-- EXCLUSIONS:
+-- The following tables are archived or unused and must not be referenced:
+--   forecast_history, inventory_snapshot, weather, stores, leaderboard,
+--   forecast_metrics, economic_indicators, holidays
 
--- Table: reorder_config
--- DESCRIPTION: Configuration data used for reorder calculations **when no forecast data is available**.
--- COLUMNS: sku, avg_daily_usage, lead_time_days, safety_stock, reorder_point.
-
--- Table: roles
--- DESCRIPTION: Stores user roles (admin, editor, viewer).
--- COLUMNS: id, role.
-
--- Table: sales
--- DESCRIPTION: Stores **past daily sales** (historical units_sold).
--- COLUMNS: id, date, **store_id (maps to store_data.store_code)**, **sku (maps to inventory.sku)**, units_sold.
-
--- Table: store_data
--- DESCRIPTION: **Master data for all stores**. Used for mapping store codes and IDs.
--- COLUMNS: **store_id** (identifier), **store_code** (VARCHAR, used in predict/sales tables), name, address, city, country, state, capacity_units.
-
--- Table: total_store_data
--- DESCRIPTION: Stores **safety_stock_level** and **reorder_level** for each SKU at each store.
--- COLUMNS: sku, safety_stock_level, reorder_level, store_code.
-
--- Table: transfer_cost_data
--- DESCRIPTION: **Cost and lead time** associated with transferring SKUs between locations.
--- COLUMNS: id, start_location, end_location, transfer_cost, lead_time.
-
--- Table: upload_batch
--- DESCRIPTION: Tracks file uploads (who, when, what type: inventory, forecast, etc.) using role_user_id.
-
--- Table: user
--- DESCRIPTION: User authentication and preferences.
--- COLUMNS: role_user_id (PK), email, lookahead_days, role_id (FK to roles), active.
-
--- Table: warehouse_max_data
--- DESCRIPTION: Stores store capacity data. **warehouse_name is basically the store_name**.
--- COLUMNS: store_id, warehouse_name, max_capacity.
-
+-- This schema is sufficient to answer all inventory, forecasting, stockout,
+-- transfer, and KPI-related questions with precision.
+--
 """
