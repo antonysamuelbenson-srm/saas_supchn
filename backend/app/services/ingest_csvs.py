@@ -154,7 +154,16 @@ def insert_inventory_snapshot(
     session.add_all(records)
 
 
-def insert_forecast_daily(rows, role_user_id, batch_id, store_cache, session):
+from typing import List, Dict, Any
+from uuid import UUID
+
+def insert_forecast_daily(rows: List[Dict[str, Any]], role_user_id: UUID, batch_id: int, store_cache: dict[str, int], session):
+    """
+    Bulk UPSERT (update or insert) for ForecastDaily data.
+    Follows the same style as insert_sales_data: fetch existing rows in bulk,
+    then perform bulk_update_mappings and bulk_insert_mappings.
+    """
+    # Map store codes to store IDs
     for row in rows:
         store_code = row["store_code"]
         store_id = store_cache.get(store_code)
@@ -162,26 +171,61 @@ def insert_forecast_daily(rows, role_user_id, batch_id, store_cache, session):
             raise ValueError(f"Unknown store_code in forecast CSV: {store_code}")
         row["store_id"] = store_id
 
-    for row in rows:
-        forecast = session.query(ForecastDaily).filter_by(
-            forecast_date=row["forecast_date"],
-            store_id=row["store_id"],
-            sku=row["sku"]
-        ).first()
+    # Identify unique keys (forecast_date, store_id, sku)
+    unique_keys = {(row["forecast_date"], row["store_id"], row["sku"]) for row in rows}
+    if not unique_keys:
+        return
 
-        if forecast:
-            forecast.forecast_qty = int(row["forecast_qty"])
-            forecast.batch_id = batch_id
+    dates = {k[0] for k in unique_keys}
+    store_ids = {k[1] for k in unique_keys}
+    skus = {k[2] for k in unique_keys}
+
+    # Fetch existing forecasts in bulk
+    existing_forecasts = session.query(ForecastDaily).filter(
+        ForecastDaily.forecast_date.in_(dates),
+        ForecastDaily.store_id.in_(store_ids),
+        ForecastDaily.sku.in_(skus)
+    ).all()
+
+    existing_map = {
+        (f.forecast_date, f.store_id, f.sku): f
+        for f in existing_forecasts
+    }
+
+    records_to_update = []
+    records_to_insert = []
+
+    for row in rows:
+        key = (row["forecast_date"], row["store_id"], row["sku"])
+        forecast_qty = int(row["forecast_qty"])
+        existing_forecast = existing_map.get(key)
+
+        if existing_forecast:
+            if existing_forecast.forecast_qty != forecast_qty or existing_forecast.batch_id != batch_id:
+                records_to_update.append({
+                    "forecast_id": existing_forecast.forecast_id,
+                    "forecast_qty": forecast_qty,
+                    "batch_id": batch_id
+                })
         else:
-            forecast = ForecastDaily(
-                forecast_date=row["forecast_date"],
-                store_id=row["store_id"],
-                sku=row["sku"],
-                forecast_qty=int(row["forecast_qty"]),
-                role_user_id=role_user_id,
-                batch_id=batch_id,
-            )
-            session.add(forecast)
+            records_to_insert.append({
+                "forecast_date": row["forecast_date"],
+                "store_id": row["store_id"],
+                "sku": row["sku"],
+                "forecast_qty": forecast_qty,
+                "role_user_id": role_user_id,
+                "batch_id": batch_id
+            })
+
+    # Bulk update existing forecasts
+    if records_to_update:
+        session.bulk_update_mappings(ForecastDaily, records_to_update)
+        print(f"Updated {len(records_to_update)} ForecastDaily records.")
+
+    # Bulk insert new forecasts
+    if records_to_insert:
+        session.bulk_insert_mappings(ForecastDaily, records_to_insert)
+        print(f"Inserted {len(records_to_insert)} new ForecastDaily records.")
 
 
 def insert_transfer_cost_data(rows, role_user_id, session):
