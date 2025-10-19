@@ -4,7 +4,8 @@ from app.services.rebalancer_services import (
     run_rebalancer,
     convert_to_csv,
     get_transfer_summary,
-    get_transfer_details
+    get_transfer_details,
+    save_rebalancer_details_to_db
 )
 from app.utils.decorators import role_required
 import logging
@@ -34,6 +35,8 @@ def get_rebalancing_recommendations():
             allocations, shortages_excesses, transfer_info_map, ddos_days, 
             unfulfilled_shortages, code_to_name_map, sku_to_name_map 
         )
+
+        save_rebalancer_details_to_db(detailed_allocations)
         
         summary_data = get_transfer_summary(
             allocations, shortages_excesses, transfer_info_map, ddos_days,
