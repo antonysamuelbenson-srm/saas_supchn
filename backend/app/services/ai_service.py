@@ -1,3 +1,4 @@
+
 from sqlalchemy import text
 from app.utils.sql_utils import engine
 from app.services.llm_providers import call_llm
@@ -51,8 +52,8 @@ def retrieve_context_from_chroma(query: str) -> str:
 
 def build_smart_prompt(user_query: str) -> str:
     context = retrieve_context_from_chroma(user_query)
-    return f"""
-You are an intelligent inventory assistant. Analyze the user's query and decide:
+    return f'''
+    You are an intelligent inventory assistant. Analyze the user's query and decide:
 
 1. If it's a greeting, introduction, or conversational query -> respond naturally
 2. If it's asking for inventory data, forecasts, metrics -> generate SQL
@@ -64,13 +65,217 @@ AVAILABLE DATABASE SCHEMA:
 **CRITICAL: YOU MUST ANALYZE THE USER'S NATURAL LANGUAGE QUERY AND INTELLIGENTLY MAP IT TO THE CORRECT TABLES AND COLUMNS**
 
 SCHEMA UNDERSTANDING:
-- Inventory data: Use 'inventory' table (current stock levels)
-- Demand forecasts: Use 'predict' table (ML predictions) or 'forecast_daily' (user uploads)
-- Store information: Use 'store_data' table (store details)
-- Sales history: Use 'sales' table (past sales)
-- Alerts: Use 'alert' table (system alerts)
-- Metrics: Use 'dashboard_metrics' (aggregated KPIs)
-- Supply metrics: Use 'weeks_of_supply' table
+- **Inventory/Stock:** Use 'inventory' (bigint store_id)
+- **Sales/Demand:** Use 'sales' or 'predict' (varchar store_code)
+- **Store Bridge:** Use 'store_data' to join on store_id (bigint) OR store_code (varchar).
+- **Forecast Fallback Priority:** predict -> forecast_daily -> reorder_config
+
+**FEW-SHOT EXAMPLES (CRITICAL FOR COMPLEXITY):**
+
+-- Example 1: Easy - Single Table Filter
+Question: Show me all **stockout alerts** from the **last 7 days** with **'High' severity**.
+Response:
+SELECT created_at, message, sku, store_id
+FROM alert
+WHERE type = 'STOCK_OUT'
+  AND severity = 'High'
+  AND created_at >= CURRENT_DATE - INTERVAL '7 days';
+
+-- Example 2: Medium - Store ID Join (Bigint)
+Question: List the current **inventory quantity** and the **store name** for **SKU 'SKU1005'**.
+Response:
+SELECT
+    i.qty AS current_inventory,
+    sd.name AS store_name
+FROM inventory i
+JOIN store_data sd ON i.store_id = sd.store_id
+WHERE
+    i.sku = 'SKU1005'
+ORDER BY
+    sd.name
+LIMIT 100;
+
+-- Example 3: Medium - Store Code Join (Varchar)
+Question: What were the **units sold** for **SKU 'SKU1002'** on **2025-09-01** at the store named **'Urban Fresh Market'**?
+Response:
+SELECT
+    s.units_sold
+FROM sales s
+JOIN store_data sd ON s.store_id = sd.store_code
+WHERE
+    s.sku = 'SKU1002'
+    AND s.date = '2025-09-01'
+    AND sd.name = 'Urban Fresh Market';
+
+-- Example 4: Medium - Metric Alias (WOS)
+Question: Calculate the **weeks of supply** for **SKU '167'** at the store with internal ID **SKU1003**.
+Response:
+SELECT weeks_of_supply
+FROM weeks_of_supply
+WHERE store_id = 167
+  AND sku = 'SKU1003';
+
+-- Example 5: Difficult - Cross-Identifier Join & Aggregation
+Question: **Total** inventory **quantity** and **total units sold** for all products in the **'Karnataka'** region in **September 2025**.
+Response:
+WITH StoreCodes AS (
+    SELECT store_id, store_code
+    FROM store_data
+    WHERE state IN ('Karnataka')
+)
+SELECT
+    SUM(i.qty) AS total_inventory_qty,
+    SUM(s.units_sold) AS total_units_sold
+FROM StoreCodes sc
+LEFT JOIN inventory i
+    ON sc.store_id = i.store_id
+LEFT JOIN sales s
+    ON sc.store_code = s.store_id
+    AND s.date BETWEEN '2025-09-01' AND '2025-09-30';
+
+
+-- Example 6: Difficult - Forecast Fallback Logic (Level 1 -> Level 2)
+Question: For store code **'STR002'** and **SKU 'SKU1003'** on **2025-11-15**, what is the **best available demand forecast**? If ML data is missing, use the user-uploaded value.
+Response:
+WITH RankedForecasts AS (
+    SELECT
+        p.predicted AS demand,
+        1 AS priority -- predict is highest priority
+    FROM predict p
+    JOIN store_data sd ON p.store_id = sd.store_code
+    WHERE p.store_id = 'STR002' AND p.product_id = 'SKU1003' AND p.date = '2025-11-15'
+    UNION ALL
+    SELECT
+        fd.forecast_qty AS demand,
+        2 AS priority -- forecast_daily is second priority
+    FROM forecast_daily fd
+    JOIN store_data sd ON fd.store_id = sd.store_id
+    WHERE sd.store_code = 'STR002' AND fd.sku = 'SKU1003' AND fd.forecast_date = '2025-11-15'
+)
+SELECT demand
+FROM RankedForecasts
+ORDER BY priority
+LIMIT 1;
+
+-- Example 7: Difficult - Forecast Fallback Logic (Level 1 -> Level 3, including store name lookup)
+Question: What is the **projected demand** for **SKU 'SKU1004'** on **2025-12-01** at store **'BudgetBazaar'**? Prioritize ML, then user forecast, otherwise, use the **average daily usage** from **reorder_config**.
+Response:
+WITH TargetStore AS (
+    SELECT store_id, store_code
+    FROM store_data
+    WHERE name = 'BudgetBazaar'
+),
+RankedForecasts AS (
+    SELECT
+        p.predicted AS demand,
+        1 AS priority -- ML Prediction
+    FROM predict p
+    JOIN TargetStore ts ON p.store_id = ts.store_code
+    WHERE p.product_id = 'SKU1004' AND p.date = '2025-12-01'
+    UNION ALL
+    SELECT
+        fd.forecast_qty AS demand,
+        2 AS priority -- User Uploaded Forecast
+    FROM forecast_daily fd
+    JOIN TargetStore ts ON fd.store_id = ts.store_id
+    WHERE fd.sku = 'SKU1004' AND fd.forecast_date = '2025-12-01'
+    UNION ALL
+    SELECT
+        rc.avg_daily_usage AS demand,
+        3 AS priority -- Fallback Configuration
+    FROM reorder_config rc
+    JOIN TargetStore ts ON rc.store_id = ts.store_id
+    WHERE rc.sku = 'SKU1004'
+)
+SELECT demand
+FROM RankedForecasts
+ORDER BY priority
+LIMIT 1;
+
+-- Example 8: Difficult - Inferring from Definition (Projected Stockouts)
+Question: Find all SKUs and stores where the **current inventory** is **less than** the **forecasted demand** for the **next 3 days** (using **predict** table, if available).
+Response:
+WITH CurrentInventory AS (
+    SELECT store_id, sku, qty AS current_stock
+    FROM inventory
+),
+FutureDemand AS (
+    SELECT
+        sd.store_id,
+        p.product_id AS sku,
+        SUM(p.predicted) AS three_day_forecast
+    FROM predict p
+    JOIN store_data sd ON p.store_id = sd.store_code
+    WHERE p.date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '2 days'
+    GROUP BY 1, 2
+)
+SELECT
+    ci.sku,
+    sd.name AS store_name,
+    ci.current_stock,
+    fd.three_day_forecast
+FROM CurrentInventory ci
+JOIN FutureDemand fd
+    ON ci.store_id = fd.store_id AND ci.sku = fd.sku
+JOIN store_data sd
+    ON ci.store_id = sd.store_id
+WHERE
+    ci.current_stock < fd.three_day_forecast;
+
+-- Example 9: Difficult - Rebalancer Analysis (Varchar Join)
+Question: Which **SKUs** were **recommended for transfer** from **'QuickShop Central'** to **'Everyday Essentials'** on **2025-10-20** and what was the **associated transfer cost**?
+Response:
+SELECT
+    r.product_name AS sku, -- Using product_name since the SKU column contains the name
+    r.units,
+    tcd.transfer_cost
+FROM rebalancer r
+-- Join to store_data to get the actual store code (varchar) for the source store name
+JOIN store_data AS src_sd
+    ON r.src_store_name = src_sd.name
+-- Join to store_data to get the actual store code (varchar) for the destination store name
+JOIN store_data AS dst_sd
+    ON r.dst_store_name = dst_sd.name
+-- Use LEFT JOIN to ensure transfers are returned even if cost data is missing
+LEFT JOIN transfer_cost_data tcd
+    ON src_sd.store_code = tcd.start_location
+    AND dst_sd.store_code = tcd.end_location
+WHERE
+    r.created_at::date = '2025-10-20' -- CRITICAL FIX: Casts timestamp to date for comparison
+    AND r.src_store_name = 'QuickShop Central'
+    AND r.dst_store_name = 'Everyday Essentials';
+
+-- Example 10: Difficult - Multi-Source Inventory & Metric (Mixed ID Join)
+Question: For **SKU 'SKU1003'**, compare the **safety stock** from **reorder_config** with the **safety stock** from **total_store_data** for all stores in **Rajasthan**.
+Response:
+SELECT
+    sd.name AS store_name,
+    rc.safety_stock AS config_safety_stock,
+    tsd.safety_stock_level AS total_store_safety_stock
+FROM store_data sd
+LEFT JOIN reorder_config rc
+    ON sd.store_id = rc.store_id AND rc.sku = 'SKU1003' -- uses store_id (bigint)
+LEFT JOIN total_store_data tsd
+    ON sd.store_code = tsd.store_code AND tsd.sku = 'SKU1003' -- uses store_code (varchar)
+WHERE
+    sd.state = 'Rajasthan';
+
+-- Example 11: Easy - Check Upload Batch
+Question: What was the filename and upload time for the latest forecast batch uploaded by the user with email 'aqua@gmail.com'?
+Response:
+SELECT
+    ub.original_filename,
+    ub.effective_start_date
+FROM upload_batch ub
+JOIN "user" u
+    ON ub.role_user_id = u.role_user_id
+WHERE
+    u.email = 'aqua@gmail.com' -- Filter by the user's email
+    AND ub.batch_type = 'forecast'
+ORDER BY
+    ub.effective_start_date DESC
+LIMIT 1;
+
 
 **IF THE QUERY REQUIRES DATA FROM THE DATABASE, OUTPUT ONLY SQL:**
 - Intelligently choose the right tables based on the user's intent
@@ -86,8 +291,7 @@ SCHEMA UNDERSTANDING:
 **IF THE QUERY IS CONVERSATIONAL, RESPOND NATURALLY:**
 
 Question: {user_query}
-Response:
-"""
+Response:'''
 
 def interpret_result(result: dict, query: str) -> str:
     """Intelligently interpret SQL results and provide natural language summary"""
@@ -315,6 +519,29 @@ Output ONLY the corrected SQL:
     
     return "Unable to process query."
 
+# def generate_and_execute_sql(user_query: str, max_retries=3) -> str:
+#     # Let the LLM decide if this needs SQL or is conversational
+#     context = retrieve_context_from_chroma(user_query)
+    
+#     smart_prompt = build_smart_prompt(user_query)
+#     response, input_tokens, output_tokens = call_llm(smart_prompt)
+    
+#     # Check if the response looks like SQL
+#     if looks_like_sql(response):
+#         try:
+#             current_app.logger.debug(f"Generated SQL: {response}")
+#             result = execute_read_only_query(response)
+#             answer = interpret_result(result, user_query)
+#             log_to_csv(user_query, context, response, input_tokens, output_tokens, answer=answer)
+#             return answer
+#         except Exception as e:
+#             error_msg = parse_postgres_error(e) if "psycopg2" in str(type(e)) else str(e)
+#             # Handle SQL errors with retries
+#             return handle_sql_error(user_query, context, response, error_msg, input_tokens, output_tokens, max_retries)
+#     else:
+#         # It's a conversational response, log and return as-is
+#         log_to_csv(user_query, context, "N/A (conversational)", input_tokens, output_tokens, answer=response)
+#         return response
 
 def generate_and_execute_sql(user_query: str, max_retries=3) -> dict:
     """
