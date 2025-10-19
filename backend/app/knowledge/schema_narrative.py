@@ -77,9 +77,37 @@ DATABASE_SCHEMA = """
 
 -- Table: rebalancer (Inventory transfer recommendations)
 -- PK: id
--- Columns: id (bigint), run_date (date), src_store (varchar = store_code), 
---          dst_store (varchar = store_code), sku (varchar), units (real), 
---          objective_value (real), status (text)
+-- Columns: 
+--          id (bigint), 
+--          created_at (timestamp),              -- The date/time the calculation was run. Use 'created_at::date' for date filtering.
+--          arrival_date (date),                 -- The date the transfer is expected to arrive.
+--          units (integer),                     -- Quantity recommended for transfer.
+--
+--          sku (varchar, CONTAINS PRODUCT NAME), 
+--          product_name (varchar, CONTAINS PRODUCT NAME),
+--
+--          src_store_name (varchar, CONTAINS DISPLAY NAME, use for filtering), 
+--          dst_store_name (varchar, CONTAINS DISPLAY NAME, use for filtering), 
+--          src_store_code (varchar, MIRROR of src_store_name), -- DO NOT use for transfer_cost_data join
+--          dst_store_code (varchar, MIRROR of dst_store_name), -- DO NOT use for transfer_cost_data join
+--
+--          src_current_inventory (integer),
+--          dst_current_inventory (integer),
+--          src_days_of_supply (double precision),
+--          dst_days_of_supply (double precision),
+--          src_daily_forecast (double precision),
+--          dst_daily_forecast (double precision),
+--          src_excess (integer),
+--          dst_shortage (integer),
+--          network_deficit (integer),
+--          ddos_shortage (integer),
+--          total_unfulfilled_shortage (integer)
+
+-- CRITICAL RULE UPDATE FOR QUERY GENERATION:
+-- The 'src_store_code' and 'dst_store_code' columns in this table contain the 
+-- human-readable STORE NAME (e.g., 'Freshway MiniMart'), NOT the technical store code.
+-- The actual transfer cost lookup (transfer_cost_data) MUST be resolved by joining 
+-- these names back to store_data to get the true store_code.
 
 -- Table: transfer_cost_data (Inter-store transfer costs)
 -- PK: id
