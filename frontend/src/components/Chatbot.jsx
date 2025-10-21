@@ -991,21 +991,20 @@
 
 
 
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiSend, FiCpu } from 'react-icons/fi';
+// --- MODIFICATION 1: Imported new icons for feedback ---
+import { FiX, FiSend, FiCpu, FiThumbsUp, FiThumbsDown } from 'react-icons/fi';
 
 const BASE_URL = "http://localhost:5500";
 
-// Animation variants for the pulsating "thinking" dots
 const dotVariants = {
     initial: { y: "0%" },
     animate: { y: "100%" },
 };
 
-// --- MODIFICATION 1: Moved sample questions to a default constant ---
-// These will be used as a fallback if no specific questions are provided.
 const defaultSampleQuestions = [
     "What is the total stock on hand?",
     "Show me products with low inventory.",
@@ -1013,21 +1012,19 @@ const defaultSampleQuestions = [
     "Summarize the inventory status."
 ];
 
-// --- MODIFICATION 2: Added the `questions` prop ---
 const Chatbot = ({ mode = 'floating', isOpen: propIsOpen, onClose: propOnClose, questions }) => {
-    const [internalIsOpen, setInternalIsOpen] = useState(false);
+    // --- MODIFICATION 2: Updated initial message state with ID and feedback fields ---
     const [messages, setMessages] = useState([
-        { sender: 'bot', text: 'Hello! How can I help you with the inventory data today?' }
+        { id: 1, sender: 'bot', text: 'Hello! How can I help you with the inventory data today?', feedback: null }
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef(null);
 
-    // --- MODIFICATION 3: Logic to decide which questions to show ---
-    // If the 'questions' prop is provided and not empty, use it. Otherwise, use the default.
     const questionsToShow = questions && questions.length > 0 ? questions : defaultSampleQuestions;
-
-
+    
+    // --- Start of unchanged code ---
+    const [internalIsOpen, setInternalIsOpen] = useState(false);
     const isFloating = mode === 'floating';
     const isIntegrated = mode === 'integrated';
     const isBar = mode === 'bar';
@@ -1049,10 +1046,12 @@ const Chatbot = ({ mode = 'floating', isOpen: propIsOpen, onClose: propOnClose, 
             }, 100);
         }
     }, [messages, isLoading, isOpen, showMessages]);
+    // --- End of unchanged code ---
 
     const submitQuery = useCallback(async (queryText) => {
         if (!queryText.trim() || isLoading) return;
-        const userMessage = { sender: 'user', text: queryText };
+        // --- MODIFICATION 3: Added a unique ID to each new message ---
+        const userMessage = { id: Date.now(), sender: 'user', text: queryText };
         setMessages(prev => [...prev, userMessage]);
         setInputValue('');
         setIsLoading(true);
@@ -1061,17 +1060,47 @@ const Chatbot = ({ mode = 'floating', isOpen: propIsOpen, onClose: propOnClose, 
             const token = localStorage.getItem("token");
             const headers = { Authorization: `Bearer ${token}` };
             const response = await axios.post(`${BASE_URL}/chat`, { query: queryText }, { headers });
-            const botMessage = { sender: 'bot', text: response.data.response || "I'm not sure how to respond to that." };
+            const botMessage = { 
+                id: Date.now() + 1, // Ensure unique ID
+                sender: 'bot', 
+                text: response.data.response || "I'm not sure how to respond to that.",
+                feedback: null // Initialize feedback as null
+            };
             setMessages(prev => [...prev, botMessage]);
         } catch (error) {
             console.error("Chatbot API error:", error);
-            const errorMessage = { sender: 'bot', text: "Sorry, I'm having trouble connecting. Please try again later." };
+            const errorMessage = { 
+                id: Date.now() + 1, 
+                sender: 'bot', 
+                text: "Sorry, I'm having trouble connecting. Please try again later.",
+                feedback: null
+            };
             setMessages(prev => [...prev, errorMessage]);
         } finally {
             setIsLoading(false);
         }
     }, [isLoading]);
+    
+    // --- MODIFICATION 4: New function to handle feedback clicks ---
+    const handleFeedback = useCallback((messageId, feedbackType) => {
+        setMessages(prevMessages =>
+            prevMessages.map(msg => {
+                if (msg.id === messageId) {
+                    // If the user clicks the same button, it toggles off (resets).
+                    // If they click the other button, it switches.
+                    const newFeedback = msg.feedback === feedbackType ? null : feedbackType;
+                    
+                    // **TODO**: Send feedback to your backend for analysis
+                    console.log(`Feedback submitted: Message ID ${messageId}, Type: ${newFeedback}`);
 
+                    return { ...msg, feedback: newFeedback };
+                }
+                return msg;
+            })
+        );
+    }, []);
+
+    // --- Start of unchanged code ---
     const handleSendMessage = useCallback(() => {
         submitQuery(inputValue);
     }, [inputValue, submitQuery]);
@@ -1082,17 +1111,13 @@ const Chatbot = ({ mode = 'floating', isOpen: propIsOpen, onClose: propOnClose, 
             handleSendMessage();
         }
     };
-
+    
     const getContainerClasses = () => {
-        if (isBar) {
-            return "w-full max-w-2xl mx-auto my-8 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl shadow-xl flex flex-col overflow-hidden";
-        }
-        if (isIntegrated) {
-            return "w-full h-full bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden";
-        }
-        // Floating mode
+        if (isBar) return "w-full max-w-2xl mx-auto my-8 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl shadow-xl flex flex-col overflow-hidden";
+        if (isIntegrated) return "w-full h-full bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden";
         return "fixed bottom-6 right-6 z-[1001] w-full max-w-sm h-[70vh] bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden";
     };
+    // --- End of unchanged code ---
 
     return (
         <>
@@ -1144,7 +1169,7 @@ const Chatbot = ({ mode = 'floating', isOpen: propIsOpen, onClose: propOnClose, 
                             </header>
                         )}
                         
-                        {/* Messages Area (unchanged) */}
+                        {/* Messages Area */}
                         <AnimatePresence>
                             {showMessages && (
                                 <motion.div
@@ -1154,12 +1179,27 @@ const Chatbot = ({ mode = 'floating', isOpen: propIsOpen, onClose: propOnClose, 
                                     transition={{ duration: 0.4, ease: "easeInOut" }}
                                     className="flex-1 p-4 overflow-y-auto space-y-4 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800"
                                 >
-                                    {messages.map((msg, index) => (
-                                        <motion.div key={index} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`flex items-end gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                            {msg.sender === 'bot' && (<div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-blue-500 flex-shrink-0"></div>)}
-                                            <div className={`max-w-[85%] p-3 rounded-xl text-sm ${msg.sender === 'user' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none' : 'bg-slate-700 text-slate-200 rounded-bl-none'}`}>
-                                                <p style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</p>
+                                    {messages.map((msg) => (
+                                        // --- MODIFICATION 5: Use `msg.id` as the key for better React performance ---
+                                        <motion.div key={msg.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                                            <div className={`flex items-end gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                                {msg.sender === 'bot' && (<div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-blue-500 flex-shrink-0 self-start"></div>)}
+                                                <div className={`max-w-[85%] p-3 rounded-xl text-sm ${msg.sender === 'user' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none' : 'bg-slate-700 text-slate-200 rounded-bl-none'}`}>
+                                                    <p style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</p>
+                                                </div>
                                             </div>
+
+                                            {/* --- MODIFICATION 6: Render feedback buttons for bot messages --- */}
+                                            {msg.sender === 'bot' && (
+                                                <div className="mt-2 flex items-center gap-3 pl-10">
+                                                    <motion.button whileHover={{ scale: 1.2 }} whileTap={{ scale: 0.9 }} onClick={() => handleFeedback(msg.id, 'up')} className="transition-colors">
+                                                        <FiThumbsUp size={16} className={msg.feedback === 'up' ? 'text-green-500' : 'text-slate-400 hover:text-slate-200'} />
+                                                    </motion.button>
+                                                    <motion.button whileHover={{ scale: 1.2 }} whileTap={{ scale: 0.9 }} onClick={() => handleFeedback(msg.id, 'down')} className="transition-colors">
+                                                        <FiThumbsDown size={16} className={msg.feedback === 'down' ? 'text-red-500' : 'text-slate-400 hover:text-slate-200'} />
+                                                    </motion.button>
+                                                </div>
+                                            )}
                                         </motion.div>
                                     ))}
                                     {isLoading && (
@@ -1177,7 +1217,7 @@ const Chatbot = ({ mode = 'floating', isOpen: propIsOpen, onClose: propOnClose, 
                             )}
                         </AnimatePresence>
                         
-                        {/* --- MODIFICATION 4: Map over `questionsToShow` --- */}
+                        {/* Sample Questions (unchanged) */}
                         <AnimatePresence>
                             {messages.length === 1 && (
                                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ delay: 0.5 }} className={`flex flex-wrap justify-center gap-2 p-4 ${isBar ? 'pt-4' : 'pt-0'}`}>
