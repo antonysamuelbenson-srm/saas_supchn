@@ -11,11 +11,15 @@ def get_db_connection():
     return psycopg2.connect(DATABASE_URL)
 
 def execute_read_only_query(sql: str) -> dict:
-    # Safety: enforce SELECT + LIMIT
     sql = sql.strip().rstrip(";")
-    if not sql.upper().startswith("SELECT"):
-        raise ValueError("Only SELECT allowed")
-    if "LIMIT" not in sql.upper():
+    upper_sql = sql.upper()
+    
+    # Allow only queries starting with SELECT or WITH and disallow dangerous keywords
+    forbidden = ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE", "CREATE"]
+    if not re.match(r"^(WITH|SELECT)\b", upper_sql) or any(word in upper_sql for word in forbidden):
+        raise ValueError("Only SELECT or WITH SELECT queries allowed")
+
+    if "LIMIT" not in upper_sql:
         sql += " LIMIT 1000"
     
     with get_db_connection() as conn:
