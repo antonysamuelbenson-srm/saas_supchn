@@ -95,11 +95,12 @@ ROUTE_ROLE_MAP = {
 
     # ---Store Inventory Summary Filter ---
     "GET:/store_inventory_summary": ["admin", "editor", "viewer"],
+    "POST:/chat": ["admin", "editor", "viewer"]
 }
     # ---filters ---
-    "GET:/store_inventory_summary": ["admin", "viewer"],  # Adjust roles as needed
-    "GET /api/weeks-of-supply/store-summary" : ["admin", "viewer"],
-    "POST /api/weeks-of-supply/refresh" : ["admin", "viewer"],
-    "POST:/chat": ["admin", "editor", "viewer"]
 
-}
+    
+    
+    
+
+
