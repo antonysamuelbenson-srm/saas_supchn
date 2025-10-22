@@ -8,7 +8,7 @@ from app import db
 from supabase import create_client
 from app.utils.jwt_utils import decode_jwt
 from app.utils.decorators import role_required
-from app.services.forecast_service import run_manual_forecast
+from app.services.forecast_service import run_manual_forecast, run_full_training_and_save
 from app.models.forecast_schedule import ForecastSchedule
 from app.models.forecast_log import ForecastLog 
 from app.models.predict import Forecast
@@ -210,6 +210,18 @@ def view_forecast_schedule():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+
+# NEW ENDPOINT: Manual trigger for the long-running training job
+@bp.post("/train")
+def run_train():
+    """Triggers the full model training and saving process."""
+    try:
+        result = run_full_training_and_save()
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @bp.post("/run")
 def run():
     payload = request.get_json(silent=True) or {}
@@ -221,6 +233,7 @@ def run():
     except Exception:
         return jsonify({"error": "weeks must be an integer"}), 400
 
+    # NOTE: run_manual_forecast now calls load_model() for fast inference
     try:
         result = run_manual_forecast(weeks)
         return jsonify({"status": "ok", **result})
@@ -819,15 +832,8 @@ def get_detailed_accuracy():
     return jsonify({"results": sorted(results, key=lambda x: x[result_key])}), 200
 
 
-# In your Flask backend file (e.g., routes.py)
-
-from flask import request, jsonify
-from datetime import datetime, timedelta
-from collections import defaultdict
-
-# Make sure other necessary imports like 'bp', 'db', 'Forecast', 'User', etc. are present
-
 # Helper function to get the start of the week (Monday)
+# (Defined earlier, repeated here for context, though typically only defined once)
 def get_week_start(d):
     return d - timedelta(days=d.weekday())
 
@@ -907,7 +913,6 @@ def get_forecast_accuracy():
 
 # --- FILTER DROPDOWN ENDPOINTS ---
 
-# ⭐ THIS IS THE CORRECTED FUNCTION ⭐
 @bp.route("/stores", methods=["GET"])
 @role_required
 def get_stores():
@@ -918,26 +923,3 @@ def get_stores():
         return jsonify({"stores": store_list}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-
-# # In your Flask backend file (e.g., routes.py)
-
-# # In your Flask backend file (e.g., routes.py)
-
-# @bp.route("/stores", methods=["GET"])
-# @role_required
-# def get_stores():
-#     """Returns a list of all stores formatted for the filter dropdown."""
-#     try:
-#         # 1. Query the database for the store ID and name
-#         stores = db.session.query(Store.store_id, Store.name).all()
-        
-#         # 2. Format the data into {value, label} objects for the frontend
-#         store_list = [{"value": s.store_id, "label": f"{s.name} (ID: {s.store_id})"} for s in stores]
-        
-#         # 3. Return the correctly formatted JSON
-#         return jsonify({"stores": store_list}), 200
-#     except Exception as e:
-#         print(f"Error in /stores endpoint: {e}") 
-#         return jsonify({"error": str(e)}), 500

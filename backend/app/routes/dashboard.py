@@ -191,63 +191,71 @@ def r2(x, places=2):
 def r2(x, places=2):
     return round(float(x), places) if x not in (None, "") else None
 
-
 @bp.route("/dashboard/recompute", methods=["POST"])
 @role_required
 def recompute_dashboard_metrics():
     try:
+        # ── Get user info from token ─────────────────────────
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        uid = decode_jwt(token).get("role_user_id")
+        if not uid:
+            return jsonify({"error": "Unauthorized"}), 401
+
         # ── Fetch latest inventory snapshot ──────────────────
         latest_date = db.session.query(db.func.max(InventorySnapshot.snapshot_date)).scalar()
         if not latest_date:
             return jsonify({"error": "No inventory snapshots found"}), 404
 
-        inv_rows = (InventorySnapshot.query
-                    .filter(InventorySnapshot.snapshot_date == latest_date)
-                    .all())
+        inv_rows = (
+            InventorySnapshot.query
+            .filter(InventorySnapshot.snapshot_date == latest_date)
+            .all()
+        )
 
-        # ── Reorder config ───────────────────────────────────
-        rc_rows = (supabase.table("reorder_config")   # <-- still Supabase (you didn’t provide ORM class for it)
-                      .select("store_id, sku, avg_daily_usage, lead_time_days, safety_stock, reorder_point")
-                      .execute()).data or []
+        # ── Reorder config (from Supabase) ───────────────────
+        rc_rows = (
+            supabase.table("reorder_config")
+            .select("store_id, sku, avg_daily_usage, lead_time_days, safety_stock, reorder_point")
+            .execute()
+        ).data or []
 
-        # ── Forecast demand calculation ──────────────────────
+        # ── Fetch lookahead_days for logged-in user ──────────
+        user_config = db.session.query(User).filter_by(role_user_id=uid).first()
+        lookahead_days = int(getattr(user_config, "lookahead_days", 14))
+
         today = datetime.now(timezone.utc).date()
-
-        # lookahead_days fetched per-user (not fixed 14)
-        # For recompute, we don’t know which user → fallback 14 unless you want global user config
-        lookahead_days = 14
         forecast_cutoff = today + timedelta(days=lookahead_days)
 
-        forecast_rows = (Forecast.query
-                         .filter(Forecast.date >= today,
-                                 Forecast.date <= forecast_cutoff)
-                         .order_by(Forecast.date)
-                         .all())
+        # ── Forecast demand for user-specific lookahead period ──────────────
+        forecast_rows = (
+            Forecast.query
+            .filter(Forecast.date >= today, Forecast.date <= forecast_cutoff)
+            .order_by(Forecast.date)
+            .all()
+        )
 
         current_demand = sum(float(r.predicted or 0) for r in forecast_rows)
 
-        # ── Metrics ──────────────────────────────────────────
-        
-        # ── Weeks of Supply Calculation ─────────────────────────
+        # ── Weeks of Supply Calculation ───────────────────────
         inv_total = r2(sum(float(r.qty) for r in inv_rows))
+        weeks_of_supply = None
 
-        # Use forecast first
         if forecast_rows:
             unique_days = len(set(f.date for f in forecast_rows))
             if unique_days > 0:
                 total_forecast = sum(float(f.predicted or 0) for f in forecast_rows)
                 avg_daily = total_forecast / unique_days
                 weeks_of_supply = r2(inv_total / (avg_daily * 7), 1)
-            else:
-                weeks_of_supply = None
         else:
-            # Fallback to reorder_config
+            # fallback to reorder_config if no forecast
             adu_vals = [float(r["avg_daily_usage"]) for r in rc_rows if r["avg_daily_usage"]]
             avg_adu = (sum(adu_vals) / len(adu_vals)) if adu_vals else None
             weeks_of_supply = r2(inv_total / (avg_adu * 7), 1) if avg_adu else None
 
+        # ── Inventory position ────────────────────────────────
         inventory_position = r2(inv_total)
 
+        # ── Projected stockouts ───────────────────────────────
         rc_map = {(r["store_id"], r["sku"]): r for r in rc_rows}
         projected_stockouts = 0
 
@@ -261,7 +269,7 @@ def recompute_dashboard_metrics():
             if days_cover is not None and lt and days_cover <= lt:
                 projected_stockouts += 1
 
-        # ── Fill rate (global, simplified) ───────────────────
+        # ── Fill rate (global simplified) ─────────────────────
         sku_demand = defaultdict(float)
         for f in forecast_rows:
             sku_demand[(f.store_id, f.product_id)] += float(f.predicted or 0)
@@ -284,7 +292,11 @@ def recompute_dashboard_metrics():
         db.session.add(metric_entry)
         db.session.commit()
 
-        return jsonify({"message": "Metrics updated successfully"}), 201
+        return jsonify({
+            "message": "Metrics updated successfully",
+            "lookahead_days_used": lookahead_days,
+            "current_demand": current_demand
+        }), 201
 
     except Exception as e:
         db.session.rollback()

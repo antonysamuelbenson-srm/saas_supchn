@@ -77,23 +77,19 @@ def fetch_permissions(token):
     except Exception as e:
         print("Error fetching permissions:", str(e))
         return None, set()
-    
+        
 def upload_csv(token: str) -> None:
     """
-    Flexible uploader.
-    The user picks which CSV(s) to upload each time:
-      1 = Store master
-      2 = Inventory snapshot
-      3 = Forecast
-    They can choose one, several comma‑separated, or 'd' to quit.
+    Flexible uploader with improved feedback
     """
     file_types = {
         "1": ("store master"      , "store"),
         "2": ("inventory snapshot", "inventory"),
         "3": ("forecast"          , "forecast"),
-        "4": ("uploadStoreData"        , "totalStoreData"),
-        "5": ("TransferCostData     " , "transferCostData"),
-        "6": ("WarehouseMaxCapacityDataUpload", "warehouseMaxData")
+        "4": ("total store data"  , "totalStoreData"),
+        "5": ("transfer cost data", "transferCostData"),
+        "6": ("warehouse max capacity data", "capacity"),
+        "7": ("sales data"        , "sales") # NEW: Added sales data upload option
     }
 
     headers = {"Authorization": f"Bearer {token}"}
@@ -124,23 +120,44 @@ def upload_csv(token: str) -> None:
                 print("❌ File does not exist. Skipped.")
                 continue
 
-            print(f"📤 Uploading {path} …")
-            with open(path, "rb") as fh:
-                res = requests.post(
-                    f"{BASE_URL}/api/upload/{route}",
-                    files={"file": fh},
-                    headers=headers,
-                    timeout=60,
-                )
-            if res.ok:
-                print("   ✅ Success")
-            else:
-                print(f"   ❌ Failed ({res.status_code})")
-                try:
-                    print("   ", res.json())
-                except Exception:
-                    print("   ", res.text)
-
+            # Check file size
+            file_size = os.path.getsize(path) / (1024 * 1024)  # Size in MB
+            print(f"📤 Uploading {path} ({file_size:.1f}MB) …")
+            
+            # Use fast bulk upload for inventory or other large datasets if needed
+            if route in ("inventory", "sales") and file_size > 1: # Added 'sales' to fast upload check
+                print("   🚀 Using fast bulk upload method...")
+            
+            try:
+                with open(path, "rb") as fh:
+                    res = requests.post(
+                        f"{BASE_URL}/api/upload/{route}",
+                        files={"file": fh},
+                        headers=headers,
+                        timeout=300,  # 5 minutes timeout
+                    )
+                if res.ok:
+                    print("   ✅ Success")
+                    # Show additional info for large files
+                    if file_size > 5:
+                        print("   ⚡ Bulk upload completed in seconds instead of minutes!")
+                else:
+                    print(f"   ❌ Failed ({res.status_code})")
+                    try:
+                        error_msg = res.json()
+                        # Check for specific validation errors
+                        if 'valid' in error_msg and error_msg['valid'] is False:
+                             print(f"   Validation Errors: {'; '.join(error_msg['errors'])}")
+                        else:
+                            print(f"   Error: {error_msg}")
+                    except Exception:
+                        print(f"   Response: {res.text}")
+                        
+            except requests.exceptions.Timeout:
+                print("   ❌ Upload timed out (took longer than 5 minutes)")
+            except Exception as e:
+                print(f"   ❌ Upload failed: {str(e)}")
+                
 def update_store_info(hdr):
     import requests
 
@@ -930,8 +947,7 @@ MENU_OPTIONS = {
         "2": {"desc": "Refresh Demand Trend Data", "route": "POST:/api/demand-trend/refresh"},
         "3": {"desc": "Back to Main Menu", "route": None}
     }
-    }
-}
+}}
 
 def normalize_route(route):
     # Replace all <...> segments with <param> to match your ROUTE_ROLE_MAP style
@@ -1011,6 +1027,22 @@ def forecast_menu(token):
 
         r = requests.post(url, json=payload, headers=headers)
         print(r.json())
+
+        #  NEW FUNCTION FOR MODEL TRAINING 
+    def run_training():
+        url = f"{BASE_URL}/train" # Hits the new /train endpoint
+        headers = {"Authorization": f"Bearer {token}"}
+
+        print("\n⚠️ Initiating full model training and saving. This may take several minutes.")
+        payload = {} # No input needed for full retraining
+
+        try:
+            r = requests.post(url, headers=headers, json=payload)
+            r.raise_for_status()
+            print("✅ Training successfully initiated (check logs for completion):")
+            print(r.json())
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Request failed: {e}")
 
     def run_forecast():
         url = f"{BASE_URL}/run"
@@ -1335,20 +1367,20 @@ def forecast_menu(token):
         "1": ("Set Forecast Schedule", set_forecast_schedule),
         "2": ("View Forecast Schedule", view_forecast_schedule),
         "3": ("Update Forecast Horizon (N weeks)", update_forecast_horizon),
-        "4": ("Run Forecast Manually", run_forecast),
-        "5": ("Store-Level Forecast (Next N Weeks)", store_level_forecast),
-        "6": ("SKU-Level Forecast (Next N Weeks)", sku_level_forecast),
-        "7": ("Past Accuracy - Store", lambda: past_accuracy_store(token)),
-        "8": ("Past Accuracy - SKU", lambda: past_accuracy_sku(token)),
-        "9": ("Chart Data with Trendline", chart_data),
-        "10": ("View Weekly Forecast", lambda: view_weekly_forecast(token)),
-        "11": ("Forecast Run Logs", forecast_logs),
-        "12": ("Overall Forecast Accuracy", lambda: overall_forecast_accuracy(token)),
-        "13": ("Drilldown Forecast Accuracy (Week/SKU/Store)", lambda: drilldown_forecast_accuracy(token)),
+        "4": ("Trigger Full Model Training & Save (Long-Running)", run_training), 
+        "5": ("Run Forecast Inference Manually (from Saved Model)", run_forecast), 
+        "6": ("Store-Level Forecast (Next N Weeks)", store_level_forecast),
+        "7": ("SKU-Level Forecast (Next N Weeks)", sku_level_forecast),
+        "8": ("Past Accuracy - Store", lambda: past_accuracy_store(token)),
+        "9": ("Past Accuracy - SKU", lambda: past_accuracy_sku(token)),
+        "10": ("Chart Data with Trendline", chart_data),
+        "11": ("View Weekly Forecast", lambda: view_weekly_forecast(token)),
+        "12": ("Forecast Run Logs", forecast_logs),
+        "13": ("Overall Forecast Accuracy", lambda: overall_forecast_accuracy(token)),
+        "14": ("Drilldown Forecast Accuracy (Week/SKU/Store)", lambda: drilldown_forecast_accuracy(token)),
         
         "0": ("Exit Forecast Menu", None)
     }
-
     while True:
         print("\n📊 Forecast Module Menu")
         for key, (desc, _) in options.items():
@@ -1364,10 +1396,6 @@ def forecast_menu(token):
 
 
 def rebalancer(token):
-    """
-    Client function to trigger inventory rebalancing, fetching all required
-    data in a single API call.
-    """
     headers = {"Authorization": f"Bearer {token}"}
     
     # helper function to convert the data to a CSV string
@@ -1386,6 +1414,13 @@ def rebalancer(token):
             "Destination Inventory",
             "Source DOS",
             "Destination DOS",
+            "Source Avg Daily Forecast",
+            "Destination Avg Daily Forecast",
+            "Source Excess",
+            "Destination Shortage",
+            "Network Deficit",
+            "DDOS Shortage",
+            "Total Unfulfilled Shortage",
             "Arrival Date"
         ]
         
@@ -1403,6 +1438,13 @@ def rebalancer(token):
                 "Destination Inventory": row["dst_current_inventory"],
                 "Source DOS": row["src_days_of_supply"],
                 "Destination DOS": row["dst_days_of_supply"],
+                "Source Avg Daily Forecast": row["src_daily_forecast"],
+                "Destination Avg Daily Forecast": row["dst_daily_forecast"],
+                "Source Excess": row["src_excess"],
+                "Destination Shortage": row["dst_shortage"],
+                "Network Deficit": row["network_deficit"],
+                "DDOS Shortage": row["ddos_shortage"],
+                "Total Unfulfilled Shortage": row["total_unfulfilled_shortage"],
                 "Arrival Date": row["arrival_date"]
             })
         writer.writerows(rows)
@@ -1452,19 +1494,19 @@ def rebalancer(token):
         if choice == '1':
             print("\n📊 Recommended Transfers (Detailed):\n")
             table = [
-                [i + 1, a["src"], a["dst"], a["sku"], a["units"], a["src_days_of_supply"], a["dst_days_of_supply"], a["src_current_inventory"], a["dst_current_inventory"], a["arrival_date"]]
+                [i + 1, a["src"], a["dst"], a["sku"], a["units"], a["src_days_of_supply"], a["dst_days_of_supply"], a["src_current_inventory"], a["dst_current_inventory"], a["src_daily_forecast"], a["dst_daily_forecast"], a["src_excess"], a["dst_shortage"], a["network_deficit"], a["ddos_shortage"], a["total_unfulfilled_shortage"], a["arrival_date"]]
                 for i, a in enumerate(allocations)
             ]
-            headers_ = ["#", "Source", "Destination", "SKU", "Units", "Src DOS", "Dst DOS", "Src Inv", "Dst Inv", "Arrival Date"]
+            headers_ = ["#", "Source", "Destination", "SKU", "Units", "Src DOS", "Dst DOS", "Src Inv", "Dst Inv", "Src Avg Daily Forecast", "Dst Avg Daily Forecast", "Src Excess", "Dst Shortage", "Network Deficit", "DDOS Shortage", "Total Unfulfilled Shortage", "Arrival Date"]
             print(tabulate(table, headers=headers_, tablefmt="fancy_grid"))
 
         elif choice == '2':
             print("\n📊 Transfer Summary by Route:\n")
             summary_table = [
-                [i + 1, s["src"], s["dest"], s["distinct_skus"], s["total_units"], s["src_days_of_supply"], s["dst_days_of_supply"], s["arrival_date"]]
+                [i + 1, s["src"], s["dest"], s["distinct_skus"], s["total_units"], s["src_days_of_supply"], s["dst_days_of_supply"], s["src_daily_forecast"], s["dst_daily_forecast"], s["arrival_date"]]
                 for i, s in enumerate(summary_data)
             ]
-            summary_headers = ["#", "Source", "Destination", "Distinct SKUs", "Total Units", "Src DOS", "Dst DOS", "Arrival Date"]
+            summary_headers = ["#", "Source", "Destination", "Distinct SKUs", "Total Units", "Src DOS", "Dst DOS", "Src Avg Daily Forecast", "Dst Avg Daily Forecast", "Arrival Date"]
             print(tabulate(summary_table, headers=summary_headers, tablefmt="fancy_grid"))
 
         elif choice == '3':
@@ -1869,6 +1911,85 @@ def view_weeks_of_supply_by_store(token):
     
     except Exception as e:
         print(f"❌ Error fetching store summary: {str(e)}")
+        
+
+def chat(token: str):
+    url = f"{BASE_URL}/chat"
+    feedback_url = f"{BASE_URL}/feedback"  # 👈 New feedback endpoint
+
+    print("\n--- Starting Chat Session ---")
+    print("Enter 'exit' or 'quit' to return to the main menu.")
+
+    while True:
+        user_query = input("You: ")
+
+        if user_query.lower() in ['exit', 'quit']:
+            print("--- Chat Session Ended. Returning to Main Menu. ---\n")
+            break
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        payload = {"query": user_query}
+
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+
+            response_data = response.json()
+            ai_response = response_data.get('response', 'Error: Could not retrieve response.')
+            print(f"\nAI: {ai_response}\n")
+
+            # 👇 Ask user for optional feedback
+            while True:
+                feedback = input("Was this helpful? (👍 / 👎 or press Enter to skip): ").strip().lower()
+                
+                if feedback in ['', 'skip']:
+                    print("Feedback skipped.\n")
+                    break
+                elif feedback in ['👍', 'up', 'yes', 'y', 'u', '+', '1']:
+                    feedback_value = "up"
+                elif feedback in ['👎', 'down', 'no', 'n', '-', '0']:
+                    feedback_value = "down"
+                else:
+                    print("Invalid input. Please enter 👍 / 👎 or press Enter to skip.")
+                    continue
+
+                # Send feedback to the backend
+                feedback_payload = {"query": user_query, "feedback": feedback_value}
+                try:
+                    fb_response = requests.post(
+                        feedback_url, headers=headers, json=feedback_payload, timeout=10
+                    )
+                    if fb_response.status_code == 200:
+                        print("✅ Feedback recorded.\n")
+                    else:
+                        print(f"⚠️ Feedback failed: {fb_response.text}\n")
+                except Exception as fb_err:
+                    print(f"⚠️ Error sending feedback: {fb_err}\n")
+
+                break  # Exit feedback loop after valid feedback
+
+        except requests.exceptions.HTTPError as http_err:
+            try:
+                error_detail = response.json().get('error', 'No specific error message provided.')
+            except json.JSONDecodeError:
+                error_detail = "Server returned non-JSON error."
+
+            print(f"\n--- [API HTTP Error] ---")
+            print(f"HTTP Status: {response.status_code}")
+            print(f"Detail: {error_detail}")
+            print("------------------------\n")
+            break
+
+        except requests.exceptions.RequestException as e:
+            print(f"\n--- [API Connection Error] ---")
+            print(f"Error communicating with server: {e}")
+            print("------------------------------\n")
+            break
+
+
 
 
 def view_demand_trend_by_store(token):
@@ -2279,6 +2400,8 @@ def main():
                         weeks_of_supply_menu(token)
                     elif action == "19":
                         demand_trend_menu(token)
+                    elif action == "20":
+                        chat(token) 
                     else:
                         print("❌ Invalid choice.")
 

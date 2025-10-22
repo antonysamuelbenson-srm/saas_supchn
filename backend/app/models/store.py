@@ -28,8 +28,13 @@ class Store(db.Model):
     country     = db.Column(db.String(50),   nullable=True)
 
     # ── Geo & time zone ───────────────────────────────────────────────────────
-    lat         = db.Column(Numeric(9, 6),   nullable=True)   #  ±90.000000
-    long        = db.Column(Numeric(9, 6),   nullable=True)   # ±180.000000
+    # The Python attribute is 'latitude', but the DB column is 'lat'.
+    latitude = db.Column('lat', db.Numeric)
+
+    # The Python attribute is 'longitude', but the DB column is 'long'.
+    longitude = db.Column('long', db.Numeric)
+    # lat         = db.Column(Numeric(9, 6),   nullable=True)   #  ±90.000000
+    # long        = db.Column(Numeric(9, 6),   nullable=True)   # ±180.000000
 
     # ── Capacity (optional) ───────────────────────────────────────────────────
     capacity_units = db.Column(Numeric(12, 2), nullable=True)

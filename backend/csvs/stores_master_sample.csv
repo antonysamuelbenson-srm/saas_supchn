@@ -1,4 +1,11 @@
 store_code,name,address,city,state,country,lat,long,capacity_units
-STR001,Downtown Flagship,123 Main St,Metropolis,CA,USA,37.7749,-122.4194,5500
-STR002,Mall Outlet,456 Mall Rd,Springfield,CA,USA,34.0522,-118.2437,3000
-STR003,Airport Kiosk,789 Terminal Ln,Gotham,NY,USA,40.7128,-74.006,800
+STR001,Urban Fresh Market,"245 Urban Road, Kochi",Kochi,Kerala,India,9.9312,76.2673,2064
+STR002,TownSquare Mart,"232 TownSquare Road, Mysuru",Mysuru,Karnataka,India,12.2958,76.6394,3011
+STR003,MegaMart Express,"221 MegaMart Road, Chennai",Chennai,Tamil Nadu,India,13.0827,80.2707,10544
+STR004,CityChoice Hyperstore,"64 CityChoice Road, Mumbai",Mumbai,Maharashtra,India,19.076,72.8777,9032
+STR005,ValueKart Superstore,"111 ValueKart Road, Hyderabad",Hyderabad,Telangana,India,17.385,78.4867,7967
+STR006,Everyday Essentials,"115 Everyday Road, Pune",Pune,Maharashtra,India,18.5204,73.8567,6109
+STR007,QuickShop Central,"170 QuickShop Road, Bangalore",Bangalore,Karnataka,India,12.9716,77.5946,5008
+STR008,DailyNeeds Outlet,"60 DailyNeeds Road, Ahmedabad",Ahmedabad,Gujarat,India,23.0225,72.5714,6798
+STR009,BudgetBazaar,"175 BudgetBazaar Road, Jaipur",Jaipur,Rajasthan,India,26.9124,75.7873,5114
+STR010,Freshway MiniMart,"207 Freshway Road, Thiruvananthapuram",Thiruvananthapuram,Kerala,India,8.5241,76.9366,3825

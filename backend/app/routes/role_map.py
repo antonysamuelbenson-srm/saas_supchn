@@ -78,6 +78,8 @@ ROUTE_ROLE_MAP = {
 
     # --- Rebalancer ---
     "POST:/api/rebalance": ["admin"],
+    "GET:/api/rebalance/stores": ["admin", "editor"],
+    "POST:/api/rebalance/download": ["admin"],
 
     # --- Weeks of Supply Filter ---
     "GET:/api/weeks-of-supply/store-summary": ["admin", "editor", "viewer"],
@@ -93,4 +95,11 @@ ROUTE_ROLE_MAP = {
 
     # ---Store Inventory Summary Filter ---
     "GET:/store_inventory_summary": ["admin", "editor", "viewer"],
+}
+    # ---filters ---
+    "GET:/store_inventory_summary": ["admin", "viewer"],  # Adjust roles as needed
+    "GET /api/weeks-of-supply/store-summary" : ["admin", "viewer"],
+    "POST /api/weeks-of-supply/refresh" : ["admin", "viewer"],
+    "POST:/chat": ["admin", "editor", "viewer"]
+
 }

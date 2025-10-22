@@ -40,7 +40,7 @@ def create_app():
         from app.routes import (
             auth, dashboard, alerts, upload, config, store_upload, 
             node_location_update, reorder, availability, admin, 
-            forecast, rebalancer, store_inventory_summary, weeks_of_supply, demand_trend
+            forecast, rebalancer, store_inventory_summary, weeks_of_supply, chatbot, demand_trend
         )
         
         app.register_blueprint(auth.bp)
@@ -58,6 +58,7 @@ def create_app():
         app.register_blueprint(store_inventory_summary.store_inventory_bp)
         # Remove url_prefix here since it's already defined in the blueprint
         app.register_blueprint(weeks_of_supply.weeks_of_supply_bp)
+        app.register_blueprint(chatbot.bp)
         app.register_blueprint(demand_trend.demand_trend_bp,url_prefix='/api')
         
         print("✅ All blueprints registered successfully!")
