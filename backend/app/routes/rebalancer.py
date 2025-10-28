@@ -62,8 +62,10 @@ def download_rebalancing_report():
         data = request.json or {}
         ddos_days = data.get("ddos_days", 28)
         
-        allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages, code_to_name_map, sku_to_name_map = run_rebalancer(ddos_days)
+        # allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages, code_to_name_map, sku_to_name_map = run_rebalancer(ddos_days)
 
+        # NEW (Fixes the error)
+        allocations, shortages_excesses, transfer_info_map, unfulfilled_shortages, code_to_name_map, sku_to_name_map, _ = run_rebalancer(ddos_days)
         if "error" in allocations:
             return jsonify(allocations), 500
         
