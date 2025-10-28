@@ -1274,6 +1274,7 @@ const AccuracyDashboard = () => {
     };
 
     return (
+        
         <div className="space-y-8">
             {error && (
                 <div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-lg flex items-center">
