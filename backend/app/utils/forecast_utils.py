@@ -6,6 +6,7 @@ import lightgbm as lgb
 from mlforecast import MLForecast
 from mlforecast.lag_transforms import RollingMean
 from app.utils.db import df_query
+from pathlib import Path
 
 # --- NEW IMPORTS FOR SERIALIZATION ---
 import pickle 
@@ -17,7 +18,14 @@ logging.basicConfig(level=logging.INFO)
 
 # Define the path where the model will be saved. 
 # It's best practice to use an environment variable or a configuration file.
-MODEL_SAVE_PATH = os.environ.get("MODEL_PATH", "/tmp/model.pkl")
+# MODEL_SAVE_PATH = os.environ.get("MODEL_PATH", "/tmp/model.pkl")
+
+# This gets the path to the current file (forecast_utils.py)
+# .parent -> app/utils
+# .parent.parent -> app
+# .parent.parent.parent -> backend
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+MODEL_SAVE_PATH = BASE_DIR / 'models' / 'model.pkl'
 
 def load_sales_from_db(split_date=None):
     sql = "SELECT store_id, sku, date, units_sold FROM sales"
@@ -165,6 +173,8 @@ def train_model(train_df: pl.DataFrame) -> MLForecast:
 # --- NEW FUNCTIONS (save_model, load_model, df_to_predict_rows remain the same) ---
 def save_model(model: MLForecast):
     """Serializes and saves the trained model to disk."""
+
+    MODEL_SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(MODEL_SAVE_PATH, 'wb') as f:
         pickle.dump(model, f)
     logger.info(f"Model saved successfully to {MODEL_SAVE_PATH}")
