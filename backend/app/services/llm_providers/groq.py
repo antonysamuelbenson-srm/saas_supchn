@@ -1,5 +1,7 @@
 from groq import Groq
 from app.config import GROQ_API_KEY
+print(f"DEBUG [groq.py]: Initializing client with API key: '{GROQ_API_KEY}'")
+# --- END DEBUG ---
 
 # Initialize Groq client once
 _client = Groq(api_key=GROQ_API_KEY)

@@ -1,7 +1,13 @@
 # run.py
+import os
 from dotenv import load_dotenv
 load_dotenv()  # ✅ Load .env variables first
 # from app.forecast_scheduler import start_forecast_scheduler
+# --- ADD THIS DEBUG BLOCK ---
+print("--- DEBUGGING .env IN run.py ---")
+print(f"GROQ_API_KEY from os.getenv: '{os.getenv('GROQ_API_KEY')}'")
+print("--- END DEBUG ---")
+# --- END DEBUG BLOCK ---
 # from app.services.forecast_service import execute_forecast_job
 from app import create_app  # 🧠 This will now use the loaded env vars
 
