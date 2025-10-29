@@ -10,3 +10,8 @@ supabase
 lightgbm
 mlforecast
 python-Levenshtein
+pulp
+groq
+chromadb
+onnxruntime
+polars
