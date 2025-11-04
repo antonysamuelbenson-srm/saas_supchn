@@ -351,6 +351,7 @@ def view_dashboard(token):
             print(f"  🔹 Projected Stockouts    : {data.get('projected_stockouts')}")
             print(f"  🔹 Fill Rate Probability  : {data.get('fill_rate_probability')}%")
             print(f"  🕓 Timestamp              : {data.get('timestamp')}")
+            print(f"  🕓 lookahead days              : {data.get('lookahead_days_used')} days")
 
             # Forecast note if available
             forecast_msg = data.get("forecast_msg")
@@ -891,6 +892,8 @@ def display_availability_from_db(token):
         print("\n📊 WEEKLY AVAILABILITY RATE")
         for item in data:
             print(f"Week starting {item['week_start']}: {item['availability_rate']}%")
+            print(f"OOS Count: {item['oos_count']}"),
+            print(f"Eligibile/total sku's: {item['eligible_count']}")
     else:
         print("❌ Failed to fetch availability data:", response.text)
 

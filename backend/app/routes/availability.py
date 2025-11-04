@@ -1,13 +1,17 @@
 from flask import Blueprint, jsonify
 from sqlalchemy import func
+import logging
 from datetime import timedelta, date
 from collections import defaultdict
+from sqlalchemy import text
 
 from app import db
 from app.models.forecast import ForecastDaily
 from app.models.availability import AvailabilityRate
 from app.models.inventory import InventorySnapshot
+from app.models.store import Store
 from app.utils.decorators import role_required
+logger = logging.getLogger(__name__)
 
 bp = Blueprint("availability_rate", __name__)
 
@@ -96,21 +100,106 @@ def recompute_availability_rate():
 @bp.route("/availability", methods=["GET"])
 @role_required
 def availability_rate_history():
-    entries = (
-        db.session.query(AvailabilityRate)
-        .order_by(AvailabilityRate.week_start)
-        .all()
-    )
+    try:
+        # --- MODIFICATION: Use the raw SQL query ---
+        # This query performs the "bridge join" and all aggregations
+        # in the database, which is fast and correct.
+        sql_query = """
+        WITH
+        DailyComparison AS (
+            SELECT
+                DATE_TRUNC('week', p.date) AS week_start,
+                p.store_id AS store_string_id, 
+                p.product_id AS sku,
+                CASE
+                    WHEN i.qty IS NULL THEN 1
+                    WHEN CAST(i.qty AS Float) < p.predicted THEN 1
+                    ELSE 0
+                END AS is_oos_day
+            FROM predict p
+            LEFT JOIN store_data s
+                ON p.store_id = s.store_code 
+            LEFT JOIN inventory i
+                ON s.store_id = i.store_id      
+                AND p.date = i.snapshot_date    
+                AND p.product_id = i.sku        
+            WHERE
+                p.date <= CURRENT_DATE
+        ),
+        WeeklySkuStatus AS (
+            SELECT
+                week_start,
+                store_string_id,
+                sku,
+                MAX(is_oos_day) AS is_oos_week
+            FROM DailyComparison
+            GROUP BY
+                week_start,
+                store_string_id,
+                sku
+        )
+        SELECT
+            week_start,
+            COUNT(*) AS eligible_count,
+            SUM(is_oos_week) AS oos_count
+        FROM WeeklySkuStatus
+        GROUP BY
+            week_start
+        ORDER BY
+            week_start;
+        """
 
-    if not entries:
-        return jsonify({"status": "error", "message": "No availability data found."}), 404
+        # Step 2: Execute the query and build results
+        result = db.session.execute(text(sql_query))
+        
+        live_results = []
+        for row in result:
+            eligible_count = row.eligible_count
+            # oos_count will be None if SUM() returns null, default to 0
+            oos_count = int(row.oos_count or 0) 
+            
+            # Calculate the rate based on the query's results
+            if eligible_count > 0:
+                availability_rate = 1 - (oos_count / eligible_count)
+            else:
+                availability_rate = 0.0
 
-    return jsonify({
-        "status": "success",
-        "data": [
-            {
-                "week_start": e.week_start.strftime("%Y-%m-%d"),
-                "availability_rate": e.availability_rate
-            } for e in entries
-        ]
-    }), 200
+            live_results.append({
+                "week_start": row.week_start.strftime("%Y-%m-%d"),
+                "availability_rate": round(availability_rate * 100, 2),
+                "oos_count": oos_count,
+                "eligible_count": int(eligible_count)
+            })
+
+        # Step 3: Return the final JSON response
+        if not live_results:
+            return jsonify({"status": "error", "message": "No availability data found."}), 404
+
+        # The results are already sorted by 'week_start' from the SQL query
+        return jsonify({
+            "status": "success",
+            "data": live_results
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Failed to calculate live availability: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+    
+    # entries = (
+    #     db.session.query(AvailabilityRate)
+    #     .order_by(AvailabilityRate.week_start)
+    #     .all()
+    # )
+
+    # if not entries:
+    #     return jsonify({"status": "error", "message": "No availability data found."}), 404
+
+    # return jsonify({
+    #     "status": "success",
+    #     "data": [
+    #         {
+    #             "week_start": e.week_start.strftime("%Y-%m-%d"),
+    #             "availability_rate": e.availability_rate
+    #         } for e in entries
+    #     ]
+    # }), 200

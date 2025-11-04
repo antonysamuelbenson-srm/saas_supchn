@@ -293,7 +293,8 @@ def recompute_dashboard_metrics():
         db.session.commit()
 
         return jsonify({
-            "message": "Metrics updated successfully",
+            "inventory_position": inventory_position,
+            "weeks_of_supply": weeks_of_supply,
             "lookahead_days_used": lookahead_days,
             "current_demand": current_demand
         }), 201
@@ -305,64 +306,128 @@ def recompute_dashboard_metrics():
 
 
 @bp.route("/dashboard", methods=["GET"])
-@role_required
+# @role_required
 def dashboard():
+    """
+    Serves the main dashboard by calculating all metrics live.
+    This single endpoint replaces the previous GET and POST methods.
+    """
     try:
-        # ── Get user info from token ─────────────────────────
+        # ── 1. Get user info and config ─────────────────────────
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
         uid = decode_jwt(token).get("role_user_id")
         if not uid:
             return jsonify({"error": "Unauthorized"}), 401
 
-        # ── Get latest dashboard metrics from DB ─────────────
-        latest_metrics = (DashboardMetrics.query
-                          .order_by(DashboardMetrics.timestamp.desc())
-                          .first())
-
-        if not latest_metrics:
-            return jsonify({"error": "No dashboard metrics available"}), 404
-
-        # ── Get user config (lookahead_days) ─────────────────
         user_config = db.session.query(User).filter_by(role_user_id=uid).first()
         lookahead_days = int(getattr(user_config, "lookahead_days", 14))
+        print("lookahead_days:", lookahead_days)
 
-        # ── Calculate current_demand live ────────────────────
+        # ── 2. Fetch all raw data required for metrics ──────────
+        
+        # A. Latest Inventory
+        latest_date = db.session.query(db.func.max(InventorySnapshot.snapshot_date)).scalar()
+        if not latest_date:
+            return jsonify({"error": "No inventory snapshots found"}), 404
+
+        inv_rows = (
+            InventorySnapshot.query
+            .filter(InventorySnapshot.snapshot_date == latest_date)
+            .all()
+        )
+
+        # B. Reorder Config
+        rc_rows = (
+            supabase.table("reorder_config")
+            .select("store_id, sku, avg_daily_usage, lead_time_days")
+            .execute()
+        ).data or []
+        rc_map = {(r["store_id"], r["sku"]): r for r in rc_rows}
+
+        # C. Forecast Data
         today = datetime.now(timezone.utc).date()
         forecast_cutoff = today + timedelta(days=lookahead_days)
+        
+        forecast_rows = (
+            Forecast.query
+            .filter(Forecast.date >= today, Forecast.date <= forecast_cutoff)
+            .order_by(Forecast.date)
+            .all()
+        )
 
-        forecast_rows = (Forecast.query
-                         .filter(Forecast.date >= today,
-                                 Forecast.date <= forecast_cutoff)
-                         .order_by(Forecast.date)
-                         .all())
+        # ── 3. Calculate all metrics live ───────────────────────
 
+        # Metric 1: Current Demand & Forecast Health
         current_demand = 0.0
-        forecast_dates = []
+        forecast_dates = set()
+        sku_demand = defaultdict(float)
 
         for r in forecast_rows:
             try:
-                if today <= r.date <= forecast_cutoff:
-                    forecast_dates.append(r.date)
-                    current_demand += float(r.predicted or 0)
+                forecast_dates.add(r.date)
+                pred_val = float(r.predicted or 0)
+                current_demand += pred_val
+                sku_demand[(r.store_id, r.product_id)] += pred_val
             except Exception as e:
                 logger.warning(f"Skipping forecast row: {r.date} → {e}")
 
-        # ── Forecast health message ──────────────────────────
         forecast_msg = (
-            f"⚠️ Forecast data available only for {len(set(forecast_dates))} days."
-            if forecast_dates and len(set(forecast_dates)) < lookahead_days
+            f"⚠️ Forecast data available only for {len(forecast_dates)} days."
+            if forecast_dates and len(forecast_dates) < lookahead_days
             else "✅ Forecast data sufficient."
         )
 
-        # ── Build final response ─────────────────────────────
+        # Metric 2: Inventory Position
+        inv_total = r2(sum(float(r.qty) for r in inv_rows))
+        inventory_position = inv_total
+
+        # Metric 3: Weeks of Supply
+        weeks_of_supply = None
+        if forecast_rows:
+            unique_days = len(forecast_dates)
+            if unique_days > 0:
+                avg_daily = current_demand / unique_days
+                if avg_daily > 0:
+                    weeks_of_supply = r2(inv_total / (avg_daily * 7), 1)
+        else:
+            # Fallback to reorder_config if no forecast
+            adu_vals = [float(r["avg_daily_usage"]) for r in rc_rows if r.get("avg_daily_usage")]
+            avg_adu = (sum(adu_vals) / len(adu_vals)) if adu_vals else 0
+            if avg_adu > 0:
+                weeks_of_supply = r2(inv_total / (avg_adu * 7), 1)
+
+        # Metric 4: Projected Stockouts
+        projected_stockouts = 0
+        for row in inv_rows:
+            qty = float(row.qty)
+            rc = rc_map.get((row.store_id, row.sku), {})
+            adu = float(rc.get("avg_daily_usage") or 0)
+            lt = int(rc.get("lead_time_days") or 0)
+            
+            if adu > 0:
+                days_cover = r2(qty / adu, 1)
+                if days_cover is not None and lt > 0 and days_cover <= lt:
+                    projected_stockouts += 1
+
+        # Metric 5: Fill Rate Probability
+        total_skus = len(inv_rows)
+        fulfilled_skus = sum(
+            1 for r in inv_rows
+            if float(r.qty) >= sku_demand.get((r.store_id, r.sku), 0)
+        )
+        fill_rate_probability = r2((fulfilled_skus / total_skus) * 100) if total_skus > 0 else 0
+
+
+        # ── 4. Build final response ───────────────────────────
         out = {
-            "current_demand": r2(current_demand),
-            "inventory_position": latest_metrics.inventory_position,
-            "weeks_of_supply": latest_metrics.weeks_of_supply,
-            "projected_stockouts": latest_metrics.projected_stockouts,
-            "fill_rate_probability": r2(latest_metrics.fill_rate_probability),
-            "timestamp": latest_metrics.timestamp.isoformat(timespec="seconds"),
-            "forecast_msg": forecast_msg
+            "current_demand": int(round(current_demand)),
+            "inventory_position": int(round(inventory_position)),
+            "weeks_of_supply": int(round(weeks_of_supply)) if weeks_of_supply is not None else None,
+            "projected_stockouts": projected_stockouts,
+            "fill_rate_probability": fill_rate_probability,
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"), # Live timestamp
+            "forecast_msg": forecast_msg,
+            "lookahead_days_used": lookahead_days
         }
 
         return jsonify(out), 200
@@ -370,6 +435,70 @@ def dashboard():
     except Exception as e:
         logger.error(f"Failed to load dashboard: {e}")
         return jsonify({"error": "Internal server error"}), 500
+# def dashboard():
+#     try:
+#         # ── Get user info from token ─────────────────────────
+#         token = request.headers.get("Authorization", "").replace("Bearer ", "")
+#         uid = decode_jwt(token).get("role_user_id")
+#         if not uid:
+#             return jsonify({"error": "Unauthorized"}), 401
+
+#         # ── Get latest dashboard metrics from DB ─────────────
+#         latest_metrics = (DashboardMetrics.query
+#                           .order_by(DashboardMetrics.timestamp.desc())
+#                           .first())
+
+#         if not latest_metrics:
+#             return jsonify({"error": "No dashboard metrics available"}), 404
+
+#         # ── Get user config (lookahead_days) ─────────────────
+#         user_config = db.session.query(User).filter_by(role_user_id=uid).first()
+#         lookahead_days = int(getattr(user_config, "lookahead_days", 14))
+
+#         # ── Calculate current_demand live ────────────────────
+#         today = datetime.now(timezone.utc).date()
+#         forecast_cutoff = today + timedelta(days=lookahead_days)
+
+#         forecast_rows = (Forecast.query
+#                          .filter(Forecast.date >= today,
+#                                  Forecast.date <= forecast_cutoff)
+#                          .order_by(Forecast.date)
+#                          .all())
+
+#         current_demand = 0.0
+#         forecast_dates = []
+
+#         for r in forecast_rows:
+#             try:
+#                 if today <= r.date <= forecast_cutoff:
+#                     forecast_dates.append(r.date)
+#                     current_demand += float(r.predicted or 0)
+#             except Exception as e:
+#                 logger.warning(f"Skipping forecast row: {r.date} → {e}")
+
+#         # ── Forecast health message ──────────────────────────
+#         forecast_msg = (
+#             f"⚠️ Forecast data available only for {len(set(forecast_dates))} days."
+#             if forecast_dates and len(set(forecast_dates)) < lookahead_days
+#             else "✅ Forecast data sufficient."
+#         )
+
+#         # ── Build final response ─────────────────────────────
+#         out = {
+#             "current_demand": r2(current_demand),
+#             "inventory_position": latest_metrics.inventory_position,
+#             "weeks_of_supply": latest_metrics.weeks_of_supply,
+#             "projected_stockouts": latest_metrics.projected_stockouts,
+#             "fill_rate_probability": r2(latest_metrics.fill_rate_probability),
+#             "timestamp": latest_metrics.timestamp.isoformat(timespec="seconds"),
+#             "forecast_msg": forecast_msg
+#         }
+
+#         return jsonify(out), 200
+
+#     except Exception as e:
+#         logger.error(f"Failed to load dashboard: {e}")
+#         return jsonify({"error": "Internal server error"}), 500
 
 
 # @bp.route("/dashboard/recompute", methods=["POST"])
