@@ -15,6 +15,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
 } from 'recharts';
 import Chatbot from '../components/Chatbot';
+import EdgeAwareTooltipMarker from "./EdgeAwareTooltipMarker";
 
 const BASE_URL = "http://localhost:5500";
 
@@ -823,38 +824,102 @@ function Dashboard() {
                     <ResetMapViewButton locations={data.locations} />
                     <FitBounds locations={data.locations} />
                     {data.locations.filter(loc => loc.lat != null && loc.lng != null).map((loc) => (
-                        <AutoPanMarker key={loc.store_id} position={[loc.lat, loc.lng]} icon={createAlertIcon(loc)}>
-                        <Tooltip direction="top" offset={[0, -42]} opacity={1} permanent={false}>
-                            <div className="text-sm space-y-3 p-1" style={{ minWidth: "250px", maxWidth: "300px" }}>
-                                <div><strong>{loc.store_name}</strong><br /><span className="text-slate-500">{loc.location}</span></div>
+                        // <AutoPanMarker key={loc.store_id} position={[loc.lat, loc.lng]} icon={createAlertIcon(loc)}>
+                        // <Tooltip direction="left" offset={[0, 0]} opacity={1} permanent={false}>
+                            // <div className="text-sm space-y-3 p-1" style={{ minWidth: "250px", maxWidth: "300px" }}>
+                            //     <div><strong>{loc.store_name}</strong><br /><span className="text-slate-500">{loc.location}</span></div>
                                 
-                                {loc.alert && <div className="text-red-600 font-bold border-t border-slate-200 pt-2">🚨 Alert: {loc.alert}</div>}
+                            //     {loc.alert && <div className="text-red-600 font-bold border-t border-slate-200 pt-2">🚨 Alert: {loc.alert}</div>}
 
-                                {loc.alertStatus && (
-                                    <div className="text-slate-800 bg-amber-100 p-2 rounded-md shadow-inner border border-amber-200">
-                                        <p className="text-amber-800 font-semibold mb-1">Reorder Status:</p>
-                                        <ul className="ml-4 list-disc text-sm space-y-1">
-                                        <li>📦 SKUs to Reorder: <strong>{loc.alertStatus.reorderCount}</strong></li>
-                                        <li className={loc.alertStatus.hasAlert ? "text-red-600 font-bold" : ""}>
-                                            ⚠️ Stockout despite Reorder: <strong>{loc.alertStatus.stockoutCount}</strong>
-                                        </li>
-                                        </ul>
-                                    </div>
-                                )}
+                            //     {loc.alertStatus && (
+                            //         <div className="text-slate-800 bg-amber-100 p-2 rounded-md shadow-inner border border-amber-200">
+                            //             <p className="text-amber-800 font-semibold mb-1">Reorder Status:</p>
+                            //             <ul className="ml-4 list-disc text-sm space-y-1">
+                            //             <li>📦 SKUs to Reorder: <strong>{loc.alertStatus.reorderCount}</strong></li>
+                            //             <li className={loc.alertStatus.hasAlert ? "text-red-600 font-bold" : ""}>
+                            //                 ⚠️ Stockout despite Reorder: <strong>{loc.alertStatus.stockoutCount}</strong>
+                            //             </li>
+                            //             </ul>
+                            //         </div>
+                            //     )}
 
-                                {loc.hoverStats && (
-                                    <div className="bg-blue-50 text-slate-800 p-2 rounded-md shadow-inner border border-blue-200 mt-2">
-                                        <p className="text-blue-800 font-semibold mb-1">Quick Stats ({loc.hoverStats.lookahead_days}-Day):</p>
-                                        <ul className="ml-4 list-disc text-sm space-y-1">
-                                        <li>📦 <strong>{loc.hoverStats.distinct_skus}</strong> SKUs</li>
-                                        <li>📊 <strong>{loc.hoverStats.inventory_units}</strong> Inventory Units</li>
-                                        <li>📈 <strong>{loc.hoverStats.forecast_units}</strong> Forecast Units</li>
-                                        </ul>
-                                    </div>
-                                )}
+                            //     {loc.hoverStats && (
+                            //         <div className="bg-blue-50 text-slate-800 p-2 rounded-md shadow-inner border border-blue-200 mt-2">
+                            //             <p className="text-blue-800 font-semibold mb-1">Quick Stats ({loc.hoverStats.lookahead_days}-Day):</p>
+                            //             <ul className="ml-4 list-disc text-sm space-y-1">
+                            //             <li>📦 <strong>{loc.hoverStats.distinct_skus}</strong> SKUs</li>
+                            //             <li>📊 <strong>{loc.hoverStats.inventory_units}</strong> Inventory Units</li>
+                            //             <li>📈 <strong>{loc.hoverStats.forecast_units}</strong> Forecast Units</li>
+                            //             </ul>
+                            //         </div>
+                            //     )}
+                            // </div>
+                        // </Tooltip>
+                        // </AutoPanMarker>
+                        <EdgeAwareTooltipMarker
+                          key={loc.store_id}
+                          position={[loc.lat, loc.lng]}
+                          icon={createAlertIcon(loc)}
+                        >
+                        <Tooltip opacity={1}>
+                          <div className="p-3 text-sm leading-5 space-y-3 min-w-[260px] max-w-[340px]">
+                            {/* Header */}
+                            <div className="border-b border-slate-200 pb-2">
+                              <div className="font-semibold text-slate-900 truncate">{loc.store_name}</div>
+                              <div className="text-slate-500">{loc.location}</div>
                             </div>
+
+                            {/* Alert (optional) */}
+                            {loc.alert && (
+                              <div className="text-red-700 font-semibold bg-red-50 p-2 rounded-md border border-red-200">
+                                🚨 Alert: <span className="font-bold">{loc.alert}</span>
+                              </div>
+                            )}
+
+                            {/* Reorder Status (optional) */}
+                            {loc.alertStatus && (
+                              <div className="text-slate-800 bg-amber-50 p-2 rounded-md shadow-inner border border-amber-200">
+                                <p className="text-amber-800 font-semibold mb-1">Reorder Status:</p>
+                                <ul className="ml-4 list-disc space-y-1">
+                                  <li>
+                                    📦 SKUs to Reorder:{" "}
+                                    <strong>{loc.alertStatus.reorderCount}</strong>
+                                  </li>
+                                  <li
+                                    className={
+                                      loc.alertStatus.hasAlert ? "text-red-600 font-bold" : ""
+                                    }
+                                  >
+                                    ⚠️ Stockout despite Reorder:{" "}
+                                    <strong>{loc.alertStatus.stockoutCount}</strong>
+                                  </li>
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Quick Stats (optional) */}
+                            {loc.hoverStats && (
+                              <div className="bg-blue-50 text-slate-800 p-2 rounded-md shadow-inner border border-blue-200">
+                                <p className="text-blue-800 font-semibold mb-1">
+                                  Quick Stats ({loc.hoverStats.lookahead_days}-Day):
+                                </p>
+                                <ul className="ml-4 list-disc space-y-1">
+                                  <li>
+                                    📦 <strong>{loc.hoverStats.distinct_skus}</strong> SKUs
+                                  </li>
+                                  <li>
+                                    📊 <strong>{loc.hoverStats.inventory_units}</strong> Inventory Units
+                                  </li>
+                                  <li>
+                                    📈 <strong>{loc.hoverStats.forecast_units}</strong> Forecast Units
+                                  </li>
+                                </ul>
+                              </div>
+                            )}
+                          </div>
                         </Tooltip>
-                        </AutoPanMarker>
+
+                        </EdgeAwareTooltipMarker>
                     ))}
                   </MapContainer>
                 ) : mapView === 'weeksOfSupply' ? (

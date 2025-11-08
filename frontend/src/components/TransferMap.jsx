@@ -888,6 +888,42 @@ const MapControls = ({ bounds, isExpanded, setIsExpanded }) => {
   );
 };
 
+const ProPopupStyles = () => (
+  <style>{`
+    .leaflet-popup-content-wrapper {
+      border-radius: 12px !important;
+      border: 1px solid #E2E8F0 !important; /* slate-200 */
+      box-shadow: 0 12px 20px rgba(15,23,42,0.12) !important; /* slate-900/12% */
+    }
+    .leaflet-popup-content {
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .leaflet-popup-tip {
+      display: none; /* cleaner look */
+    }
+  `}</style>
+);
+
+
+// tries explicit fields, else parses "Store, City" or "Store (City)"
+const extractCity = (name, explicit) => {
+  if (explicit && typeof explicit === 'string') return explicit;
+  if (!name || typeof name !== 'string') return '';
+  // (City) pattern
+  const paren = name.match(/\(([^)]+)\)\s*$/);
+  if (paren && paren[1]) return paren[1].trim();
+  // "Store, City" or "Store - City"
+  const parts = name.split(/[-,|>]/);
+  if (parts.length > 1) return parts[parts.length - 1].trim();
+  return '';
+};
+
+const formatStoreCity = (store, city) => {
+  const safeCity = extractCity(store, city);
+  return safeCity ? `${store} (${safeCity})` : store;
+};
+
 const MapResizer = ({ isExpanded }) => {
   const map = useMap();
   useEffect(() => {
@@ -958,6 +994,7 @@ const TransferMap = ({ summaryData }) => {
     return (
         <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'fixed inset-0 z-50 p-4 bg-black bg-opacity-70' : 'relative h-96 w-full'}`}>
             <AnimationStyles />
+            <ProPopupStyles />
             <div className="rounded-lg overflow-hidden border border-slate-300 h-full w-full bg-slate-100">
                 <MapContainer
                     bounds={bounds}
@@ -994,13 +1031,40 @@ const TransferMap = ({ summaryData }) => {
                                         mouseout: (e) => { setHoveredTransfer(null); e.target.closePopup(); },
                                     }}
                                 >
-                                    <Popup>
-                                        <div className="font-sans text-sm bg-white text-slate-700 p-1 rounded-md shadow-none border-none">
-                                            <p className="mb-1"><strong>Transfer:</strong> {transfer.src} to {transfer.dest}</p>
-                                            <p className="mb-1"><strong>Units:</strong> {transfer.total_units.toLocaleString()}</p>
-                                            <p><strong>SKUs:</strong> {transfer.distinct_skus}</p>
+                                <Popup>
+                                  <div className="p-3">
+                                    <div className="rounded-xl bg-white">
+                                      <div className="flex items-start justify-between p-3 border-b border-slate-200">
+                                        <div className="min-w-0">
+                                          <div className="text-[13px] font-semibold text-slate-800 truncate">
+                                            {formatStoreCity(transfer.src, transfer.src_city || transfer.src_location)}
+                                          </div>
+                                          <div className="text-[12px] text-slate-500">
+                                            &#8594; {formatStoreCity(transfer.dest, transfer.dest_city || transfer.dest_location)}
+                                          </div>
                                         </div>
-                                    </Popup>
+                                      </div>
+
+                                      <div className="grid grid-cols-2 gap-2 p-3">
+                                        <div className="rounded-lg border border-slate-200 p-2">
+                                          <div className="text-[11px] text-slate-500">Total Units</div>
+                                          <div className="text-[13px] font-semibold text-slate-800">
+                                            {Number(transfer.total_units || 0).toLocaleString()}
+                                          </div>
+                                        </div>
+                                        <div className="rounded-lg border border-slate-200 p-2">
+                                          <div className="text-[11px] text-slate-500">Distinct SKUs</div>
+                                          <div className="text-[13px] font-semibold text-slate-800">
+                                            {transfer.distinct_skus ?? '—'}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      
+                                    </div>
+                                  </div>
+                                </Popup>
+
                                 </Polyline>
 
                                 {/* 2. The Visible, Animated Line */}
@@ -1021,8 +1085,24 @@ const TransferMap = ({ summaryData }) => {
                     })}
                     
                     {uniqueLocations.map(([name, coords]) => (
-                        coords && <Marker key={`location-${name}`} position={coords}><Popup>{name}</Popup></Marker>
+                      coords && (
+                        <Marker key={`location-${name}`} position={coords}>
+                          <Popup>
+                            <div className="p-3">
+                              <div className="rounded-xl bg-white border border-slate-200 p-3">
+                                <div className="text-[13px] font-semibold text-slate-800">
+                                  {formatStoreCity(name)}
+                                </div>
+                                <div className="text-[12px] text-slate-500 mt-1">
+                                  {extractCity(name) ? 'Store • City' : 'Store'}
+                                </div>
+                              </div>
+                            </div>
+                          </Popup>
+                        </Marker>
+                      )
                     ))}
+
                 </MapContainer>
             </div>
         </div>
