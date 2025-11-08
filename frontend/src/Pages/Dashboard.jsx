@@ -384,11 +384,25 @@ const AutoPanMarker = ({ children, ...props }) => {
     return <Marker {...props} eventHandlers={eventHandlers}>{children}</Marker>;
 };
 
+// // **KEPT**: Original MetricCard
+// const MetricCard = React.memo(({ icon, title, value }) => (
+//     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="bg-slate-800 rounded-lg p-4 shadow-lg border border-slate-700 flex items-center space-x-4">
+//         <div className="bg-slate-900 p-3 rounded-full">{icon}</div>
+//         <div><p className="text-sm font-medium text-slate-400">{title}</p><p className="text-2xl font-bold text-white">{value}</p></div>
+//     </motion.div>
+// ));
+
+
 // **KEPT**: Original MetricCard
-const MetricCard = React.memo(({ icon, title, value }) => (
+const MetricCard = React.memo(({ icon, title, value, subtitle }) => ( // Added subtitle prop
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="bg-slate-800 rounded-lg p-4 shadow-lg border border-slate-700 flex items-center space-x-4">
         <div className="bg-slate-900 p-3 rounded-full">{icon}</div>
-        <div><p className="text-sm font-medium text-slate-400">{title}</p><p className="text-2xl font-bold text-white">{value}</p></div>
+        <div>
+            <p className="text-sm font-medium text-slate-400">{title}</p>
+            {/* This is the new line */}
+            {subtitle && <p className="text-xs text-slate-500 -mt-1">{subtitle}</p>} 
+            <p className="text-2xl font-bold text-white mt-1">{value}</p>
+        </div>
     </motion.div>
 ));
 
@@ -496,11 +510,17 @@ function Dashboard() {
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
   const [permissions, setPermissions] = useState([]);
   const [availabilityData, setAvailabilityData] = useState([]);
+  // const [data, setData] = useState({
+  //   metrics: { current_demand: 0, inventory_position: 0, weeks_of_supply: 0, stockouts: 0, skus_below_threshold: 0, timestamp: new Date().toISOString() },
+  //   alerts: [],
+  //   locations: []
+  // });
+
   const [data, setData] = useState({
-    metrics: { current_demand: 0, inventory_position: 0, weeks_of_supply: 0, stockouts: 0, skus_below_threshold: 0, timestamp: new Date().toISOString() },
-    alerts: [],
-    locations: []
-  });
+    metrics: { current_demand: 0, inventory_position: 0, weeks_of_supply: 0, stockouts: 0, skus_below_threshold: 0, timestamp: new Date().toISOString(), lookahead_days: 14 }, // Added lookahead_days
+    alerts: [],
+    locations: []
+  });
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -629,15 +649,25 @@ function Dashboard() {
           };
       });
 
+      // setData({
+      //   metrics: {
+      //     current_demand: backendDashboard.current_demand ?? 0,
+      //     inventory_position: backendDashboard.inventory_position ?? 0,
+      //     weeks_of_supply: backendDashboard.weeks_of_supply ?? 0,
+      //     stockouts,
+      //     skus_below_threshold: skusBelow,
+      //     timestamp: backendDashboard.timestamp ?? new Date().toISOString()
+      //   }
       setData({
-        metrics: {
-          current_demand: backendDashboard.current_demand ?? 0,
-          inventory_position: backendDashboard.inventory_position ?? 0,
-          weeks_of_supply: backendDashboard.weeks_of_supply ?? 0,
-          stockouts,
-          skus_below_threshold: skusBelow,
-          timestamp: backendDashboard.timestamp ?? new Date().toISOString()
-        },
+        metrics: {
+          current_demand: backendDashboard.current_demand ?? 0,
+          inventory_position: backendDashboard.inventory_position ?? 0,
+          weeks_of_supply: backendDashboard.weeks_of_supply ?? 0,
+          stockouts,
+          skus_below_threshold: skusBelow,
+          timestamp: backendDashboard.timestamp ?? new Date().toISOString(),
+          lookahead_days: backendDashboard.lookahead_days_used ?? 14 // <-- ADD THIS LINE
+       },
         alerts: backendAlerts.map((a, i) => ({
           id: a.id || `alert-${i}`,
           severity: a.severity || "Low",
@@ -760,7 +790,12 @@ function Dashboard() {
           <div className="lg:col-span-2 space-y-6 flex flex-col">
             {/* **KEPT**: Original Metric Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <MetricCard icon={<FiTrendingUp size={24} className="text-blue-400" />} title="Current Demand" value={data.metrics.current_demand.toLocaleString()} />
+                <MetricCard 
+                    icon={<FiTrendingUp size={24} className="text-blue-400" />} 
+                    title="Current Demand" 
+                    value={data.metrics.current_demand.toLocaleString()} 
+                    subtitle={`(Next ${data.metrics.lookahead_days} Days)`}
+                />
                 <MetricCard icon={<FiBox size={24} className="text-green-400" />} title="Inventory Position" value={data.metrics.inventory_position.toLocaleString()}   />
                 <MetricCard icon={<FiCalendar size={24} className="text-yellow-400" />} title="Weeks Of Supply" value={data.metrics.weeks_of_supply.toLocaleString()} />
             </div>
