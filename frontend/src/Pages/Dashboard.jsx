@@ -92,10 +92,10 @@ const createAlertIcon = (location) => {
 
 // **ADDED**: New icon function for Weeks of Supply
 const createWeeksSupplyIcon = (store, selectedCategory) => {
- const { critical_count, low_count } = store;
- let severityClass = 'severity-all';
- let count = store.total_skus || 0;
- if (selectedCategory && selectedCategory !== 'all') {
+  const { critical_count, low_count } = store;
+  let severityClass = 'severity-all';
+  let count = store.total_skus || 0;
+  if (selectedCategory && selectedCategory !== 'all') {
     switch (selectedCategory) {
     case 'Critical': severityClass = 'severity-critical'; count = store.critical_count; break;
     case 'Low': severityClass = 'severity-low'; count = store.low_count; break;
@@ -103,44 +103,44 @@ const createWeeksSupplyIcon = (store, selectedCategory) => {
     case 'High': severityClass = 'severity-high'; count = store.high_count; break;
     default: severityClass = 'severity-all'; count = store.total_skus;
     }
- } else {
+  } else {
     if (critical_count > 0) { severityClass = 'severity-critical'; count = critical_count; }
     else if (low_count > 0) { severityClass = 'severity-low'; count = low_count; }
     else { severityClass = 'severity-all'; count = store.total_skus; }
- }
- return new L.DivIcon({
+  }
+  return new L.DivIcon({
     className: `custom-marker-container ${severityClass}`,
     html: `<div class="marker-count wos">${count}</div><svg viewBox="0 0 24 24" class="marker-svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`,
     iconSize: [32, 42],
     iconAnchor: [16, 42]
- });
+  });
 };
 
 // **ADDED**: New icon function for Demand Trend
 const createDemandTrendIcon = (store, selectedTrend) => {
- const { accelerating_count, stable_count, decelerating_count, total_skus } = store;
- let severityClass = 'demand-stable';
- let count = total_skus || 0;
- 
- if (selectedTrend && selectedTrend !== 'all') {
+  const { accelerating_count, stable_count, decelerating_count, total_skus } = store;
+  let severityClass = 'demand-stable';
+  let count = total_skus || 0;
+  
+  if (selectedTrend && selectedTrend !== 'all') {
     switch (selectedTrend) {
     case 'Accelerating': severityClass = 'demand-accelerating'; count = accelerating_count; break;
     case 'Stable': severityClass = 'demand-stable'; count = stable_count; break;
     case 'Decelerating': severityClass = 'demand-decelerating'; count = decelerating_count; break;
     default: severityClass = 'demand-stable'; count = total_skus;
     }
- } else {
+  } else {
     if (accelerating_count > 0) { severityClass = 'demand-accelerating'; count = accelerating_count; }
     else if (decelerating_count > 0) { severityClass = 'demand-decelerating'; count = decelerating_count; }
     else { severityClass = 'demand-stable'; count = stable_count || 0; }
- }
- 
- return new L.DivIcon({
+  }
+  
+  return new L.DivIcon({
     className: `custom-marker-container ${severityClass}`,
     html: `<div class="marker-count demand">${count}</div><svg viewBox="0 0 24 24" class="marker-svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`,
     iconSize: [32, 42],
     iconAnchor: [16, 42]
- });
+  });
 };
 
 // **KEPT**: Original FitBounds
@@ -179,134 +179,134 @@ const ResetMapViewButton = ({ locations }) => {
 
 // **ADDED**: New MapFilterControl component
 const MapFilterControl = ({ selectedCategory, onCategoryChange, storeCounts, filterType }) => {
- const categories = [
+  const categories = [
     { key: 'all', label: 'All Stores', bgColor: '#6b7280', icon: '🏪' },
     { key: 'Critical', label: 'Critical', bgColor: '#ef4444', icon: '🔴' },
     { key: 'Low', label: 'Low', bgColor: '#f59e0b', icon: '🟠' },
     { key: 'Adequate', label: 'Adequate', bgColor: '#10b981', icon: '🟢' },
     { key: 'High', label: 'High', bgColor: '#3b82f6', icon: '🔵' }
- ];
+  ];
 
- const trendCategories = [
+  const trendCategories = [
     { key: 'all', label: 'All Stores', bgColor: '#6b7280', icon: '🏪' },
     { key: 'Accelerating', label: 'Accelerating', bgColor: '#10b981', icon: '📈' },
     { key: 'Stable', label: 'Stable', bgColor: '#3b82f6', icon: '➡️' },
     { key: 'Decelerating', label: 'Decelerating', bgColor: '#f59e0b', icon: '📉' }
- ];
+  ];
 
- const categoryList = filterType === 'demand' ? trendCategories : categories;
- const filterLabel = filterType === 'demand' ? 'Demand Trend' : 'Weeks of Supply';
+  const categoryList = filterType === 'demand' ? trendCategories : categories;
+  const filterLabel = filterType === 'demand' ? 'Demand Trend' : 'Weeks of Supply';
 
- return (
+  return (
     <div className="absolute top-3 left-3 z-[1000] map-filter-control">
     <div className="flex items-center space-x-2 mb-2"><FiFilter size={16} className="text-slate-600" /><span className="text-sm font-semibold text-slate-800">{filterLabel}</span></div>
     <div className="space-y-1">
-    {categoryList.map(category => (<button key={category.key} onClick={() => onCategoryChange(category.key)} className={`filter-btn ${selectedCategory === category.key ? 'active' : ''}`} style={{ backgroundColor: selectedCategory === category.key ? category.bgColor : 'transparent', color: selectedCategory === category.key ? 'white' : category.bgColor, border: `1px solid ${category.bgColor}` }}>
+    {categoryList.map(category => (<button key={category.key} onClick={() => onCategoryChange(category.key)} className={`filter-btn ${selectedCategory === category.key ? 'active' : ''}`} style={{ backgroundColor: selectedCategory === category.key ? category.bgColor : 'transparent', color: selectedKategor.key ? 'white' : category.bgColor, border: `1px solid ${category.bgColor}` }}>
     <div className="flex items-center"><span className="mr-2">{category.icon}</span><span>{category.label}</span></div><span className="text-xs opacity-80">{storeCounts[category.key] || 0}</span></button>
     ))}
     </div>
     </div>
- );
+  );
 };
 
 // **ADDED**: New StoreSummaryTooltip component
 const StoreSummaryTooltip = ({ store, onCategoryClick, onViewAllSKUs }) => (
- <div className="text-sm space-y-3 p-3 w-full">
- <div className="border-b border-slate-200 pb-2">
- <div className="flex items-center justify-between gap-2"><strong className="text-lg truncate flex-shrink min-w-0">📍 Store {store.store_id}</strong><button onClick={onViewAllSKUs} className="flex items-center text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap flex-shrink-0">View All SKUs <FiArrowRight className="ml-1" size={12} /></button></div>
- <span className="text-slate-500 text-sm truncate block">{store.store_name || `Store ${store.store_id}`}</span>
- </div>
- <div className="grid grid-cols-2 gap-3 text-xs">
- <div className="bg-slate-100 p-2 rounded"><div className="font-semibold truncate">📊 Total SKUs</div><div className="text-lg font-bold">{store.total_skus}</div></div>
- <div className="bg-slate-100 p-2 rounded"><div className="font-semibold truncate">📈 Avg Weeks</div><div className="text-lg font-bold">{store.avg_weeks_of_supply?.toFixed(2) || '0.00'}</div></div>
- </div>
- <div className="space-y-2">
- <div className="flex items-center justify-between"><span className="text-sm font-semibold text-slate-700">Categories:</span><span className="text-xs text-slate-500 whitespace-nowrap">Click to filter</span></div>
- <div className="flex flex-wrap gap-1">
- {store.critical_count > 0 && <div className="category-tag bg-red-100 text-red-800 border border-red-300 text-xs" onClick={() => onCategoryClick('Critical')}>🔴 Critical: {store.critical_count}</div>}
- {store.low_count > 0 && <div className="category-tag bg-orange-100 text-orange-800 border border-orange-300 text-xs" onClick={() => onCategoryClick('Low')}>🟠 Low: {store.low_count}</div>}
- {store.adequate_count > 0 && <div className="category-tag bg-green-100 text-green-800 border border-green-300 text-xs" onClick={() => onCategoryClick('Adequate')}>🟢 Adequate: {store.adequate_count}</div>}
- {store.high_count > 0 && <div className="category-tag bg-blue-100 text-blue-800 border border-blue-300 text-xs" onClick={() => onCategoryClick('High')}>🔵 High: {store.high_count}</div>}
- </div>
- </div>
- </div>
+  <div className="text-sm space-y-3 p-3 w-full">
+  <div className="border-b border-slate-200 pb-2">
+  <div className="flex items-center justify-between gap-2"><strong className="text-lg truncate flex-shrink min-w-0">📍 Store {store.store_id}</strong><button onClick={onViewAllSKUs} className="flex items-center text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap flex-shrink-0">View All SKUs <FiArrowRight className="ml-1" size={12} /></button></div>
+  <span className="text-slate-500 text-sm truncate block">{store.store_name || `Store ${store.store_id}`}</span>
+  </div>
+  <div className="grid grid-cols-2 gap-3 text-xs">
+  <div className="bg-slate-100 p-2 rounded"><div className="font-semibold truncate">📊 Total SKUs</div><div className="text-lg font-bold">{store.total_skus}</div></div>
+  <div className="bg-slate-100 p-2 rounded"><div className="font-semibold truncate">📈 Avg Weeks</div><div className="text-lg font-bold">{store.avg_weeks_of_supply?.toFixed(2) || '0.00'}</div></div>
+  </div>
+  <div className="space-y-2">
+  <div className="flex items-center justify-between"><span className="text-sm font-semibold text-slate-700">Categories:</span><span className="text-xs text-slate-500 whitespace-nowrap">Click to filter</span></div>
+  <div className="flex flex-wrap gap-1">
+  {store.critical_count > 0 && <div className="category-tag bg-red-100 text-red-800 border border-red-300 text-xs" onClick={() => onCategoryClick('Critical')}>🔴 Critical: {store.critical_count}</div>}
+  {store.low_count > 0 && <div className="category-tag bg-orange-100 text-orange-800 border border-orange-300 text-xs" onClick={() => onCategoryClick('Low')}>🟠 Low: {store.low_count}</div>}
+  {store.adequate_count > 0 && <div className="category-tag bg-green-100 text-green-800 border border-green-300 text-xs" onClick={() => onCategoryClick('Adequate')}>🟢 Adequate: {store.adequate_count}</div>}
+  {store.high_count > 0 && <div className="category-tag bg-blue-100 text-blue-800 border border-blue-300 text-xs" onClick={() => onCategoryClick('High')}>🔵 High: {store.high_count}</div>}
+  </div>
+  </div>
+  </div>
 );
 
 // **ADDED**: New DemandTrendTooltip component
 const DemandTrendTooltip = ({ store, onCategoryClick, onViewAllSKUs }) => (
- <div className="text-sm space-y-3 p-3 w-full">
- <div className="border-b border-slate-200 pb-2">
- <div className="flex items-center justify-between gap-2">
- <strong className="text-lg truncate flex-shrink min-w-0">
- 📍 Store {store.store_id}
- </strong>
- <button
- onClick={onViewAllSKUs}
- className="flex items-center text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap flex-shrink-0"
- >
- View All SKUs <FiArrowRight className="ml-1" size={12} />
- </button>
- </div>
- <span className="text-slate-500 text-sm truncate block">
- {store.store_name || `Store ${store.store_id}`}
- </span>
- </div>
+  <div className="text-sm space-y-3 p-3 w-full">
+  <div className="border-b border-slate-200 pb-2">
+  <div className="flex items-center justify-between gap-2">
+  <strong className="text-lg truncate flex-shrink min-w-0">
+  📍 Store {store.store_id}
+  </strong>
+  <button
+  onClick={onViewAllSKUs}
+  className="flex items-center text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap flex-shrink-0"
+  >
+  View All SKUs <FiArrowRight className="ml-1" size={12} />
+  </button>
+  </div>
+  <span className="text-slate-500 text-sm truncate block">
+  {store.store_name || `Store ${store.store_id}`}
+  </span>
+  </div>
 
- <div className="grid grid-cols-2 gap-3 text-xs">
- <div className="bg-slate-100 p-2 rounded">
- <div className="font-semibold truncate">📊 Total SKUs</div>
- <div className="text-lg font-bold">{store.total_skus}</div>
- </div>
- <div className="bg-slate-100 p-2 rounded">
- <div className="font-semibold truncate">📈 Avg Variance</div>
- <div className="text-lg font-bold">
- {store.avg_variance_pct?.toFixed(1) || '0.0'}%
- </div>
- </div>
- </div>
+  <div className="grid grid-cols-2 gap-3 text-xs">
+  <div className="bg-slate-100 p-2 rounded">
+  <div className="font-semibold truncate">📊 Total SKUs</div>
+  <div className="text-lg font-bold">{store.total_skus}</div>
+  </div>
+  <div className="bg-slate-100 p-2 rounded">
+  <div className="font-semibold truncate">📈 Avg Variance</div>
+  <div className="text-lg font-bold">
+  {store.avg_variance_pct?.toFixed(1) || '0.0'}%
+  </div>
+  </div>
+  </div>
 
- <div className="space-y-2">
- <div className="flex items-center justify-between">
- <span className="text-sm font-semibold text-slate-700">Trends:</span>
- <span className="text-xs text-slate-500 whitespace-nowrap">
- Click to filter
- </span>
- </div>
- <div className="flex flex-wrap gap-1">
- {store.accelerating_count > 0 && (
- <div
- className="category-tag bg-green-100 text-green-800 border border-green-300 text-xs"
- onClick={() => onCategoryClick('Accelerating')}
- >
- 📈 Accelerating: {store.accelerating_count}
- </div>
- )}
- {store.stable_count > 0 && (
- <div
- className="category-tag bg-blue-100 text-blue-800 border border-blue-300 text-xs"
- onClick={() => onCategoryClick('Stable')}
- >
- ➡️ Stable: {store.stable_count}
- </div>
- )}
- {store.decelerating_count > 0 && (
- <div
- className="category-tag bg-orange-100 text-orange-800 border border-orange-300 text-xs"
- onClick={() => onCategoryClick('Decelerating')}
- >
- 📉 Decelerating: {store.decelerating_count}
- </div>
- )}
- </div>
- </div>
- </div>
+  <div className="space-y-2">
+  <div className="flex items-center justify-between">
+  <span className="text-sm font-semibold text-slate-700">Trends:</span>
+  <span className="text-xs text-slate-500 whitespace-nowrap">
+  Click to filter
+  </span>
+  </div>
+  <div className="flex flex-wrap gap-1">
+  {store.accelerating_count > 0 && (
+  <div
+  className="category-tag bg-green-100 text-green-800 border border-green-300 text-xs"
+  onClick={() => onCategoryClick('Accelerating')}
+  >
+  📈 Accelerating: {store.accelerating_count}
+  </div>
+  )}
+  {store.stable_count > 0 && (
+  <div
+  className="category-tag bg-blue-100 text-blue-800 border border-blue-300 text-xs"
+  onClick={() => onCategoryClick('Stable')}
+  >
+  ➡️ Stable: {store.stable_count}
+  </div>
+  )}
+  {store.decelerating_count > 0 && (
+  <div
+  className="category-tag bg-orange-100 text-orange-800 border border-orange-300 text-xs"
+  onClick={() => onCategoryClick('Decelerating')}
+  >
+  📉 Decelerating: {store.decelerating_count}
+  </div>
+  )}
+  </div>
+  </div>
+  </div>
 );
 
 // **ADDED**: New SKUDetailsPopup component
 const SKUDetailsPopup = ({ storeId, category, onClose, storeName }) => {
- const [skuDetails, setSkuDetails] = useState([]);
- const [loading, setLoading] = useState(true);
- useEffect(() => {
+  const [skuDetails, setSkuDetails] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
     const fetchSKUDetails = async () => {
     try {
     const token = localStorage.getItem("token");
@@ -317,27 +317,27 @@ const SKUDetailsPopup = ({ storeId, category, onClose, storeName }) => {
     } catch (error) { console.error('Error fetching SKU details:', error); } finally { setLoading(false); }
     };
     fetchSKUDetails();
- }, [storeId, category]);
- if (loading) return <div className="p-4 h-80 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>;
- return (
- <div className="p-4 max-h-80 overflow-y-auto min-w-[500px] bg-white">
- <div className="flex justify-between items-center mb-4">
- <div><h3 className="text-lg font-bold text-slate-800">SKU Details - {storeName}</h3>{category && category !== 'all' && <span className="text-sm text-slate-600">Filter: {category}</span>}</div>
- <button onClick={onClose} className="text-slate-500 hover:text-slate-700"><FiX size={20} /></button>
- </div>
- {skuDetails.length === 0 ? <div className="text-center py-8 text-slate-500"><FiBox className="mx-auto mb-2 text-slate-400" size={32} /><p>No SKUs found.</p></div> : (<div className="space-y-3">
- <div className="grid grid-cols-12 gap-2 text-xs font-semibold border-b pb-2 text-slate-600 bg-slate-50 p-2 rounded-t"><div className="col-span-4">SKU</div><div className="col-span-2">Current Inv</div><div className="col-span-2">Weekly Demand</div><div className="col-span-2">Weeks Left</div><div className="col-span-2">Category</div></div>
- {skuDetails.map((sku, index) => <div key={index} className="grid grid-cols-12 gap-2 text-xs border-b pb-2 last:border-b-0 hover:bg-slate-50 rounded p-1"><div className="col-span-4 font-medium text-slate-800">{sku.sku}</div><div className="col-span-2 text-slate-700">{sku.current_inventory?.toLocaleString()}</div><div className="col-span-2 text-slate-700">{sku.avg_weekly_demand?.toFixed(2)}</div><div className="col-span-2 font-bold text-slate-800">{sku.weeks_of_supply?.toFixed(1)}</div><div className="col-span-2"><span className={`category-tag text-xs`}>{sku.category}</span></div></div>)}
- </div>)}
- </div>
- );
+  }, [storeId, category]);
+  if (loading) return <div className="p-4 h-80 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>;
+  return (
+  <div className="p-4 max-h-80 overflow-y-auto min-w-[500px] bg-white">
+  <div className="flex justify-between items-center mb-4">
+  <div><h3 className="text-lg font-bold text-slate-800">SKU Details - {storeName}</h3>{category && category !== 'all' && <span className="text-sm text-slate-600">Filter: {category}</span>}</div>
+  <button onClick={onClose} className="text-slate-500 hover:text-slate-700"><FiX size={20} /></button>
+  </div>
+  {skuDetails.length === 0 ? <div className="text-center py-8 text-slate-500"><FiBox className="mx-auto mb-2 text-slate-400" size={32} /><p>No SKUs found.</p></div> : (<div className="space-y-3">
+  <div className="grid grid-cols-12 gap-2 text-xs font-semibold border-b pb-2 text-slate-600 bg-slate-50 p-2 rounded-t"><div className="col-span-4">SKU</div><div className="col-span-2">Current Inv</div><div className="col-span-2">Weekly Demand</div><div className="col-span-2">Weeks Left</div><div className="col-span-2">Category</div></div>
+  {skuDetails.map((sku, index) => <div key={index} className="grid grid-cols-12 gap-2 text-xs border-b pb-2 last:border-b-0 hover:bg-slate-50 rounded p-1"><div className="col-span-4 font-medium text-slate-800">{sku.sku}</div><div className="col-span-2 text-slate-700">{sku.current_inventory?.toLocaleString()}</div><div className="col-span-2 text-slate-700">{sku.avg_weekly_demand?.toFixed(2)}</div><div className="col-span-2 font-bold text-slate-800">{sku.weeks_of_supply?.toFixed(1)}</div><div className="col-span-2"><span className={`category-tag text-xs`}>{sku.category}</span></div></div>)}
+  </div>)}
+  </div>
+  );
 };
 
 // **ADDED**: New DemandTrendSKUDetailsPopup component
 const DemandTrendSKUDetailsPopup = ({ storeId, trendCategory, onClose, storeName }) => {
- const [skuDetails, setSkuDetails] = useState([]);
- const [loading, setLoading] = useState(true);
- useEffect(() => {
+  const [skuDetails, setSkuDetails] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
     const fetchSKUDetails = async () => {
     try {
     const token = localStorage.getItem("token");
@@ -348,20 +348,20 @@ const DemandTrendSKUDetailsPopup = ({ storeId, trendCategory, onClose, storeName
     } catch (error) { console.error('Error fetching demand trend SKU details:', error); } finally { setLoading(false); }
     };
     fetchSKUDetails();
- }, [storeId, trendCategory]);
- if (loading) return <div className="p-4 h-80 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>;
- return (
- <div className="p-4 max-h-80 overflow-y-auto min-w-[550px] bg-white">
- <div className="flex justify-between items-center mb-4">
- <div><h3 className="text-lg font-bold text-slate-800">Demand Trend SKU Details - {storeName}</h3>{trendCategory && trendCategory !== 'all' && <span className="text-sm text-slate-600">Filter: {trendCategory}</span>}</div>
- <button onClick={onClose} className="text-slate-500 hover:text-slate-700"><FiX size={20} /></button>
- </div>
- {skuDetails.length === 0 ? <div className="text-center py-8 text-slate-500"><FiBox className="mx-auto mb-2 text-slate-400" size={32} /><p>No SKUs found.</p></div> : (<div className="space-y-3">
- <div className="grid grid-cols-12 gap-2 text-xs font-semibold border-b pb-2 text-slate-600 bg-slate-50 p-2 rounded-t"><div className="col-span-3">SKU</div><div className="col-span-2">Recent Sales</div><div className="col-span-2">Forecast</div><div className="col-span-2">Trend %</div><div className="col-span-3">Category</div></div>
- {skuDetails.map((sku, index) => <div key={index} className="grid grid-cols-12 gap-2 text-xs border-b pb-2 last:border-b-0 hover:bg-slate-50 rounded p-1"><div className="col-span-3 font-medium text-slate-800">{sku.sku}</div><div className="col-span-2 text-slate-700">{parseFloat(sku.recent_avg_sales || 0).toFixed(2)}</div><div className="col-span-2 text-slate-700">{parseFloat(sku.forecast_demand || 0).toFixed(2)}</div><div className="col-span-2 font-bold text-slate-800">{parseFloat(sku.trend_percentage || 0).toFixed(1)}%</div><div className="col-span-3"><span className={`category-tag text-xs ${sku.trend_category === 'Accelerating' ? 'bg-green-100 text-green-800' : sku.trend_category === 'Stable' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>{sku.trend_category}</span></div></div>)}
- </div>)}
- </div>
- );
+  }, [storeId, trendCategory]);
+  if (loading) return <div className="p-4 h-80 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>;
+  return (
+  <div className="p-4 max-h-80 overflow-y-auto min-w-[550px] bg-white">
+  <div className="flex justify-between items-center mb-4">
+  <div><h3 className="text-lg font-bold text-slate-800">Demand Trend SKU Details - {storeName}</h3>{trendCategory && trendCategory !== 'all' && <span className="text-sm text-slate-600">Filter: {trendCategory}</span>}</div>
+  <button onClick={onClose} className="text-slate-500 hover:text-slate-700"><FiX size={20} /></button>
+  </div>
+  {skuDetails.length === 0 ? <div className="text-center py-8 text-slate-500"><FiBox className="mx-auto mb-2 text-slate-400" size={32} /><p>No SKUs found.</p></div> : (<div className="space-y-3">
+  <div className="grid grid-cols-12 gap-2 text-xs font-semibold border-b pb-2 text-slate-600 bg-slate-50 p-2 rounded-t"><div className="col-span-3">SKU</div><div className="col-span-2">Recent Sales</div><div className="col-span-2">Forecast</div><div className="col-span-2">Trend %</div><div className="col-span-3">Category</div></div>
+  {skuDetails.map((sku, index) => <div key={index} className="grid grid-cols-12 gap-2 text-xs border-b pb-2 last:border-b-0 hover:bg-slate-50 rounded p-1"><div className="col-span-3 font-medium text-slate-800">{sku.sku}</div><div className="col-span-2 text-slate-700">{parseFloat(sku.recent_avg_sales || 0).toFixed(2)}</div><div className="col-span-2 text-slate-700">{parseFloat(sku.forecast_demand || 0).toFixed(2)}</div><div className="col-span-2 font-bold text-slate-800">{parseFloat(sku.trend_percentage || 0).toFixed(1)}%</div><div className="col-span-3"><span className={`category-tag text-xs ${sku.trend_category === 'Accelerating' ? 'bg-green-100 text-green-800' : sku.trend_category === 'Stable' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>{sku.trend_category}</span></div></div>)}
+  </div>)}
+  </div>
+  );
 };
 
 // **KEPT**: Original AutoPanMarker
@@ -443,6 +443,50 @@ const Sidebar = React.memo(({ isOpen, onClose, permissions }) => {
         </div>
     );
 });
+
+// --- [NEW] Custom Tooltip for Availability Chart ---
+const CustomAvailabilityTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const availableSkus = data.eligible_count - data.oos_count;
+    const formattedLabel = new Date(label + 'T00:00:00').toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+
+    return (
+      <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-lg p-3 text-sm text-slate-300 min-w-[220px]">
+        <p className="font-bold text-white mb-2 text-base">
+          {formattedLabel}
+        </p>
+        
+        {/* Availability % (the main metric) */}
+        <p className="flex justify-between items-center text-base mb-1.5">
+          <span className="text-blue-400 font-semibold">Availability:</span>
+          <span className="font-bold text-white">{data.availability_rate.toFixed(2)}%</span>
+        </p>
+        
+        {/* Divider */}
+        <hr className="border-slate-700 my-1.5" />
+        
+        {/* # SKUs Available */}
+        <p className="flex justify-between items-center text-xs">
+          <span className="text-slate-400">SKUs Available:</span>
+          <span className="font-medium text-slate-200">{availableSkus.toLocaleString()}</span>
+        </p>
+        
+        {/* Total SKUs */}
+        <p className="flex justify-between items-center text-xs">
+          <span className="text-slate-400">Total Eligible SKUs:</span>
+          <span className="font-medium text-slate-200">{data.eligible_count.toLocaleString()}</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
 
 // --- Main Dashboard Component ---
 
@@ -707,7 +751,7 @@ function Dashboard() {
         {/* **KEPT**: Original Sidebar component */}
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} permissions={permissions} />
 
-      <main className="flex-1 p-6 transition-all duration-300">
+      <main className="flex-1 p-6 pb-24 transition-all duration-300">
         {/* **KEPT**: Original Header call (with lastUpdated and fetchDashboardData) */}
         <Header lastUpdated={data.metrics.timestamp} onRefresh={fetchDashboardData} />
 
@@ -830,14 +874,23 @@ function Dashboard() {
                             <div className="bg-slate-800 rounded-lg p-4 shadow-lg border border-slate-700 flex flex-col h-[320px]">
                                 <h3 className="text-lg font-bold text-white">SKU Availability Rate</h3><p className="text-sm text-slate-400 mb-4 flex-shrink-0">Weekly historical availability.</p>
                                 <div className="w-full flex-1">
-                                    <ResponsiveContainer width="100%" height="100%"><BarChart data={availabilityData} margin={{ top: 5, right: 20, left: -15, bottom: 5 }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                      <BarChart data={availabilityData} margin={{ top: 5, right: 20, left: -15, bottom: 5 }}>
                                         <defs><linearGradient id="availGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#38bdf8" stopOpacity={0.8} /><stop offset="95%" stopColor="#38bdf8" stopOpacity={0.1} /></linearGradient></defs>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#2a3a56" />
                                         <XAxis dataKey="week_start" stroke="#9ca3af" tick={{ fontSize: 12 }} tickFormatter={(label) => new Date(label + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} />
                                         <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={[0, 100]} tickFormatter={(tick) => `${tick}%`} />
-                                        <RechartsTooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.5rem' }} labelStyle={{ color: '#e2e8f0' }} formatter={(value) => [`${value.toFixed(2)}%`, "Availability"]} cursor={{ fill: 'rgba(100, 116, 139, 0.2)' }} />
+                                        
+                                        {/* --- [MODIFIED] --- */}
+                                        <RechartsTooltip 
+                                            content={<CustomAvailabilityTooltip />} 
+                                            cursor={{ fill: 'rgba(100, 116, 139, 0.2)' }} 
+                                        />
+                                        {/* --- [END MODIFIED] --- */}
+
                                         <Bar dataKey="availability_rate" name="Availability Rate" fill="url(#availGrad)" radius={[4, 4, 0, 0]} />
-                                    </BarChart></ResponsiveContainer>
+                                      </BarChart>
+                                    </ResponsiveContainer>
                                 </div>
                             </div>
                         </motion.div>
