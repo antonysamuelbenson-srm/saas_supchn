@@ -66,3 +66,77 @@ Buffer for demand spikes: 20% cushion for unexpected orders
 Reorder timing: Gives time to restock before hitting capacity
 Operational efficiency: Sweet spot between stock availability and storage costs
 Safety margin: Prevents stockouts during supply delays
+
+
+<br />
+
+## Chatbot
+
+### Switching between LLM providers
+
+Configuring & Switching LLM Providers
+
+This backend supports multiple LLM providers for SQL generation and NLP tasks:
+
+* OpenAI : gpt-4o-mini
+* Groq : llama-3.1-8b-instant
+* Google Gemini : gemini-pro-latest
+
+1. Set API Keys in .env
+Add provider keys to the .env file:
+
+env
+```
+LLM_PROVIDER=groq   # or "gemini" or "openai"
+
+GROQ_API_KEY=your_groq_key
+GEMINI_API_KEY=your_gemini_key
+OPENAI_API_KEY=your_openai_key
+``` 
+
+2. Switching Providers
+To switch the active LLM provider, simply update the LLM_PROVIDER value in your .env file:
+
+env
+```
+LLM_PROVIDER=groq
+```
+or
+
+env
+```
+LLM_PROVIDER=gemini
+```
+or
+
+env
+```
+LLM_PROVIDER=openai
+```
+
+3. How It Works
+The provider is automatically selected at runtime based on the LLM_PROVIDER environment variable.
+
+The logic resides in:
+app/services/llm_providers/__init__.py
+
+```
+from app.config import LLM_PROVIDER
+
+if LLM_PROVIDER == "gemini":
+    from .gemini import call_llm
+elif LLM_PROVIDER == "groq":
+    from .groq import call_llm
+elif LLM_PROVIDER == "openai":
+    from .openai_llm import call_llm
+else:
+    raise ValueError(f"Unsupported LLM: {LLM_PROVIDER}")
+```
+Whichever provider is set in .env becomes active instantly upon server restart
+
+### In order to update the knowledge base
+* make necessary change in backend/app/knowledge
+* run the following command to ingest the updates in knowledge base to chroma db
+  ```
+  python -m app.knowledge.chroma_ingest
+  ```
