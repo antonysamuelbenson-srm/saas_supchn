@@ -89,13 +89,13 @@ env
 ```
 LLM_PROVIDER=groq   # or "gemini" or "openai"
 
-GROQ_API_KEY=your_groq_key
-GEMINI_API_KEY=your_gemini_key
-OPENAI_API_KEY=your_openai_key
+GROQ_API_KEY=groq_key
+GEMINI_API_KEY=gemini_key
+OPENAI_API_KEY=openai_key
 ``` 
 
 2. Switching Providers
-To switch the active LLM provider, simply update the LLM_PROVIDER value in your .env file:
+To switch the active LLM provider, simply update the LLM_PROVIDER value in .env file:
 
 env
 ```
