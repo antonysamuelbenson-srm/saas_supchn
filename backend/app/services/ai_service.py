@@ -426,12 +426,13 @@ def log_to_db(
 
     insert_sql = text("""
         INSERT INTO query_logs
-        (timestamp, user_query, retrieved_context, generated_sql, input_tokens, output_tokens, final_answer, error, feedback)
-        VALUES (:ts, :user_query, :context, :sql, :input_tokens, :output_tokens, :answer, :error, :feedback)
+        (timestamp, llm_provider, user_query, retrieved_context, generated_sql, input_tokens, output_tokens, final_answer, error, feedback)
+        VALUES (:ts, :llm_provider, :user_query, :context, :sql, :input_tokens, :output_tokens, :answer, :error, :feedback)
     """)
     with engine.begin() as conn:
         conn.execute(insert_sql, {
             "ts": datetime.utcnow(),
+            "llm_provider": LLM_PROVIDER,
             "user_query": user_query,
             "context": context,
             "sql": sql,
