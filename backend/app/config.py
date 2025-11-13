@@ -11,6 +11,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # DB Settings
 DATABASE_URL = os.getenv("DATABASE_URL")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
+
 SECRET_KEY = os.getenv("SECRET_KEY")
-ANON_KEY = os.getenv("ANON_KEY")
+

@@ -5,7 +5,6 @@ from sqlalchemy import func,text
 import uuid
 import pickle
 from app import db
-from supabase import create_client
 from app.utils.jwt_utils import decode_jwt
 from app.utils.decorators import role_required
 from app.services.forecast_service import run_manual_forecast, run_full_training_and_save
@@ -25,7 +24,7 @@ bp = Blueprint("forecast", __name__)
 
 
 # Supabase client
-supabase = create_client(os.environ["SUPABASE_URL"], os.environ["ANON_KEY"])
+from app.utils.supabase_adapter import supabase
 
 @bp.route("/forecast/store/<int:store_id>", methods=["GET"])
 @role_required

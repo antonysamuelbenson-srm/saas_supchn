@@ -308,7 +308,7 @@ import axios from "axios";
 import Select from "react-select";
 
 // --- Configuration ---
-const BASE_URL = "http://127.0.0.1:5500";
+const BASE_URL = "http://127.0.0.1:5001";
 const token = localStorage.getItem("token");
 
 // --- Reusable Hooks ---

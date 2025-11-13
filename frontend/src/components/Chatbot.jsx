@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 // --- MODIFICATION 1: Imported new icons for feedback ---
 import { FiX, FiSend, FiCpu, FiThumbsUp, FiThumbsDown } from 'react-icons/fi';
 
-const BASE_URL = "http://localhost:5500";
+const BASE_URL = "http://localhost:5001";
 
 const dotVariants = {
     initial: { y: "0%" },

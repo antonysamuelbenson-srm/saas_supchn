@@ -11,9 +11,7 @@ from app.utils.decorators import role_required
 load_dotenv()
 
 # Supabase initialization
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-ANON_KEY = os.getenv("ANON_KEY")
-supabase: Client = create_client(SUPABASE_URL, ANON_KEY)
+from app.utils.supabase_adapter import supabase
 
 # Flask Blueprint
 bp = Blueprint("node_location_update", __name__)

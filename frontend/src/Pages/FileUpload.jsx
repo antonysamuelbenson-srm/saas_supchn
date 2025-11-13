@@ -159,7 +159,7 @@ import {
 import { motion } from "framer-motion";
 
 // --- Configuration ---
-const BASE_URL = "http://localhost:5500";
+const BASE_URL = "http://localhost:5001";
 
 // --- Layout Components (Copied from Dashboard/Admin pages) ---
 

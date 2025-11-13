@@ -11,7 +11,7 @@ import AccuracyDashboard from './AccuracyDashboard';
 import Chatbot from '../components/Chatbot';
 
 // --- API Configuration ---
-const API_BASE_URL = 'http://127.0.0.1:5500';
+const API_BASE_URL = 'http://127.0.0.1:5001';
 
 // ✨ Animation variants for panels
 const panelVariants = {

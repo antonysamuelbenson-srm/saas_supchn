@@ -17,7 +17,7 @@ import {
 import Chatbot from '../components/Chatbot';
 import EdgeAwareTooltipMarker from "./EdgeAwareTooltipMarker";
 
-const BASE_URL = "http://localhost:5500";
+const BASE_URL = "http://localhost:5001";
 
 // --- Leaflet & Map Helper Components (Defined ONCE) ---
 

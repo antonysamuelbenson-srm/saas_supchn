@@ -1137,7 +1137,7 @@ import { FiTrendingUp, FiCpu, FiTarget, FiAlertCircle, FiRefreshCw } from 'react
 import Select from 'react-select';
 import HierarchicalTable from './HierarchicalTable'; // Make sure this component exists
 
-const API_BASE_URL = 'http://127.0.0.1:5500';
+const API_BASE_URL = 'http://127.0.0.1:5001';
 
 // --- Helper Components ---
 const LoadingSpinner = () => (

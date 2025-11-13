@@ -4,15 +4,12 @@ import os
 import json
 from datetime import date
 from dotenv import load_dotenv
-from supabase import create_client, Client
 from io import StringIO
 import csv
 from tabulate import tabulate
 
 load_dotenv()
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("ANON_KEY")
-supabase: Client = create_client(url, key)
+from app.utils.supabase_adapter import supabase
 
 from pathlib import Path
 
