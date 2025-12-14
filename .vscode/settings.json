@@ -1,5 +1,23 @@
 {
     "python-envs.defaultPackageManager": "ms-python.python:conda",
     "python-envs.pythonProjects": [],
-    "python-envs.defaultEnvManager": "ms-python.python:conda"
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "sqltools.connections": [
+        {
+            "pgOptions": {
+                "ssl": {
+                    "rejectUnauthorized": true
+                }
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "sshOptions": {
+                "port": 22
+            },
+            "server": "localhost",
+            "driver": "PostgreSQL",
+            "name": "srmist_inv_db",
+            "connectString": "postgresql://srmist_inv:R8nX2mG9qL5cT1Vp@srmist.cjwqmm4a21xa.ap-south-1.rds.amazonaws.com:5432/srmist_inv_db"
+        }
+    ]
 }
