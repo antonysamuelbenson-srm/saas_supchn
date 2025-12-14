@@ -247,3 +247,95 @@ def hovered_store_stats(store_id):
         "forecast_units": int(round(total_forecast_units)),
         "alerts": alert_count
     }), 200
+
+
+    # ────────────────────────────────────────────────────────────────
+# 5️⃣ GET /store/<id>/with-alert-status (Missing Endpoint)
+# ────────────────────────────────────────────────────────────────
+@bp.route("/store/<int:store_id>/with-alert-status", methods=["GET"])
+@role_required
+def get_store_alert_status_route(store_id):
+    """
+    Returns alert statistics for a specific store.
+    """
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    payload = decode_jwt(token)
+    if not payload.get("role_user_id"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    # Fetch alerts for this store from the DB
+    alerts = (
+        supabase.table("alert")
+        .select("type")
+        .eq("store_id", str(store_id))
+        .execute()
+        .data or []
+    )
+
+    # Count specific alert types
+    reorders = sum(1 for a in alerts if a["type"] == "Reorder Needed")
+    stockouts = sum(1 for a in alerts if a["type"] == "Stockout Despite Reorder")
+    
+    # "alert" is true if there are ANY alerts
+    has_alert = len(alerts) > 0
+
+    return jsonify({
+        "store_id": store_id,
+        "num_skus_to_reorder": reorders,
+        "num_skus_stockout_despite_reorder": stockouts,
+        "alert": has_alert
+    }), 200
+
+
+# ────────────────────────────────────────────────────────────────
+# 6️⃣ GET /stores/with-alert-status (Missing Endpoint for Map)
+# ────────────────────────────────────────────────────────────────
+@bp.route("/stores/with-alert-status", methods=["GET"])
+@role_required
+def get_all_stores_alert_status():
+    """
+    Returns alert statistics for ALL stores.
+    """
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    payload = decode_jwt(token)
+    if not payload.get("role_user_id"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    # Fetch all active alerts
+    all_alerts = (
+        supabase.table("alert")
+        .select("store_id, type")
+        .execute()
+        .data or []
+    )
+
+    # Aggregate by store
+    store_stats = {}
+    
+    for a in all_alerts:
+        sid = int(a["store_id"])
+        if sid not in store_stats:
+            store_stats[sid] = {"reorders": 0, "stockouts": 0}
+        
+        if a["type"] == "Reorder Needed":
+            store_stats[sid]["reorders"] += 1
+        elif a["type"] == "Stockout Despite Reorder":
+            store_stats[sid]["stockouts"] += 1
+
+    # Format result list
+    results = []
+    # We need a list of all stores to ensure we return 0s for stores with no alerts
+    all_stores_rows = supabase.table("store_data").select("store_id").execute().data or []
+    
+    for s in all_stores_rows:
+        sid = int(s["store_id"])
+        stats = store_stats.get(sid, {"reorders": 0, "stockouts": 0})
+        
+        results.append({
+            "store_id": sid,
+            "num_skus_to_reorder": stats["reorders"],
+            "num_skus_stockout_despite_reorder": stats["stockouts"],
+            "alert": (stats["reorders"] > 0 or stats["stockouts"] > 0)
+        })
+
+    return jsonify(results), 200

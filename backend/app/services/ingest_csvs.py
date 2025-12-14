@@ -379,7 +379,7 @@ import io
 import pandas as pd
 from sqlalchemy import text
 
-def bulk_upload_inventory_csv(file_path: Path, role_user_id: uuid.UUID) -> None:
+def bulk_upload_inventory_csv(file_path: Path, role_user_id: UUID) -> None:
     """
     Simple bulk insert without touching triggers
     """

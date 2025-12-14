@@ -7,7 +7,7 @@ from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
 from app import db
 from app.models.store import Store
-from app.services.ingest_csvs import ingest_csv_files
+from app.services.ingest_csvs import ingest_csv_files, bulk_upload_inventory_csv
 from app.utils.jwt_utils import decode_jwt
 from app.utils.threshold_calc import update_reorder_config 
 from app.utils.decorators import role_required

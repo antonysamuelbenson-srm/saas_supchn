@@ -179,6 +179,7 @@ const ResetMapViewButton = ({ locations }) => {
 };
 
 // **ADDED**: New MapFilterControl component
+// **ADDED**: New MapFilterControl component
 const MapFilterControl = ({ selectedCategory, onCategoryChange, storeCounts, filterType }) => {
   const categories = [
     { key: 'all', label: 'All Stores', bgColor: '#6b7280', icon: '🏪' },
@@ -200,12 +201,30 @@ const MapFilterControl = ({ selectedCategory, onCategoryChange, storeCounts, fil
 
   return (
     <div className="absolute top-3 left-3 z-[1000] map-filter-control">
-    <div className="flex items-center space-x-2 mb-2"><FiFilter size={16} className="text-slate-600" /><span className="text-sm font-semibold text-slate-800">{filterLabel}</span></div>
-    <div className="space-y-1">
-    {categoryList.map(category => (<button key={category.key} onClick={() => onCategoryChange(category.key)} className={`filter-btn ${selectedCategory === category.key ? 'active' : ''}`} style={{ backgroundColor: selectedCategory === category.key ? category.bgColor : 'transparent', color: selectedKategor.key ? 'white' : category.bgColor, border: `1px solid ${category.bgColor}` }}>
-    <div className="flex items-center"><span className="mr-2">{category.icon}</span><span>{category.label}</span></div><span className="text-xs opacity-80">{storeCounts[category.key] || 0}</span></button>
-    ))}
-    </div>
+      <div className="flex items-center space-x-2 mb-2">
+        <FiFilter size={16} className="text-slate-600" />
+        <span className="text-sm font-semibold text-slate-800">{filterLabel}</span>
+      </div>
+      <div className="space-y-1">
+        {categoryList.map(category => (
+          <button 
+            key={category.key} 
+            onClick={() => onCategoryChange(category.key)} 
+            className={`filter-btn ${selectedCategory === category.key ? 'active' : ''}`} 
+            style={{ 
+              backgroundColor: selectedCategory === category.key ? category.bgColor : 'transparent', 
+              color: selectedCategory === category.key ? 'white' : category.bgColor, // <--- FIXED HERE
+              border: `1px solid ${category.bgColor}` 
+            }}
+          >
+            <div className="flex items-center">
+              <span className="mr-2">{category.icon}</span>
+              <span>{category.label}</span>
+            </div>
+            <span className="text-xs opacity-80">{storeCounts[category.key] || 0}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 };
