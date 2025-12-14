@@ -45,18 +45,52 @@ def load_products_from_db():
         pl.col("store_id").cast(pl.Utf8), pl.col("sku").cast(pl.Utf8)
     ])
 
-def load_regressors_from_db():
-    hol = pl.from_pandas(df_query("SELECT date, is_holiday FROM holidays")) \
-            .with_columns(pl.col("date").cast(pl.Date),
-                          pl.col("is_holiday").cast(pl.Int8))
-    wth = pl.from_pandas(df_query("SELECT date, store_id, temperature FROM weather")) \
-            .with_columns(pl.col("date").cast(pl.Date),
-                          pl.col("store_id").cast(pl.Utf8))
-    eco = pl.from_pandas(df_query(
-        "SELECT date, fuel_price, cpi, unemployment FROM economic_indicators"
-    )).with_columns(pl.col("date").cast(pl.Date))
-    return hol, wth, eco
+# def load_regressors_from_db():
+#     hol = pl.from_pandas(df_query("SELECT date, is_holiday FROM holidays")) \
+#             .with_columns(pl.col("date").cast(pl.Date),
+#                           pl.col("is_holiday").cast(pl.Int8))
+#     wth = pl.from_pandas(df_query("SELECT date, store_id, temperature FROM weather")) \
+#             .with_columns(pl.col("date").cast(pl.Date),
+#                           pl.col("store_id").cast(pl.Utf8))
+#     eco = pl.from_pandas(df_query(
+#         "SELECT date, fuel_price, cpi, unemployment FROM economic_indicators"
+#     )).with_columns(pl.col("date").cast(pl.Date))
+#     return hol, wth, eco
 
+def load_regressors_from_db():
+    # --- OLD CODE (Comment this out) ---
+    # hol = pl.from_pandas(df_query("SELECT date, is_holiday FROM holidays")) ...
+    # wth = pl.from_pandas(df_query("SELECT date, store_id, temperature FROM weather")) ...
+    # eco = pl.from_pandas(df_query("SELECT date, fuel_price, cpi, unemployment FROM economic_indicators"))...
+    
+    # --- NEW TEMPORARY CODE ---
+    # Return empty polars DataFrames with the expected schema
+    hol = pl.DataFrame({
+        "date": [], 
+        "is_holiday": []
+    }).with_columns([
+        pl.col("date").cast(pl.Date), 
+        pl.col("is_holiday").cast(pl.Int8)
+    ])
+
+    wth = pl.DataFrame({
+        "date": [], 
+        "store_id": [], 
+        "temperature": []
+    }).with_columns([
+        pl.col("date").cast(pl.Date), 
+        pl.col("store_id").cast(pl.Utf8)
+    ])
+
+    eco = pl.DataFrame({
+        "date": [], 
+        "fuel_price": [], 
+        "cpi": [], 
+        "unemployment": []
+    }).with_columns([pl.col("date").cast(pl.Date)])
+
+    return hol, wth, eco
+    
 def preprocess(df: pl.DataFrame) -> pl.DataFrame:
     df = df.with_columns([
         pl.col("store_id").cast(pl.Utf8),

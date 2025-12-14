@@ -26,12 +26,82 @@ bp = Blueprint("forecast", __name__)
 # Supabase client
 from app.utils.supabase_adapter import supabase
 
+# @bp.route("/forecast/store/<int:store_id>", methods=["GET"])
+# @role_required
+# def forecast_for_store(store_id):
+#     """
+#     Returns forecast data for a specific store — grouped by SKU & date.
+#     Accepts optional query param: days=7 (lookahead days)
+#     """
+#     token = request.headers.get("Authorization", "").replace("Bearer ", "")
+#     payload = decode_jwt(token)
+#     role_user_id = payload.get("role_user_id")
+
+#     if not role_user_id:
+#         return jsonify({"error": "Unauthorized"}), 401
+
+#     # STEP 1: Check query param or fallback to stored setting
+#     days_param = request.args.get("days")
+#     if days_param is not None:
+#         try:
+#             days = int(days_param)
+#         except ValueError:
+#             return jsonify({"error": "Invalid 'days' parameter"}), 400
+#     else:
+#         # Get stored lookahead_days from Supabase user profile
+#         user_profile = (
+#             supabase.table("user")
+#             .select("lookahead_days")
+#             .eq("role_user_id", role_user_id)
+#             .maybe_single()
+#             .execute()
+#         ).data
+#         days = int(user_profile.get("lookahead_days", 7))  # default to 7 if not found
+
+#     # STEP 2: Check if store belongs to this user
+#     store_check = (
+#         supabase.table("store_data")
+#         .select("store_id")
+#         .eq("store_id", store_id)
+#         .maybe_single()
+#         .execute()
+#     ).data
+
+#     if not store_check:
+#         return jsonify({"error": "Store not found"}), 404
+
+#     # STEP 3: Get forecast within range
+#     today = date.today()
+#     end_date = today + timedelta(days=days)
+
+#     forecast_rows = (
+#         supabase.table("forecast_daily")
+#         .select("forecast_date,sku,forecast_qty")
+#         .eq("store_id", store_id)
+#         .gte("forecast_date", today.isoformat())
+#         .lte("forecast_date", end_date.isoformat())
+#         .order("forecast_date")
+#         .execute()
+#     ).data or []
+
+#     forecast_data = defaultdict(list)
+#     for row in forecast_rows:
+#         forecast_data[row["sku"]].append({
+#             "date": row["forecast_date"],
+#             "forecast_qty": float(row["forecast_qty"])
+#         })
+
+#     return jsonify({
+#         "store_id": store_id,
+#         "forecast": forecast_data
+#     }), 200
+
 @bp.route("/forecast/store/<int:store_id>", methods=["GET"])
 @role_required
 def forecast_for_store(store_id):
     """
     Returns forecast data for a specific store — grouped by SKU & date.
-    Accepts optional query param: days=7 (lookahead days)
+    Refactored to use native SQLAlchemy instead of Supabase adapter.
     """
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
     payload = decode_jwt(token)
@@ -40,55 +110,48 @@ def forecast_for_store(store_id):
     if not role_user_id:
         return jsonify({"error": "Unauthorized"}), 401
 
-    # STEP 1: Check query param or fallback to stored setting
+    # STEP 1: Determine Lookahead Days
+    # logic: Try query param -> Try DB user profile -> Default to 7
+    days = 7
     days_param = request.args.get("days")
+    
     if days_param is not None:
         try:
             days = int(days_param)
         except ValueError:
             return jsonify({"error": "Invalid 'days' parameter"}), 400
     else:
-        # Get stored lookahead_days from Supabase user profile
-        user_profile = (
-            supabase.table("user")
-            .select("lookahead_days")
-            .eq("role_user_id", role_user_id)
-            .maybe_single()
-            .execute()
-        ).data
-        days = int(user_profile.get("lookahead_days", 7))  # default to 7 if not found
+        # Fetch from User table using SQLAlchemy
+        user = User.query.filter_by(role_user_id=role_user_id).first()
+        if user and user.lookahead_days:
+            days = int(user.lookahead_days)
 
-    # STEP 2: Check if store belongs to this user
-    store_check = (
-        supabase.table("store_data")
-        .select("store_id")
-        .eq("store_id", store_id)
-        .maybe_single()
-        .execute()
-    ).data
-
-    if not store_check:
+    # STEP 2: Check if store exists
+    # Using the Store model imported at top of file
+    store = Store.query.filter_by(store_id=store_id).first()
+    if not store:
         return jsonify({"error": "Store not found"}), 404
 
     # STEP 3: Get forecast within range
     today = date.today()
     end_date = today + timedelta(days=days)
 
+    # Using the Forecast model (table: 'predict' or 'forecast')
+    # Mapping columns: forecast_date -> date, sku -> product_id, forecast_qty -> predicted
     forecast_rows = (
-        supabase.table("forecast_daily")
-        .select("forecast_date,sku,forecast_qty")
-        .eq("store_id", store_id)
-        .gte("forecast_date", today.isoformat())
-        .lte("forecast_date", end_date.isoformat())
-        .order("forecast_date")
-        .execute()
-    ).data or []
+        db.session.query(Forecast)
+        .filter(Forecast.store_id == str(store_id))  # Ensure string comparison if DB store_id is string
+        .filter(Forecast.date >= today)
+        .filter(Forecast.date <= end_date)
+        .order_by(Forecast.date)
+        .all()
+    )
 
     forecast_data = defaultdict(list)
     for row in forecast_rows:
-        forecast_data[row["sku"]].append({
-            "date": row["forecast_date"],
-            "forecast_qty": float(row["forecast_qty"])
+        forecast_data[row.product_id].append({
+            "date": row.date.isoformat() if isinstance(row.date, (date, datetime)) else row.date,
+            "forecast_qty": float(row.predicted)
         })
 
     return jsonify({
