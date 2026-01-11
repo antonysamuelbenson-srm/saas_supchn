@@ -10,9 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@elfalem/leaflet-curve": "^0.9.2",
     "axios": "^1.10.0",
+    "cors": "^2.8.5",
     "framer-motion": "^12.18.1",
     "leaflet": "^1.9.4",
+    "leaflet-polylinedecorator": "^1.6.0",
     "lucide-react": "^0.515.0",
     "mdb-react-ui-kit": "^9.0.0",
     "mdb-ui-kit": "^9.1.0",

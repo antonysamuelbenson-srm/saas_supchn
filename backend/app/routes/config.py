@@ -17,30 +17,6 @@ FORMULAS = {
     "conservative": "reorder_point = (avg_daily_usage × lead_time) + 2 × safety_stock"
 }
 
-
-# # 🚩 Add a new node (store/warehouse)
-# @bp.route("/nodes", methods=["POST"])
-# def add_node():
-#     try:
-#         token = request.headers.get("Authorization", "").replace("Bearer ", "")
-#         payload = decode_jwt(token)
-#         role_user_id = payload.get("role_user_id")
-
-#         data = request.json
-#         node = Node(
-#             name=data["name"],
-#             type=data["type"],
-#             role_user_id=role_user_id  # optional
-#         )
-#         db.session.add(node)
-#         db.session.commit()
-#         return jsonify({"msg": "Node added"}), 200
-
-#     except Exception as e:
-#         db.session.rollback()
-#         return jsonify({"error": str(e)}), 500
-
-
 # 🚩 Recalculate thresholds (default formula)
 @bp.route("/config/recalculate-thresholds", methods=["POST"])
 @role_required
@@ -83,7 +59,7 @@ def apply_formula():
             return jsonify({"error": "Invalid formula choice"}), 400
 
         updated = update_reorder_config(None, formula=chosen_formula, store_ids=store_ids)
-        alerts_count = generate_alerts(None)
+        alerts_count = generate_alerts()
 
 
         return jsonify({

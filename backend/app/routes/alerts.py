@@ -57,7 +57,7 @@ def refresh_alerts():
     Alert.query.delete()
     db.session.commit()
 
-    inserted = generate_alerts(uid)
+    inserted = generate_alerts()
     return jsonify({"inserted": inserted}), 200
 
 

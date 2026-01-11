@@ -7,3 +7,11 @@ pandas
 psycopg2-binary
 flask_cors
 supabase
+lightgbm
+mlforecast
+python-Levenshtein
+pulp
+groq
+chromadb
+onnxruntime
+polars

@@ -11,6 +11,8 @@ from app.services.ingest_csvs import ingest_csv_files
 from app.utils.jwt_utils import decode_jwt
 from app.utils.threshold_calc import update_reorder_config 
 from app.utils.decorators import role_required
+import logging
+logger = logging.getLogger(__name__)
 
 
 bp = Blueprint("upload", __name__, url_prefix="/api/upload")
@@ -22,9 +24,10 @@ REQUIRED_COLS = {
     ],
     "inventory": ["snapshot_date", "store_code", "sku", "qty", "product_name"],
     "forecast":  ["forecast_date", "store_code", "sku", "forecast_qty"],
-    "total_store_data": ["node_name", "sku", "safety_stock_level", "reorder_level"],
-    "transfer_cost_data": ["start_location", "end_location", "transfer_cost"],
-    "warehouse_max_data": ["store_id", "warehouse_name", "max_capacity"]
+    "total_store_data": ["store_code", "sku", "safety_stock_level", "reorder_level"],
+    "transfer_cost_data": ["start_location", "end_location", "transfer_cost","lead_time"],
+    "capacity": ["store_id", "warehouse_name", "max_capacity"],
+    "sales": ["date", "store_id", "units_sold", "sku"]
 }
 
 # ─────────────────────── helpers ───────────────────────────────────────
@@ -43,6 +46,10 @@ def _validate_csv(df: pd.DataFrame, btype: str, role_user_id: uuid.UUID) -> List
         unknown = set(df["store_code"].unique()) - _fetch_store_codes()
         if unknown:
             errors.append(f"unknown store_code(s): {', '.join(unknown)}")
+    if not errors and btype == "sales":
+        unknown = set(df["store_id"].unique()) - _fetch_store_codes()
+        if unknown:
+            errors.append(f"unknown store_id (Store Code) in sales CSV: {', '.join(unknown)}")
     return errors
 
 def _handle_upload(btype: str):
@@ -59,34 +66,56 @@ def _handle_upload(btype: str):
     f = request.files["file"]
 
     try:
-        df = pd.read_csv(f)
+        # Read just the first row to validate structure
+        df_sample = pd.read_csv(f, nrows=1)
         f.seek(0)
+        
+        # Validate with sample
+        errs = _validate_csv(df_sample, btype, role_user_id)
+        if errs:
+            return jsonify({"valid": False, "errors": errs}), 400
+            
     except Exception as e:
         return jsonify({"error": f"Could not parse CSV ({e})"}), 400
 
-    errs = _validate_csv(df, btype, role_user_id)
-    if errs:
-        return jsonify({"valid": False, "errors": errs}), 400
-
-    # ---- save + ingest ------------------------------------------------
+    # ---- save + process -----------------------------------------------
     filename = secure_filename(f.filename) or "upload.csv"
-    f.seek(0)
-    with tempfile.NamedTemporaryFile(suffix=f"_{filename}", delete=False) as tmp:
-        tmp.write(f.read())
-        tmp_path = Path(tmp.name)
-
-
+    
     try:
-        ingest_csv_files([tmp_path], role_user_id,btype)
-        update_reorder_config(role_user_id, formula="default",store_ids=None)
+        # Save the uploaded file temporarily
+        with tempfile.NamedTemporaryFile(suffix=f"_{filename}", delete=False) as tmp:
+            f.save(tmp.name)
+            tmp_path = Path(tmp.name)
+
+        # Use different methods based on file type
+        if btype == "inventory":
+            try:
+                # Use the simple bulk insert (no trigger disabling)
+                bulk_upload_inventory_csv(tmp_path, role_user_id)
+                
+                # Update reorder config after successful upload
+                update_reorder_config(role_user_id, formula="default", store_ids=None)
+                
+            except Exception as exc:
+                db.session.rollback()
+                return jsonify({"error": str(exc)}), 400
+        else:
+            # Use existing method for other file types
+            try:
+                ingest_csv_files([tmp_path], role_user_id, btype)
+            except Exception as exc:
+                db.session.rollback()
+                return jsonify({"error": str(exc)}), 400
+        
+        return jsonify({"status": "success"}), 201
+
     except Exception as exc:
         db.session.rollback()
-        tmp_path.unlink(missing_ok=True)
+        logger.error(f"Upload failed: {exc}")
         return jsonify({"error": str(exc)}), 400
     finally:
+        # Clean up temporary file
         tmp_path.unlink(missing_ok=True)
-
-    return jsonify({"status": "success"}), 201
 
 # ─────────────────────── routes ────────────────────────────────────────
 @bp.post("/store")
@@ -114,8 +143,12 @@ def upload_totalStore_Data():
 def upload_transferCost_Data():
     return _handle_upload("transfer_cost_data")
 
-@bp.post("/warehouseMaxData")
+@bp.post("/capacity")
 @role_required
 def upload_warehouse_max_data():
-    return _handle_upload("warehouse_max_data")
+    return _handle_upload("capacity")
 
+@bp.post("/sales")
+@role_required
+def upload_sales_data():
+    return _handle_upload("sales")

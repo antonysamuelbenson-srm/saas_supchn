@@ -29,6 +29,20 @@ ROUTE_ROLE_MAP = {
     "GET:/forecast/store/<int:store_id>":  ["admin", "editor", "viewer"],
     "GET:/user/lookahead_days":              ["admin", "editor", "viewer"],
     "POST:/user/lookahead_days":             ["admin", "editor", "viewer"],
+    "POST:/forecast/schedule/horizon": ["admin", "editor"],
+    "POST:/forecast/schedule": ["admin", "editor", "viewer"],
+    "GET:/forecast/schedule": ["admin", "editor", "viewer"],
+    "POST:/forecast/run": ["admin", "editor", "viewer"],
+    "GET:/forecast/store-level": ["admin", "editor", "viewer"],
+    "GET:/forecast/sku-level": ["admin", "editor", "viewer"],
+    "GET:/forecast/accuracy/store": ["admin", "editor", "viewer"],
+    "GET:/forecast/accuracy/sku": ["admin", "editor", "viewer"],
+    "GET:/forecast/chart-data": ["admin", "editor", "viewer"],
+    "POST:/forecast/weekly": ["admin", "editor", "viewer"],
+    "GET:/forecast/logs": ["admin", "editor", "viewer"],
+    "GET:/forecast/accuracy/overall": ["admin", "editor", "viewer"],
+    "GET:/forecast/accuracy/detail": ["admin", "editor", "viewer"],
+    "GET:/forecast/accuracy":              ["admin", "editor", "viewer"],
 
     # --- Store ---
     "POST:/store_upload":               ["admin", "editor"],
@@ -38,17 +52,19 @@ ROUTE_ROLE_MAP = {
     "GET:/stores/with-alert-status":               ["admin", "editor", "viewer"],
     "GET:/store/<int:store_id>/with-alert-status": ["admin", "editor", "viewer"],
 
+    # -----display all skus  -----
+    "GET:/skus":                       ["admin", "editor", "viewer"],
+
     # --- Node Location Update ---
     "POST:/update_store":               ["admin", "editor"],
 
     # --- Reorder ---
-    "GET:/reorder/generate": ["admin", "editor", "viewer"],   # View reorder suggestions (centralized for all)
+    "GET:/reorder/generate": ["admin", "editor", "viewer"],
     "POST:/reorder/place":      ["admin", "editor"],
 
     # ----Availability rate----
     "GET:/availability": ["admin", "editor","viewer"],
     "POST:/availability/recompute" : ["admin", "editor"],
-
 
     # --- Uploads ---
     "POST:/api/upload/store":                ["admin", "editor", "viewer"],
@@ -56,8 +72,35 @@ ROUTE_ROLE_MAP = {
     "POST:/api/upload/forecast":             ["admin", "editor", "viewer"],
     "POST:/api/upload/totalStoreData":       ["admin", "editor", "viewer"],
     "POST:/api/upload/transferCostData":     ["admin", "editor", "viewer"],
-    "POST:/api/upload/warehouseMaxData":     ["admin", "editor", "viewer"],
+    "POST:/api/upload/capacity":     ["admin", "editor", "viewer"],
 
-    "GET:/user/permissions": ["admin", "editor", "viewer"]
+    "GET:/user/permissions": ["admin", "editor", "viewer"],
 
+    # --- Rebalancer ---
+    "POST:/api/rebalance": ["admin"],
+    "GET:/api/rebalance/stores": ["admin", "editor"],
+    "POST:/api/rebalance/download": ["admin"],
+
+    # --- Weeks of Supply Filter ---
+    "GET:/api/weeks-of-supply/store-summary": ["admin", "editor", "viewer"],
+    "GET:/api/weeks-of-supply/sku-details/<int:store_id>": ["admin", "editor", "viewer"],
+    "POST:/api/weeks-of-supply/refresh": ["admin", "editor"],
+    "GET:/api/weeks-of-supply/categories": ["admin", "editor", "viewer"],
+
+    # --- Demand Trend Analysis ---
+    "GET:/api/demand-trend/store-summary": ["admin", "editor", "viewer"],
+    "GET:/api/demand-trend/sku-details/<int:store_id>": ["admin", "editor", "viewer"],
+    "POST:/api/demand-trend/refresh": ["admin", "editor"],
+    "GET:/api/demand-trend/categories": ["admin", "editor", "viewer"],
+
+    # ---Store Inventory Summary Filter ---
+    "GET:/store_inventory_summary": ["admin", "editor", "viewer"],
+    "POST:/chat": ["admin", "editor", "viewer"]
 }
+    # ---filters ---
+
+    
+    
+    
+
+

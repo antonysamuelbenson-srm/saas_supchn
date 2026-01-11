@@ -1,11 +1,13 @@
 import requests
 import getpass
 import os
-import json, uuid
+import json
 from datetime import date
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from app.routes import forecast_data
+from io import StringIO
+import csv
+from tabulate import tabulate
 
 load_dotenv()
 url: str = os.environ.get("SUPABASE_URL")
@@ -14,7 +16,7 @@ supabase: Client = create_client(url, key)
 
 from pathlib import Path
 
-BASE_URL = "http://127.0.0.1:5000"
+BASE_URL = "http://127.0.0.1:5500"
 
 def signup():
     print("\n🔐 SIGNUP")
@@ -75,23 +77,19 @@ def fetch_permissions(token):
     except Exception as e:
         print("Error fetching permissions:", str(e))
         return None, set()
-    
+        
 def upload_csv(token: str) -> None:
     """
-    Flexible uploader.
-    The user picks which CSV(s) to upload each time:
-      1 = Store master
-      2 = Inventory snapshot
-      3 = Forecast
-    They can choose one, several comma‑separated, or 'd' to quit.
+    Flexible uploader with improved feedback
     """
     file_types = {
         "1": ("store master"      , "store"),
         "2": ("inventory snapshot", "inventory"),
         "3": ("forecast"          , "forecast"),
-        "4": ("uploadStoreData"        , "totalStoreData"),
-        "5": ("TransferCostData     " , "transferCostData"),
-        "6": ("WarehouseMaxCapacityDataUpload", "warehouseMaxData")
+        "4": ("total store data"  , "totalStoreData"),
+        "5": ("transfer cost data", "transferCostData"),
+        "6": ("warehouse max capacity data", "capacity"),
+        "7": ("sales data"        , "sales") # NEW: Added sales data upload option
     }
 
     headers = {"Authorization": f"Bearer {token}"}
@@ -122,23 +120,44 @@ def upload_csv(token: str) -> None:
                 print("❌ File does not exist. Skipped.")
                 continue
 
-            print(f"📤 Uploading {path} …")
-            with open(path, "rb") as fh:
-                res = requests.post(
-                    f"{BASE_URL}/api/upload/{route}",
-                    files={"file": fh},
-                    headers=headers,
-                    timeout=60,
-                )
-            if res.ok:
-                print("   ✅ Success")
-            else:
-                print(f"   ❌ Failed ({res.status_code})")
-                try:
-                    print("   ", res.json())
-                except Exception:
-                    print("   ", res.text)
-
+            # Check file size
+            file_size = os.path.getsize(path) / (1024 * 1024)  # Size in MB
+            print(f"📤 Uploading {path} ({file_size:.1f}MB) …")
+            
+            # Use fast bulk upload for inventory or other large datasets if needed
+            if route in ("inventory", "sales") and file_size > 1: # Added 'sales' to fast upload check
+                print("   🚀 Using fast bulk upload method...")
+            
+            try:
+                with open(path, "rb") as fh:
+                    res = requests.post(
+                        f"{BASE_URL}/api/upload/{route}",
+                        files={"file": fh},
+                        headers=headers,
+                        timeout=300,  # 5 minutes timeout
+                    )
+                if res.ok:
+                    print("   ✅ Success")
+                    # Show additional info for large files
+                    if file_size > 5:
+                        print("   ⚡ Bulk upload completed in seconds instead of minutes!")
+                else:
+                    print(f"   ❌ Failed ({res.status_code})")
+                    try:
+                        error_msg = res.json()
+                        # Check for specific validation errors
+                        if 'valid' in error_msg and error_msg['valid'] is False:
+                             print(f"   Validation Errors: {'; '.join(error_msg['errors'])}")
+                        else:
+                            print(f"   Error: {error_msg}")
+                    except Exception:
+                        print(f"   Response: {res.text}")
+                        
+            except requests.exceptions.Timeout:
+                print("   ❌ Upload timed out (took longer than 5 minutes)")
+            except Exception as e:
+                print(f"   ❌ Upload failed: {str(e)}")
+                
 def update_store_info(hdr):
     import requests
 
@@ -267,14 +286,14 @@ def settings_menu(token: str):
             set_lead_times(token)
 
         elif choice == "3":
-            lookahead = input("Enter forecast lookahead (in days): ").strip()
+            lookahead = input("Enter forecast lookahead (in weeks): ").strip()
             if not lookahead.isdigit():
                 print("❌ Invalid input. Must be a number.")
                 continue
             response = requests.post(
-                f"{BASE_URL}/config/set-lookahead-days",
+                f"{BASE_URL}/user/lookahead_days",
                 headers=hdr,
-                json={"lookahead_days": int(lookahead)}
+                json={"weeks": int(lookahead)}
             )
             if response.ok:
                 print("✅ Lookahead updated successfully.")
@@ -332,6 +351,7 @@ def view_dashboard(token):
             print(f"  🔹 Projected Stockouts    : {data.get('projected_stockouts')}")
             print(f"  🔹 Fill Rate Probability  : {data.get('fill_rate_probability')}%")
             print(f"  🕓 Timestamp              : {data.get('timestamp')}")
+            print(f"  🕓 lookahead days              : {data.get('lookahead_days_used')} days")
 
             # Forecast note if available
             forecast_msg = data.get("forecast_msg")
@@ -872,6 +892,8 @@ def display_availability_from_db(token):
         print("\n📊 WEEKLY AVAILABILITY RATE")
         for item in data:
             print(f"Week starting {item['week_start']}: {item['availability_rate']}%")
+            print(f"OOS Count: {item['oos_count']}"),
+            print(f"Eligibile/total sku's: {item['eligible_count']}")
     else:
         print("❌ Failed to fetch availability data:", response.text)
 
@@ -888,16 +910,47 @@ MENU_OPTIONS = {
     "8": {"desc": "Check Stockouts After Reorder(store alert on map)", "route": "POST:/alerts/check-stockout-after-reorder"},
     "9": {"desc": "Individual store map alert", "route": "GET:/stores/with-alert-status"},
     "10": {"desc": "Show Forecasted Data", "route": "GET:/forecast/store/<int:store_id>"},
-    "11": {"desc": "Admin Privileges", "route": "GET:/admin/users"},  # Admin-only example
+    "11": {"desc": "Admin Privileges", "route": "GET:/admin/users"},
     "12": {"desc": "Logout", "route": None},
     "13": {"desc": "Place Reorder", "route": "POST:/reorder/place"},
-    "14": {
-    "desc": "View Weekly Availability Rate",
-    "route": "GET:/availability"
-}
-
-
-}
+    "14": {"desc": "View Weekly Availability Rate", "route": "GET:/availability"},
+    "15": {
+        "desc": "Forecast",
+        "route" : None,
+        "submenu": {
+            "1": {"desc": "Set Forecast Schedule", "route": "POST:/forecast/schedule"},
+            "2": {"desc": "Update Forecast Horizon", "route": "POST:/forecast/schedule/horizon"},
+            "3": {"desc": "View Forecast Schedules", "route": "GET:/forecast/schedule"},
+            "4": {"desc": "Manual Forecast Runner", "route": "POST:/forecast/run"},
+            "5": {"desc": "Store-level Forecast (Next N Weeks)", "route": "GET:/forecast/store-level"},
+            "6": {"desc": "Store-level Past Accuracy", "route": "GET:/forecast/accuracy/store"},
+            "7": {"desc": "SKU-level Forecast (Next N Weeks)", "route": "GET:/forecast/sku-level"},
+            "8": {"desc": "SKU-level Past Accuracy", "route": "GET:/forecast/accuracy/sku"},
+            "9": {"desc": "Forecast Chart Data", "route": "GET:/forecast/chart-data"},
+            "10": {"desc": "Weekly forecasts", "route": "POST:/forecast/weekly"},
+            "11": {"desc": "Forecast Run Logs", "route": "GET:/forecast/logs"}
+        }
+    },
+    "16": {"desc": "Rebalancer", "route": "POST:/api/rebalance"},
+    "17": {"desc": "Inventory Levels Filter", "route": "GET:/store_inventory_summary"},
+    "18": {
+        "desc": "Weeks of Supply Analysis",
+        "route": None,
+        "submenu": {
+            "1": {"desc": "View Store Summary", "route": "GET:/api/weeks-of-supply/store-summary"},
+            "2": {"desc": "Refresh Weeks of Supply Data", "route": "POST:/api/weeks-of-supply/refresh"},
+            "3": {"desc": "Back to Main Menu", "route": None}
+        }
+    },
+    "19": {
+    "desc": "Demand Trend Analysis",
+    "route": None,
+    "submenu": {
+        "1": {"desc": "View Store Summary", "route": "GET:/api/demand-trend/store-summary"},
+        "2": {"desc": "Refresh Demand Trend Data", "route": "POST:/api/demand-trend/refresh"},
+        "3": {"desc": "Back to Main Menu", "route": None}
+    }
+}}
 
 def normalize_route(route):
     # Replace all <...> segments with <param> to match your ROUTE_ROLE_MAP style
@@ -920,6 +973,1360 @@ def show_menu(allowed_routes):
         if norm_route in normalized_allowed:
             print(f"{key}. {opt['desc']}")
 
+
+def forecast_menu(token):
+
+    def view_forecast_schedule():
+        url = f"{BASE_URL}/forecast/schedule"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        print(r.json())
+
+    def set_forecast_schedule():
+        url = f"{BASE_URL}/forecast/schedule"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Optional store/product
+        store_id = input("Enter store ID [leave blank for all stores]: ").strip() or None
+        product_id = input("Enter product ID [leave blank for all products]: ").strip() or None
+
+        # Frequency selection
+        valid_frequencies = ["hourly", "daily", "weekly", "monthly"]
+        while True:
+            frequency = input(f"Select frequency {valid_frequencies}: ").strip().lower()
+            if frequency in valid_frequencies:
+                break
+            print("Invalid frequency, choose from the options above.")
+
+        # Optional time/day
+        time_of_day = input("Enter time of day (HH:MM) [default 00:00]: ").strip() or "00:00"
+        day_of_week = input("Enter day of week [default Saturday]: ").strip() or "Saturday"
+
+        payload = {
+            "store_id": store_id,
+            "product_id": product_id,
+            "frequency": frequency,
+            "time_of_day": time_of_day,
+            "day_of_week": day_of_week
+        }
+
+        r = requests.post(url, json=payload, headers=headers)
+        print(r.json())
+
+
+    def update_forecast_horizon():
+        url = f"{BASE_URL}/forecast/schedule/horizon"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Prompt user for n_days
+        while True:
+            n_days_input = input("Enter forecast horizon in days (e.g., 7): ").strip()
+            if n_days_input.isdigit() and int(n_days_input) > 0:
+                n_days = int(n_days_input)
+                break
+            print("Please enter a valid positive integer for n_weeks.")
+
+        payload = {"n_weeks": n_days}
+
+        r = requests.post(url, json=payload, headers=headers)
+        print(r.json())
+
+        #  NEW FUNCTION FOR MODEL TRAINING 
+    def run_training():
+        url = f"{BASE_URL}/train" # Hits the new /train endpoint
+        headers = {"Authorization": f"Bearer {token}"}
+
+        print("\n⚠️ Initiating full model training and saving. This may take several minutes.")
+        payload = {} # No input needed for full retraining
+
+        try:
+            r = requests.post(url, headers=headers, json=payload)
+            r.raise_for_status()
+            print("✅ Training successfully initiated (check logs for completion):")
+            print(r.json())
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Request failed: {e}")
+
+    def run_forecast():
+        url = f"{BASE_URL}/run"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # ask user for input
+        try:
+            weeks_input = input("Enter number of weeks for forecast [default 4]: ").strip()
+            weeks = int(weeks_input) if weeks_input else 4
+        except ValueError:
+            print("❌ Invalid input. Please enter an integer.")
+            return
+
+        payload = {"weeks": weeks}
+
+        try:
+            r = requests.post(url, headers=headers, json=payload)
+            r.raise_for_status()
+            print(r.json())
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
+
+
+    def chart_data():
+        url = f"{BASE_URL}/forecast/chart-data"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        print(r.json())
+
+    def store_level_forecast():
+        url = f"{BASE_URL}/forecast/store-level"
+        headers = {"Authorization": f"Bearer {token}"}
+        params = {"n_weeks": 4}
+        r = requests.get(url, headers=headers, params=params)
+        print(r.json())
+
+
+    def sku_level_forecast():
+        url = f"{BASE_URL}/forecast/sku-level"
+        headers = {"Authorization": f"Bearer {token}"}
+        params = {"n_weeks": 4}
+        r = requests.get(url, headers=headers, params=params)
+        print(r.json())
+
+    def past_accuracy_sku(token):
+        url = f"{BASE_URL}/forecast/accuracy/sku"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        if r.ok:
+            data = r.json()
+            print("\n📊 SKU Forecast Accuracy:")
+            for row in data:
+                sku = row.get('sku') or "Unknown"
+                week_start = row.get('week_start') or "Unknown"
+                bias = row.get('bias')
+                wmape = row.get('wmape')
+                mae = row.get('mae')
+                actuals = row.get('actuals')
+                predicted = row.get('predicted')
+
+                print(
+                    f"📦 SKU: {sku} | "
+                    f"📅 Week Start: {week_start} | "
+                    f"🎯 Bias: {bias:.2f}% | "
+                    f"📉 WMAPE: {wmape:.2f}% | "
+                    f"📏 MAE: {mae:.2f} | "
+                    f"🟢 Actuals: {actuals:.2f} | "
+                    f"🔵 Predicted: {predicted:.2f}"
+                )
+        else:
+            print("❌ Failed to fetch SKU accuracy:", r.text)
+
+
+    def past_accuracy_store(token):
+        url = f"{BASE_URL}/forecast/accuracy/store"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        if r.ok:
+            data = r.json()
+            print("\n📊 Store Forecast Accuracy:")
+            for row in data:
+                store_id = row.get('store_id') or "Unknown"
+                week_start = row.get('week_start') or "Unknown"
+                bias = row.get('bias')
+                wmape = row.get('wmape')
+                mae = row.get('mae')
+                actuals = row.get('actuals')
+                predicted = row.get('predicted')
+
+                print(
+                    f"🏬 Store: {store_id} | "
+                    f"📅 Week Start: {week_start} | "
+                    f"🎯 Bias: {bias:.2f}% | "
+                    f"📉 WMAPE: {wmape:.2f}% | "
+                    f"📏 MAE: {mae:.2f} | "
+                    f"🟢 Actuals: {actuals:.2f} | "
+                    f"🔵 Predicted: {predicted:.2f}"
+                )
+        else:
+            print("❌ Failed to fetch Store accuracy:", r.text)
+
+    
+    def view_weekly_forecast(token):
+        hdr = {"Authorization": f"Bearer {token}"}
+
+        # Fetch available stores
+        r = requests.get(f"{BASE_URL}/stores", headers=hdr, timeout=20)
+        stores = r.json().get("stores", []) if r.ok else []
+        print("\n🏬 Available Stores:")
+        if stores:
+            for s in stores:
+                print(f"  - {s['store_id']} ({s['name']} - {s['city']})")
+        else:
+            print("  🙅 No stores found.")
+
+        # Fetch available SKUs
+        r = requests.get(f"{BASE_URL}/skus", headers=hdr, timeout=20)
+        skus_list = r.json().get("skus", []) if r.ok else []
+        print("\n📦 Available SKUs:")
+        if skus_list:
+            for s in skus_list:
+                print(f"  - {s}")
+        else:
+            print("  🙅 No SKUs found.")
+
+        # Ask user for filters
+        print("\n🔎 Forecast Filters")
+        store_ids_in = input("Enter store id(s) (comma-separated, leave blank for all): ").strip()
+        skus_in = input("Enter SKUs (comma-separated, leave blank for all): ").strip()
+
+        # ✅ Only allow future weeks override
+        future_weeks_in = input("Enter number of future weeks (leave blank for user default): ").strip()
+
+        try:
+            store_ids = [s.strip() for s in store_ids_in.split(",") if s.strip()] if store_ids_in else None
+            skus = [s.strip() for s in skus_in.split(",") if s.strip()] if skus_in else None
+            future_weeks = int(future_weeks_in) if future_weeks_in else None  # None => backend uses lookahead_days
+        except ValueError:
+            print("🚫 Invalid input. Please enter numeric value for future weeks.")
+            return
+
+        payload = {
+            "store_ids": store_ids,
+            "skus": skus
+        }
+        if future_weeks is not None:
+            payload["future_weeks"] = future_weeks  # ✅ send only if user explicitly provided
+
+        # Call backend
+        r = requests.post(f"{BASE_URL}/forecast/weekly", json=payload, headers=hdr, timeout=20)
+        if not r.ok:
+            print("❌ Failed to fetch weekly forecast:", r.text)
+            return
+
+        data = r.json().get("forecasts", [])
+        if not data:
+            print("🙅 No forecast data available for given filters.")
+            return
+
+        print("\n📊 Weekly Forecast Results:")
+        for row in data:
+            actual_value = row.get("weekly_actual")
+            forecast_value = row.get("weekly_forecast", 0)
+
+            if actual_value is not None:
+                print(
+                    f"🏬 Store: {row['store_code']} | 📦 SKU: {row['sku']} | "
+                    f"📅 Week Start: {row['week_start']} | "
+                    f"📊 Actual: {actual_value:.2f} units | 🔮 Forecast: {forecast_value:.2f} units"
+                )
+            else:
+                print(
+                    f"🏬 Store: {row['store_code']} | 📦 SKU: {row['sku']} | "
+                    f"📅 Week Start: {row['week_start']} | "
+                    f"🔮 Forecast: {forecast_value:.2f} units | 📊 Actual: N/A"
+                )
+
+
+
+    def forecast_logs():
+        url = f"{BASE_URL}/forecast/logs"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        print(r.json())
+
+
+    def overall_forecast_accuracy(token):
+        url = f"{BASE_URL}/forecast/accuracy/overall"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        weeks_input = input("Enter number of past weeks [leave blank for default lookahead]: ").strip()
+        params = {}
+        if weeks_input.isdigit() and int(weeks_input) > 0:
+            params["weeks"] = int(weeks_input)
+
+        r = requests.get(url, headers=headers, params=params)
+
+        if not r.ok:
+            print("❌ Failed to fetch overall accuracy:", r.text)
+            return []
+
+        data = r.json()
+        rows = data.get("results", []) if isinstance(data, dict) else data
+
+        print("\n📊 Overall Forecast Accuracy (Week-wise):")
+        if not rows:
+            print("🙅 No data available.")
+            return []
+
+        for row in rows:
+            print(
+                f"📅 Week: {row['week_start']} | "
+                f"🟢 Actuals: {row['actuals']:.2f} | "
+                f"🔵 Forecast: {row['forecast']:.2f} | "
+                f"🎯 Bias: {row['bias']:.2f}% | "
+                f"📉 WMAPE: {row['wmape']:.2f}% | "
+                f"📏 MAE: {row['mae']:.2f}"
+            )
+
+        return rows
+
+    def drilldown_forecast_accuracy(token):
+        url = f"{BASE_URL}/forecast/accuracy/detail"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Step 1: Fetch week-level accuracy first
+        r = requests.get(url, headers=headers, params={"granularity": "week"})
+        if not r.ok:
+            print("❌ Failed to fetch forecast accuracy:", r.text)
+            return
+
+        data = r.json()
+        rows = data.get("results", []) if isinstance(data, dict) else data
+        if not rows:
+            print("🙅 No data found.")
+            return
+
+        print("\n📊 Overall Forecast Accuracy (Week-wise):")
+        for row in rows:
+            print(
+                f"📅 Week: {row['week_start']} | "
+                f"🟢 Actuals: {row['actuals']:.2f} | "
+                f"🔵 Forecast: {row['predicted']:.2f} | "
+                f"🎯 Bias: {row['bias']:.2f}% | "
+                f"📉 WMAPE: {row['wmape']:.2f}% | "
+                f"📏 MAE: {row['mae']:.2f}"
+            )
+
+        # Step 2: Ask user to pick week(s) (multi-select)
+        print("\n📅 Available Weeks:")
+        for idx, row in enumerate(rows, start=1):
+            print(f"  {idx}. {row['week_start']}")
+        week_choice = input(f"Select week(s) (comma-separated 1-{len(rows)}, leave blank for all): ").strip()
+
+        if week_choice:
+            week_indices = [int(x) for x in week_choice.split(",") if x.strip().isdigit()]
+            selected_weeks = [rows[i - 1]["week_start"] for i in week_indices if 1 <= i <= len(rows)]
+        else:
+            selected_weeks = [r["week_start"] for r in rows]  # All by default
+
+        # Step 3: Get available stores (multi-select)
+        r = requests.get(f"{BASE_URL}/stores", headers=headers, timeout=20)
+        stores = r.json().get("stores", []) if r.ok else []
+        print("\n🏬 Available Stores:")
+        if stores:
+            for s in stores:
+                print(f"  - {s['store_id']} ({s['name']} - {s['city']})")
+        else:
+            print("  🙅 No stores found.")
+
+        store_choice = input("Enter store_id(s) [comma-separated, leave blank for all]: ").strip()
+        selected_stores = [x.strip() for x in store_choice.split(",") if x.strip()] if store_choice else []
+
+        # Step 4: Get available SKUs (multi-select)
+        r = requests.get(f"{BASE_URL}/skus", headers=headers, timeout=20)
+        skus_list = r.json().get("skus", []) if r.ok else []
+        print("\n📦 Available SKUs:")
+        if skus_list:
+            for s in skus_list:
+                print(f"  - {s}")
+        else:
+            print("  🙅 No SKUs found.")
+
+        sku_choice = input("Enter SKU(s) [comma-separated, leave blank for all]: ").strip()
+        selected_skus = [x.strip() for x in sku_choice.split(",") if x.strip()] if sku_choice else []
+
+        # Step 5: Fetch day-level accuracy
+        params = {
+            "weeks": ",".join(selected_weeks),
+            "granularity": "day"
+        }
+        if selected_stores:
+            params["store"] = ",".join(selected_stores)
+        if selected_skus:
+            params["sku"] = ",".join(selected_skus)
+
+        r = requests.get(url, headers=headers, params=params)
+        if not r.ok:
+            print("❌ Failed to fetch day-level accuracy:", r.text)
+            return
+
+        data = r.json()
+        rows = data.get("results", []) if isinstance(data, dict) else data
+        if not rows:
+            print("🙅 No day-level data found for selection.")
+            return
+
+        print(f"\n📊 Day-Level Accuracy for Week(s): {', '.join(selected_weeks)}")
+        for row in rows:
+            key = row.get("date") or row.get("week_start")
+            print(
+                f"📅 {key} | "
+                f"🟢 Actuals: {row['actuals']:.2f} | "
+                f"🔵 Forecast: {row['predicted']:.2f} | "
+                f"🎯 Bias: {row['bias']:.2f}% | "
+                f"📉 WMAPE: {row['wmape']:.2f}% | "
+                f"📏 MAE: {row['mae']:.2f}"
+            )
+
+
+    options = {
+        "1": ("Set Forecast Schedule", set_forecast_schedule),
+        "2": ("View Forecast Schedule", view_forecast_schedule),
+        "3": ("Update Forecast Horizon (N weeks)", update_forecast_horizon),
+        "4": ("Trigger Full Model Training & Save (Long-Running)", run_training), 
+        "5": ("Run Forecast Inference Manually (from Saved Model)", run_forecast), 
+        "6": ("Store-Level Forecast (Next N Weeks)", store_level_forecast),
+        "7": ("SKU-Level Forecast (Next N Weeks)", sku_level_forecast),
+        "8": ("Past Accuracy - Store", lambda: past_accuracy_store(token)),
+        "9": ("Past Accuracy - SKU", lambda: past_accuracy_sku(token)),
+        "10": ("Chart Data with Trendline", chart_data),
+        "11": ("View Weekly Forecast", lambda: view_weekly_forecast(token)),
+        "12": ("Forecast Run Logs", forecast_logs),
+        "13": ("Overall Forecast Accuracy", lambda: overall_forecast_accuracy(token)),
+        "14": ("Drilldown Forecast Accuracy (Week/SKU/Store)", lambda: drilldown_forecast_accuracy(token)),
+        
+        "0": ("Exit Forecast Menu", None)
+    }
+    while True:
+        print("\n📊 Forecast Module Menu")
+        for key, (desc, _) in options.items():
+            print(f"{key}. {desc}")
+
+        choice = input("Select an option: ").strip()
+        if choice == "0":
+            break
+        elif choice in options:
+            options[choice][1]()
+        else:
+            print("❌ Invalid choice. Try again.")
+
+
+def rebalancer(token):
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # helper function to convert the data to a CSV string
+    def convert_to_csv_client(data):
+        if not data:
+            return ""
+        
+        output = StringIO()
+        
+        fieldnames = [
+            "Source",
+            "Destination",
+            "SKU",
+            "Units",
+            "Source Inventory",
+            "Destination Inventory",
+            "Source DOS",
+            "Destination DOS",
+            "Source Avg Daily Forecast",
+            "Destination Avg Daily Forecast",
+            "Source Excess",
+            "Destination Shortage",
+            "Network Deficit",
+            "DDOS Shortage",
+            "Total Unfulfilled Shortage",
+            "Arrival Date"
+        ]
+        
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        
+        rows = []
+        for row in data:
+            rows.append({
+                "Source": row["src"],
+                "Destination": row["dst"],
+                "SKU": row["sku"],
+                "Units": row["units"],
+                "Source Inventory": row["src_current_inventory"],
+                "Destination Inventory": row["dst_current_inventory"],
+                "Source DOS": row["src_days_of_supply"],
+                "Destination DOS": row["dst_days_of_supply"],
+                "Source Avg Daily Forecast": row["src_daily_forecast"],
+                "Destination Avg Daily Forecast": row["dst_daily_forecast"],
+                "Source Excess": row["src_excess"],
+                "Destination Shortage": row["dst_shortage"],
+                "Network Deficit": row["network_deficit"],
+                "DDOS Shortage": row["ddos_shortage"],
+                "Total Unfulfilled Shortage": row["total_unfulfilled_shortage"],
+                "Arrival Date": row["arrival_date"]
+            })
+        writer.writerows(rows)
+        return output.getvalue()
+
+
+    print("📦 Inventory Rebalancing Client\n")
+
+    try:
+        ddos_days = int(input("Enter Desired Days of Supply (DDOS): ").strip())
+    except ValueError:
+        print("❌ Invalid input. Please enter a number.")
+        return
+
+    payload = {"ddos_days": ddos_days}
+
+    try:
+        # Make a single, efficient API call to get both detailed and summary data
+        print("⏳ Calculating rebalancing recommendations...")
+        url = f"{BASE_URL}/api/rebalance"
+        resp = requests.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+
+        data = resp.json()
+        allocations = data.get("allocations", [])
+        summary_data = data.get("summary", [])
+
+        if not allocations:
+            print("\n✅ No transfers required. Inventory is already balanced.")
+            return
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ API request failed: {e}")
+        # Exit gracefully if the initial request fails
+        return
+
+    # Now, present the menu using the data you already have
+    while True:
+        print("\n--- Options ---")
+        print("1. View Detailed SKU-level Transfers")
+        print("2. View Transfer Summary by Route")
+        print("3. Download Results as CSV")
+        print("4. Exit")
+        
+        choice = input("Enter your choice (1-4): ").strip()
+
+        if choice == '1':
+            print("\n📊 Recommended Transfers (Detailed):\n")
+            table = [
+                [i + 1, a["src"], a["dst"], a["sku"], a["units"], a["src_days_of_supply"], a["dst_days_of_supply"], a["src_current_inventory"], a["dst_current_inventory"], a["src_daily_forecast"], a["dst_daily_forecast"], a["src_excess"], a["dst_shortage"], a["network_deficit"], a["ddos_shortage"], a["total_unfulfilled_shortage"], a["arrival_date"]]
+                for i, a in enumerate(allocations)
+            ]
+            headers_ = ["#", "Source", "Destination", "SKU", "Units", "Src DOS", "Dst DOS", "Src Inv", "Dst Inv", "Src Avg Daily Forecast", "Dst Avg Daily Forecast", "Src Excess", "Dst Shortage", "Network Deficit", "DDOS Shortage", "Total Unfulfilled Shortage", "Arrival Date"]
+            print(tabulate(table, headers=headers_, tablefmt="fancy_grid"))
+
+        elif choice == '2':
+            print("\n📊 Transfer Summary by Route:\n")
+            summary_table = [
+                [i + 1, s["src"], s["dest"], s["distinct_skus"], s["total_units"], s["src_days_of_supply"], s["dst_days_of_supply"], s["src_daily_forecast"], s["dst_daily_forecast"], s["arrival_date"]]
+                for i, s in enumerate(summary_data)
+            ]
+            summary_headers = ["#", "Source", "Destination", "Distinct SKUs", "Total Units", "Src DOS", "Dst DOS", "Src Avg Daily Forecast", "Dst Avg Daily Forecast", "Arrival Date"]
+            print(tabulate(summary_table, headers=summary_headers, tablefmt="fancy_grid"))
+
+        elif choice == '3':
+            csv_data = convert_to_csv_client(allocations)
+            filename = f"rebalancing_recommendations_{date.today().strftime('%Y-%m-%d')}.csv"
+            
+            with open(filename, "w", newline="") as f:
+                f.write(csv_data)
+            
+            print(f"✅ Successfully downloaded recommendations to '{filename}'.")
+
+        elif choice == '4':
+            print("Goodbye!")
+            break
+
+        else:
+            print("Invalid choice. Please enter a number from 1 to 4.")
+
+def inventory_levels_filter(token):
+    """
+    Interactive inventory levels filter using existing API endpoints
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    def get_inventory_levels_api(level_filter=None, store_ids=None):
+        """Fetch inventory levels via API"""
+        url = f"{BASE_URL}/store_inventory_summary"  # You'll need to create this endpoint
+        params = {}
+        
+        if level_filter:
+            params['level_category'] = level_filter
+        if store_ids:
+            params['store_ids'] = ','.join(map(str, store_ids))
+            
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=20)
+            if response.ok:
+                return response.json().get('data', [])
+            else:
+                print(f"❌ API Error: {response.status_code} - {response.text}")
+                return []
+        except Exception as e:
+            print(f"❌ Request failed: {e}")
+            return []
+    
+    def display_results(data, title):
+        print(f"\n📊 {title}")
+        print("-" * len(title))
+        
+        if not data:
+            print("❌ No data found for the selected criteria.")
+            return
+        
+        for row in data:
+            print(f"🏬 Store: {row.get('store_name', 'N/A')} (ID: {row.get('store_id', 'N/A')})")
+            print(f"   📍 Location: {row.get('store_location', 'N/A')}")
+            print(f"   📦 Current: {row.get('current_inventory', 0)} / {row.get('max_capacity', 0)} units")
+            print(f"   📊 Level: {row.get('inventory_percentage', 0):.1f}% ({row.get('level_category', 'N/A')})")
+            print(f"   🎯 Target: {row.get('target_level', 0)} | Safety: {row.get('safety_stock', 0)}")
+            print(f"   ⚡ Status: {row.get('operational_status', 'N/A')}")
+            print(f"   🕒 Updated: {row.get('last_updated', 'N/A')}")
+            print()
+        
+        print(f"📈 Total Records: {len(data)}")
+    
+    # Main menu loop
+    while True:
+        print("\n" + "="*50)
+        print("📊 INVENTORY LEVELS FILTER")
+        print("="*50)
+        print("1. 🔴 Low Inventory Stores (< 20%)")
+        print("2. 🟡 Medium Inventory Stores (20% - 80%)")
+        print("3. 🟢 High Inventory Stores (> 80%)")
+        print("4. 📈 All Stores")
+        print("5. 🔍 Custom Store Filter")
+        print("6. 📊 Summary Statistics")
+        print("7. ❌ Back to Main Menu")
+        print("="*50)
+        
+        choice = input("Enter your choice (1-7): ").strip()
+        
+        if choice == "1":
+            data = get_inventory_levels_api(level_filter='Low')
+            display_results(data, "LOW INVENTORY STORES (< 20%)")
+            
+        elif choice == "2":
+            data = get_inventory_levels_api(level_filter='Medium')
+            display_results(data, "MEDIUM INVENTORY STORES (20% - 80%)")
+            
+        elif choice == "3":
+            data = get_inventory_levels_api(level_filter='High')
+            display_results(data, "HIGH INVENTORY STORES (> 80%)")
+            
+        elif choice == "4":
+            data = get_inventory_levels_api()
+            display_results(data, "ALL STORES")
+            
+        elif choice == "5":
+            print("\n🔍 Custom Store Filter")
+            try:
+                store_ids_input = input("Enter store IDs (comma-separated, e.g., 167,168,169): ")
+                store_ids = [int(x.strip()) for x in store_ids_input.split(',') if x.strip()]
+                
+                level_input = input("Enter level filter (Low/Medium/High or press Enter for all): ").strip()
+                level_filter = level_input if level_input in ['Low', 'Medium', 'High'] else None
+                
+                data = get_inventory_levels_api(level_filter=level_filter, store_ids=store_ids)
+                display_results(data, "CUSTOM FILTER RESULTS")
+                
+            except ValueError:
+                print("❌ Invalid store IDs format. Please enter numbers separated by commas.")
+        
+        elif choice == "6":
+            # Use existing API or create a summary endpoint
+            url = f"{BASE_URL}/store_inventory_summary/stats"
+            try:
+                response = requests.get(url, headers=headers, timeout=20)
+                if response.ok:
+                    stats = response.json().get('data', [])
+                    print("\n📊 INVENTORY LEVEL SUMMARY")
+                    for row in stats:
+                        print(f"{row['level_category']:>6}: {row['store_count']} stores "
+                              f"(avg: {row['avg_percentage']}%, "
+                              f"range: {row['min_percentage']}%-{row['max_percentage']}%)")
+                else:
+                    print(f"❌ Failed to fetch summary: {response.text}")
+            except Exception as e:
+                print(f"❌ Error getting summary: {e}")
+        
+        elif choice == "7":
+            break
+        else:
+            print("❌ Invalid choice. Please enter 1-7.")
+        
+        input("\nPress Enter to continue...")
+
+
+def weeks_of_supply_menu(token):
+    """Handle weeks of supply analysis menu"""
+    while True:
+        print("\n==== 📊 Weeks of Supply Analysis ====")
+        print("1. View Store Summary")
+        print("2. Recalculate Categories with Custom Thresholds")
+        print("3. Refresh Weeks of Supply Data")
+        print("4. Back to Main Menu")
+        
+        choice = input("\nEnter your choice: ").strip()
+        
+        if choice == "1":
+            view_weeks_of_supply_by_store(token)
+        elif choice == "2":
+            recalculate_categories_with_thresholds(token)
+        elif choice == "3":
+            refresh_weeks_of_supply(token)
+        elif choice == "4":
+            break
+        else:
+            print("❌ Invalid choice.")
+
+
+def recalculate_categories_with_thresholds(token):
+    """Recalculate categories based on custom week thresholds"""
+    print("\n🔧 Configure Category Thresholds")
+    print("="*60)
+    print("Current default thresholds:")
+    print("  🔴 Critical: < 2 weeks")
+    print("  🟠 Low: 2-4 weeks")
+    print("  🟢 Adequate: 4-8 weeks")
+    print("  🔵 High: >= 8 weeks")
+    print("="*60)
+    
+    try:
+        # Get custom thresholds from user
+        print("\nEnter new thresholds (press Enter to use defaults):")
+        
+        critical_input = input("Critical threshold (default: 2 weeks): ").strip()
+        critical_threshold = float(critical_input) if critical_input else 2
+        
+        low_input = input("Low threshold (default: 4 weeks): ").strip()
+        low_threshold = float(low_input) if low_input else 4
+        
+        adequate_input = input("Adequate threshold (default: 8 weeks): ").strip()
+        adequate_threshold = float(adequate_input) if adequate_input else 8
+        
+        # Validate thresholds
+        if critical_threshold <= 0 or low_threshold <= 0 or adequate_threshold <= 0:
+            print("❌ All thresholds must be positive numbers.")
+            return
+        
+        if not (critical_threshold < low_threshold < adequate_threshold):
+            print("❌ Thresholds must be in ascending order: critical < low < adequate")
+            return
+        
+        # Confirm with user
+        print(f"\n📋 New threshold configuration:")
+        print(f"  🔴 Critical: < {critical_threshold} weeks")
+        print(f"  🟠 Low: {critical_threshold} - {low_threshold} weeks")
+        print(f"  🟢 Adequate: {low_threshold} - {adequate_threshold} weeks")
+        print(f"  🔵 High: >= {adequate_threshold} weeks")
+        
+        confirm = input("\nProceed with recalculation? (y/n): ").strip().lower()
+        
+        if confirm != 'y':
+            print("⚠️  Operation cancelled.")
+            return
+        
+        print("\n🔄 Recalculating categories...")
+        
+        # Send POST request with thresholds
+        resp = requests.post(
+            f"{BASE_URL}/weeks-of-supply/recalculate-categories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "critical_threshold": critical_threshold,
+                "low_threshold": low_threshold,
+                "adequate_threshold": adequate_threshold
+            }
+        )
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            print(f"\n✅ Success! Categories recalculated for {data.get('rows_affected', 0)} records.")
+            print("\n📊 Applied thresholds:")
+            thresholds = data.get('thresholds', {})
+            print(f"  🔴 Critical: {thresholds.get('critical', 'N/A')}")
+            print(f"  🟠 Low: {thresholds.get('low', 'N/A')}")
+            print(f"  🟢 Adequate: {thresholds.get('adequate', 'N/A')}")
+            print(f"  🔵 High: {thresholds.get('high', 'N/A')}")
+        else:
+            error_data = resp.json()
+            print(f"❌ Error: {error_data.get('error', 'Unknown error')}")
+    
+    except ValueError:
+        print("❌ Invalid input. Please enter valid numbers.")
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+    
+    input("\nPress Enter to continue...")
+
+
+def refresh_weeks_of_supply(token):
+    """Manually refresh weeks of supply calculations"""
+    print("\n🔄 Refreshing weeks of supply data...")
+    
+    try:
+        resp = requests.post(
+            f"{BASE_URL}/weeks-of-supply/refresh",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            print(f"✅ Success! {data.get('rows_affected', 0)} records updated.")
+        else:
+            print(f"❌ Error: {resp.json().get('error', 'Unknown error')}")
+    
+    except Exception as e:
+        print(f"❌ Error refreshing data: {str(e)}")
+
+
+def view_weeks_of_supply_by_store(token):
+    """View weeks of supply analysis - store selection and SKU details"""
+    
+    # Step 1: Get store summary
+    print("\n📦 Fetching store summary...")
+    
+    try:
+        resp = requests.get(
+            f"{BASE_URL}/weeks-of-supply/store-summary",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if resp.status_code != 200:
+            print(f"❌ Error: {resp.json().get('error', 'Unknown error')}")
+            return
+        
+        stores = resp.json().get('data', [])
+        
+        if not stores:
+            print("\n⚠️  No data available. Please refresh weeks of supply data first (Option 3).")
+            return
+        
+        # Display store list
+        print("\n" + "="*80)
+        print("📍 AVAILABLE STORES")
+        print("="*80)
+        print(f"{'#':<5} {'Store ID':<15} {'Total SKUs':<12} {'Critical':<10} {'Low':<10} {'Adequate':<10} {'High':<10}")
+        print("-"*80)
+        
+        for idx, store in enumerate(stores, 1):
+            print(f"{idx:<5} {store['store_id']:<15} {store['total_skus']:<12} "
+                  f"{store['critical_count']:<10} {store['low_count']:<10} "
+                  f"{store['adequate_count']:<10} {store['high_count']:<10}")
+        
+        print("="*80)
+        
+        # Step 2: Let user select a store
+        store_choice = input("\nEnter store number to view SKU details (or 'q' to go back): ").strip()
+        
+        if store_choice.lower() == 'q':
+            return
+        
+        try:
+            store_idx = int(store_choice) - 1
+            if store_idx < 0 or store_idx >= len(stores):
+                print("❌ Invalid store number.")
+                return
+            
+            selected_store = stores[store_idx]
+            store_id = selected_store['store_id']
+            
+            # Step 3: Show store overview
+            print(f"\n{'='*100}")
+            print(f"📦 STORE ID: {store_id}")
+            print(f"{'='*100}")
+            print(f"📊 Total SKUs: {selected_store['total_skus']}")
+            print(f"🔴 Critical: {selected_store['critical_count']}")
+            print(f"🟠 Low: {selected_store['low_count']}")
+            print(f"🟢 Adequate: {selected_store['adequate_count']}")
+            print(f"🔵 High: {selected_store['high_count']}")
+            print(f"📈 Avg Weeks of Supply: {float(selected_store.get('avg_weeks_of_supply', 0)):.2f}")
+            print(f"{'='*100}\n")
+            
+            # Step 4: Filter options
+            print("Filter by category (optional):")
+            print("1. Critical only")
+            print("2. Low only")
+            print("3. Adequate only")
+            print("4. High only")
+            print("5. All categories")
+            
+            filter_choice = input("\nEnter filter choice (default: 5 - All): ").strip() or "5"
+            
+            category_map = {
+                "1": "Critical",
+                "2": "Low",
+                "3": "Adequate",
+                "4": "High",
+                "5": None
+            }
+            
+            category_filter = category_map.get(filter_choice)
+            
+            # Step 5: Fetch SKU details
+            params = {}
+            if category_filter:
+                params['category'] = category_filter
+            
+            sku_resp = requests.get(
+                f"{BASE_URL}/weeks-of-supply/sku-details/{store_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                params=params
+            )
+            
+            if sku_resp.status_code != 200:
+                print(f"❌ Error: {sku_resp.json().get('error', 'Unknown error')}")
+                return
+            
+            skus = sku_resp.json().get('data', [])
+            
+            if not skus:
+                print("\n⚠️  No SKUs found with the selected filter.")
+                return
+            
+            # Step 6: Display SKU details
+            print(f"\n{'='*100}")
+            print(f"📦 SKU DETAILS - Store ID: {store_id} {f'(Filter: {category_filter})' if category_filter else '(All)'}")
+            print(f"{'='*100}")
+            print(f"{'SKU':<20} {'Current Inv':<15} {'Weekly Demand':<15} {'Weeks Left':<15} {'Category':<15}")
+            print("-"*100)
+            
+            for sku in skus:
+                # Color coding for terminal
+                category = sku['category']
+                if category == 'Critical':
+                    category_display = f"🔴 {category}"
+                elif category == 'Low':
+                    category_display = f"🟠 {category}"
+                elif category == 'Adequate':
+                    category_display = f"🟢 {category}"
+                else:
+                    category_display = f"🔵 {category}"
+                
+                weeks_left = float(sku['weeks_of_supply'])
+                weeks_display = f"{weeks_left:.1f}" if weeks_left < 999 else "999+"
+                
+                print(f"{sku['sku']:<20} "
+                      f"{int(sku['current_inventory']):<15} "
+                      f"{float(sku['avg_weekly_demand']):<15.2f} "
+                      f"{weeks_display:<15} {category_display:<15}")
+            
+            print("="*100)
+            print(f"\n📊 Showing {len(skus)} SKU(s)")
+            
+            # Option to export or view more details
+            input("\nPress Enter to continue...")
+            
+        except ValueError:
+            print("❌ Invalid input. Please enter a number.")
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+    
+    except Exception as e:
+        print(f"❌ Error fetching store summary: {str(e)}")
+        
+
+def chat(token: str):
+    url = f"{BASE_URL}/chat"
+    feedback_url = f"{BASE_URL}/feedback"  # 👈 New feedback endpoint
+
+    print("\n--- Starting Chat Session ---")
+    print("Enter 'exit' or 'quit' to return to the main menu.")
+
+    while True:
+        user_query = input("You: ")
+
+        if user_query.lower() in ['exit', 'quit']:
+            print("--- Chat Session Ended. Returning to Main Menu. ---\n")
+            break
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        payload = {"query": user_query}
+
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+
+            response_data = response.json()
+            ai_response = response_data.get('response', 'Error: Could not retrieve response.')
+            print(f"\nAI: {ai_response}\n")
+
+            # 👇 Ask user for optional feedback
+            while True:
+                feedback = input("Was this helpful? (👍 / 👎 or press Enter to skip): ").strip().lower()
+                
+                if feedback in ['', 'skip']:
+                    print("Feedback skipped.\n")
+                    break
+                elif feedback in ['👍', 'up', 'yes', 'y', 'u', '+', '1']:
+                    feedback_value = "up"
+                elif feedback in ['👎', 'down', 'no', 'n', '-', '0']:
+                    feedback_value = "down"
+                else:
+                    print("Invalid input. Please enter 👍 / 👎 or press Enter to skip.")
+                    continue
+
+                # Send feedback to the backend
+                feedback_payload = {"query": user_query, "feedback": feedback_value}
+                try:
+                    fb_response = requests.post(
+                        feedback_url, headers=headers, json=feedback_payload, timeout=10
+                    )
+                    if fb_response.status_code == 200:
+                        print("✅ Feedback recorded.\n")
+                    else:
+                        print(f"⚠️ Feedback failed: {fb_response.text}\n")
+                except Exception as fb_err:
+                    print(f"⚠️ Error sending feedback: {fb_err}\n")
+
+                break  # Exit feedback loop after valid feedback
+
+        except requests.exceptions.HTTPError as http_err:
+            try:
+                error_detail = response.json().get('error', 'No specific error message provided.')
+            except json.JSONDecodeError:
+                error_detail = "Server returned non-JSON error."
+
+            print(f"\n--- [API HTTP Error] ---")
+            print(f"HTTP Status: {response.status_code}")
+            print(f"Detail: {error_detail}")
+            print("------------------------\n")
+            break
+
+        except requests.exceptions.RequestException as e:
+            print(f"\n--- [API Connection Error] ---")
+            print(f"Error communicating with server: {e}")
+            print("------------------------------\n")
+            break
+
+
+
+
+def view_demand_trend_by_store(token):
+    """View demand trend analysis - store selection and SKU details"""
+    
+    # Step 1: Get store summary
+    print("\n📈 Fetching demand trend store summary...")
+    
+    try:
+        resp = requests.get(
+            f"{BASE_URL}/api/demand-trend/store-summary",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        # Debug information
+        print(f"\n🔍 DEBUG INFO:")
+        print(f"   Status Code: {resp.status_code}")
+        print(f"   Content-Type: {resp.headers.get('Content-Type', 'N/A')}")
+        print(f"   Response Length: {len(resp.text)} chars")
+        print(f"   First 200 chars: {resp.text[:200]}")
+        
+        if resp.status_code != 200:
+            try:
+                error_data = resp.json()
+                print(f"\n❌ Error: {error_data.get('error', 'Unknown error')}")
+            except:
+                print(f"\n❌ HTTP {resp.status_code} Error")
+                print(f"   Response: {resp.text[:500]}")
+            return
+        
+        try:
+            result = resp.json()
+        except Exception as json_err:
+            print(f"\n❌ Failed to parse JSON response")
+            print(f"   Error: {str(json_err)}")
+            print(f"   Response text: {resp.text[:500]}")
+            return
+        
+        if not result.get('success'):
+            print(f"\n❌ Error: {result.get('error', 'Unknown error')}")
+            return
+        
+        stores = result.get('data', [])
+        
+        if not stores:
+            print("\n⚠️  No data available. Please refresh demand trend data first (Option 2).")
+            print("   This will calculate demand trends based on your sales and forecast data.")
+            return
+        
+        # Display store list
+        print("\n" + "="*100)
+        print("📍 DEMAND TREND - STORE SUMMARY")
+        print("="*100)
+        print(f"{'#':<5} {'Store ID':<15} {'Total SKUs':<12} {'Accelerating':<15} {'Stable':<15} {'Decelerating':<15}")
+        print("-"*100)
+        
+        for idx, store in enumerate(stores, 1):
+            print(f"{idx:<5} {store['store_id']:<15} {store['total_skus']:<12} "
+                  f"🟢 {store.get('accelerating_count', 0):<13} "
+                  f"🔵 {store.get('stable_count', 0):<13} "
+                  f"🟠 {store.get('decelerating_count', 0):<13}")
+        
+        print("="*100)
+        
+        # Step 2: Let user select a store
+        store_choice = input("\nEnter store number to view SKU details (or 'q' to go back): ").strip()
+        
+        if store_choice.lower() == 'q':
+            return
+        
+        try:
+            store_idx = int(store_choice) - 1
+            if store_idx < 0 or store_idx >= len(stores):
+                print("❌ Invalid store number.")
+                return
+            
+            selected_store = stores[store_idx]
+            store_id = selected_store['store_id']
+            
+            # Step 3: Show store overview
+            print(f"\n{'='*100}")
+            print(f"📈 DEMAND TREND - STORE ID: {store_id}")
+            print(f"{'='*100}")
+            print(f"📊 Total SKUs: {selected_store['total_skus']}")
+            print(f"🟢 Accelerating (Stock Up): {selected_store.get('accelerating_count', 0)}")
+            print(f"🔵 Stable (Normal): {selected_store.get('stable_count', 0)}")
+            print(f"🟠 Decelerating (Slow Down): {selected_store.get('decelerating_count', 0)}")
+            print(f"{'='*100}\n")
+            
+            # Step 4: Filter options
+            print("Filter by trend category (optional):")
+            print("1. Accelerating only (Stock Up)")
+            print("2. Stable only (Normal)")
+            print("3. Decelerating only (Slow Down)")
+            print("4. All categories")
+            
+            filter_choice = input("\nEnter filter choice (default: 4 - All): ").strip() or "4"
+            
+            category_map = {
+                "1": "Accelerating",
+                "2": "Stable",
+                "3": "Decelerating",
+                "4": None
+            }
+            
+            category_filter = category_map.get(filter_choice)
+            
+            # Step 5: Fetch SKU details
+            params = {}
+            if category_filter:
+                params['trend_category'] = category_filter
+            
+            sku_resp = requests.get(
+                f"{BASE_URL}/api/demand-trend/sku-details/{store_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                params=params
+            )
+            
+            if sku_resp.status_code != 200:
+                try:
+                    print(f"❌ Error: {sku_resp.json().get('error', 'Unknown error')}")
+                except:
+                    print(f"❌ HTTP {sku_resp.status_code} Error: {sku_resp.text[:200]}")
+                return
+            
+            try:
+                sku_result = sku_resp.json()
+            except:
+                print(f"❌ Failed to parse SKU details response")
+                print(f"   Response: {sku_resp.text[:500]}")
+                return
+            
+            if not sku_result.get('success'):
+                print(f"❌ Error: {sku_result.get('error', 'Unknown error')}")
+                return
+            
+            skus = sku_result.get('data', [])
+            
+            if not skus:
+                print("\n⚠️  No SKUs found with the selected filter.")
+                return
+            
+            # Step 6: Display SKU details
+            print(f"\n{'='*120}")
+            print(f"📈 DEMAND TREND - SKU DETAILS - Store ID: {store_id} {f'(Filter: {category_filter})' if category_filter else '(All)'}")
+            print(f"{'='*120}")
+            print(f"{'SKU':<20} {'Recent Sales':<15} {'Forecast':<15} {'Trend %':<15} {'Category':<20}")
+            print("-"*120)
+            
+            for sku in skus:
+                # Color coding for terminal
+                category = sku['trend_category']
+                if category == 'Accelerating':
+                    category_display = f"🟢 {category}"
+                elif category == 'Stable':
+                    category_display = f"🔵 {category}"
+                else:
+                    category_display = f"🟠 {category}"
+                
+                recent_sales = float(sku.get('recent_avg_sales', 0))
+                forecast = float(sku.get('forecast_demand', 0))
+                trend_pct = float(sku.get('trend_percentage', 0))
+                
+                trend_display = f"{trend_pct:+.1f}%" if trend_pct != 0 else "0.0%"
+                
+                print(f"{sku['sku']:<20} "
+                      f"{recent_sales:<15.2f} "
+                      f"{forecast:<15.2f} "
+                      f"{trend_display:<15} "
+                      f"{category_display:<20}")
+            
+            print("="*120)
+            print(f"\n📊 Showing {len(skus)} SKU(s)")
+            
+            # Summary statistics
+            if skus:
+                total_accelerating = sum(1 for s in skus if s['trend_category'] == 'Accelerating')
+                total_stable = sum(1 for s in skus if s['trend_category'] == 'Stable')
+                total_decelerating = sum(1 for s in skus if s['trend_category'] == 'Decelerating')
+                
+                print(f"\n📈 Summary:")
+                print(f"   🟢 Accelerating: {total_accelerating} SKUs")
+                print(f"   🔵 Stable: {total_stable} SKUs")
+                print(f"   🟠 Decelerating: {total_decelerating} SKUs")
+            
+            input("\nPress Enter to continue...")
+            
+        except ValueError:
+            print("❌ Invalid input. Please enter a number.")
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Network error: {str(e)}")
+        print(f"   Make sure your Flask server is running at {BASE_URL}")
+    except Exception as e:
+        print(f"❌ Error fetching store summary: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+
+def refresh_demand_trend(token):
+    """Manually refresh demand trend calculations"""
+    print("\n" + "="*60)
+    print("🔄 REFRESH DEMAND TREND DATA")
+    print("="*60)
+    print("\nThis will update the last_updated timestamp for all records.")
+    print("="*60)
+    
+    lookback = input("\nLookback days (default 30): ").strip() or "30"
+    horizon = input("Forecast horizon days (default 14): ").strip() or "14"
+    
+    try:
+        lookback_int = int(lookback)
+        horizon_int = int(horizon)
+        
+        print("\n🔄 Processing...")
+        
+        resp = requests.post(
+            f"{BASE_URL}/api/demand-trend/refresh",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "lookback_days": lookback_int,
+                "forecast_horizon_days": horizon_int
+            }
+        )
+        
+        print(f"\n🔍 DEBUG: Status Code: {resp.status_code}")
+        print(f"🔍 DEBUG: Response: {resp.text[:500]}")
+        
+        if resp.status_code == 200:
+            try:
+                result = resp.json()
+                if result.get('success'):
+                    rows_affected = result.get('rows_affected', 0)
+                    print(f"\n✅ Success! Demand trend data refreshed.")
+                    print(f"📊 {rows_affected} records updated.")
+                    print(f"\nYou can now view demand trends by store (Option 1).")
+                else:
+                    print(f"\n❌ Error: {result.get('error', 'Unknown error')}")
+            except:
+                print(f"\n❌ Failed to parse response JSON")
+                print(f"   Response: {resp.text[:500]}")
+        else:
+            try:
+                error_msg = resp.json().get('error', 'Unknown error')
+                print(f"\n❌ Error: {error_msg}")
+            except:
+                print(f"\n❌ HTTP {resp.status_code} Error")
+                print(f"   Response: {resp.text[:500]}")
+    
+    except ValueError:
+        print("❌ Invalid input. Please enter numeric values.")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Network error: {str(e)}")
+        print(f"   Make sure your Flask server is running at {BASE_URL}")
+    except Exception as e:
+        print(f"❌ Error refreshing data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+
+def demand_trend_menu(token):
+    """Handle demand trend analysis menu"""
+    while True:
+        print("\n" + "="*60)
+        print("📈 DEMAND TREND ANALYSIS")
+        print("="*60)
+        print("1. View Store Summary & SKU Details")
+        print("2. Refresh Demand Trend Data")
+        print("3. View Available Categories")
+        print("4. Back to Main Menu")
+        print("="*60)
+        
+        choice = input("\nEnter your choice: ").strip()
+        
+        if choice == "1":
+            view_demand_trend_by_store(token)
+        elif choice == "2":
+            refresh_demand_trend(token)
+        elif choice == "3":
+            view_trend_categories(token)
+        elif choice == "4":
+            break
+        else:
+            print("❌ Invalid choice. Please enter 1-4.")
+
+
+def view_trend_categories(token):
+    """View available trend categories and their descriptions"""
+    try:
+        resp = requests.get(
+            f"{BASE_URL}/api/demand-trend/categories",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        print(f"\n🔍 DEBUG: Status Code: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            try:
+                result = resp.json()
+                if result.get('success'):
+                    categories = result.get('data', [])
+                    
+                    print("\n" + "="*80)
+                    print("📊 DEMAND TREND CATEGORIES")
+                    print("="*80)
+                    
+                    for cat in categories:
+                        icon = "🟢" if cat['value'] == "Accelerating" else "🔵" if cat['value'] == "Stable" else "🟠"
+                        print(f"\n{icon} {cat['label']}")
+                        print(f"   Description: {cat['description']}")
+                    
+                    print("\n" + "="*80)
+                    print("\n💡 Use these categories to filter SKUs when viewing store details.")
+                else:
+                    print(f"❌ Error: {result.get('error', 'Unknown error')}")
+            except:
+                print(f"❌ Failed to parse JSON")
+                print(f"   Response: {resp.text[:500]}")
+        else:
+            try:
+                print(f"❌ Error: {resp.json().get('error', 'Unknown error')}")
+            except:
+                print(f"❌ HTTP {resp.status_code} Error: {resp.text[:200]}")
+        
+        input("\nPress Enter to continue...")
+    
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 def main():
     while True:
@@ -956,8 +2363,6 @@ def main():
                             print("❌ You don't have permission for this action.")
                             continue
 
-
-                    # action = input("Enter your choice: ").strip()
                     if action == "1":
                         upload_csv(token)
                     elif action == "2":
@@ -967,9 +2372,9 @@ def main():
                         view_dashboard(token)
                     elif action == "4":
                         view_store_summary(token)
-                    elif action=="5":
+                    elif action == "5":
                         settings_menu(token)
-                    elif action=="6":
+                    elif action == "6":
                         add_store(token)
                     elif action == "7":
                         view_hovered_store_stats(token)
@@ -986,14 +2391,22 @@ def main():
                         break
                     elif action == "13":
                         place_reorder(token)
-                    elif action=="14":
+                    elif action == "14":
                         display_availability_from_db(token)
-
+                    elif action == "15":
+                        forecast_menu(token)
+                    elif action == "16":
+                        rebalancer(token)
+                    elif action == "17":  
+                        inventory_levels_filter(token)
+                    elif action == "18":  # NEW: Weeks of Supply
+                        weeks_of_supply_menu(token)
+                    elif action == "19":
+                        demand_trend_menu(token)
+                    elif action == "20":
+                        chat(token) 
                     else:
                         print("❌ Invalid choice.")
-        else:
-            print("❌ Invalid input. Enter 1 or 2.")
-
 
 if __name__ == "__main__":
     main()
